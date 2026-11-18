@@ -76,8 +76,8 @@
 
     async records(name) {
       await sleep(200);
-      const list = (REC[name] || []).map(([d, i, o, note]) => ({ date: md('2026-' + d), in: i, out: o, mins: mins(o) - mins(i), note: note || '' }));
-      return { month: '11월', list, total: list.reduce((a, r) => a + r.mins, 0) };
+      const list = (REC[name] || []).map(([d, i, o, note]) => ({ date: md('2026-' + d), day: Number(d.slice(3)), in: i, out: o, mins: mins(o) - mins(i), note: note || '' }));
+      return { month: '11월', year: 2026, mon: 11, today: Number(TODAY.slice(8)), list, total: list.reduce((a, r) => a + r.mins, 0) };
     },
 
     async leaveForm(name) {
