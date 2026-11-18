@@ -9,7 +9,7 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 10</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 11</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
@@ -51,8 +51,10 @@
         <label>이름 (성까지)</label><input id="nm" autocomplete="username" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
         <label>비밀번호</label>${pin('pw')}
         <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '처음이거나 비밀번호를 잊었으면 사장님께 임시 비밀번호를 받아 그 번호로 들어오세요.')}</p>
-        <button id="go" style="margin-top:8px">로그인</button></div></div>`);
+        <button id="go" style="margin-top:8px">로그인</button>
+        <button class="ghost" id="join" style="margin-top:10px">처음 가입 / 비밀번호 잊음</button></div></div>`);
     const $m = document.getElementById('lm'), say = t => { $m.textContent = t; $m.style.color = 'var(--bad)'; };
+    document.getElementById('join').onclick = () => join();
     document.getElementById('go').onclick = async e => {
       const name = document.getElementById('nm').value.trim(), pw = document.getElementById('pw').value.trim();
       if (!name) return say('이름을 써 주세요'); if (!/^\d{6}$/.test(pw)) return say('비밀번호는 숫자 6자리예요');
@@ -62,6 +64,28 @@
       if (r.ok) return start();
       if (r.needNew) return newPin(name, pw);
       e.target.disabled = false; e.target.textContent = '로그인'; say(r.err || '로그인하지 못했어요');
+    };
+  }
+  // 가입: 사장님께 받은 임시 비밀번호(6자리) 확인 → 내 비밀번호 정하기
+  function join() {
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
+      <div class="card" style="width:100%;text-align:left;margin-top:18px"><b>처음 가입 / 비밀번호 다시 정하기</b>
+        <p class="small">사장님·매니저님께 받은 <b style="color:var(--text)">임시 비밀번호 6자리</b>를 넣어 주세요. 다음 화면에서 내 비밀번호를 정해요.</p>
+        <label>이름 (성까지)</label><input id="nm" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
+        <label>임시 비밀번호</label>${pin('pw')}
+        <p class="small" id="lm" style="margin-top:10px;color:var(--bad)"></p>
+        <button id="go" style="margin-top:8px">다음</button><button class="ghost" id="back" style="margin-top:10px">로그인으로 돌아가기</button></div></div>`);
+    const $m = document.getElementById('lm');
+    document.getElementById('back').onclick = () => login();
+    document.getElementById('go').onclick = async e => {
+      const name = document.getElementById('nm').value.trim(), pw = document.getElementById('pw').value.trim();
+      if (!name) return $m.textContent = '이름을 써 주세요'; if (!/^\d{6}$/.test(pw)) return $m.textContent = '임시 비밀번호는 숫자 6자리예요';
+      e.target.disabled = true; e.target.textContent = '확인 중…';
+      let r; try { r = await API.login(name, pw); } catch (x) { r = { ok: false, err: x.message }; }
+      store.set('mate_last', name);
+      if (r.needNew) return newPin(name, pw);
+      if (r.ok) return start();
+      e.target.disabled = false; e.target.textContent = '다음'; $m.textContent = r.err || '확인하지 못했어요';
     };
   }
   function newPin(name, temp) {

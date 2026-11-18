@@ -1,6 +1,6 @@
 // 산성 MATE 서비스 워커: 화면 파일만 저장해 두고(빠르게 열기), 데이터는 항상 새로 받는다
-const CACHE = 'mate-v10';
-const FILES = ['./', './index.html', './app.js?v=10', './data-live.js?v=10', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png', './icons/emblem.png',
+const CACHE = 'mate-v11';
+const FILES = ['./', './index.html', './app.js?v=11', './data-live.js?v=11', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png', './icons/emblem.png',
   './img/deco.png', './img/calli-line.png', './img/bear-grill.png', './img/bear-eat.png'];
 
 self.addEventListener('install', e => {
