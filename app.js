@@ -9,13 +9,13 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 9</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 10</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
   const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
   const ADMIN_TABS = [['atoday', '👀', '오늘'], ['aok', '✅', '승인'], ['asales', '💰', '매출'], ['adash', '📊', '대시보드'], ['amore', '☰', '더보기']];
-  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore' };  // 더보기 안의 화면
+  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore' };  // 더보기 안의 화면
   function tabs() { return ME.role ? ADMIN_TABS : STAFF_TABS; }
   function drawNav() {
     $nav.hidden = false;
@@ -23,7 +23,14 @@
     $navin.innerHTML = tabs().map(([k, i, t]) => `<a href="#" data-tab="${k}" class="${k === cur ? 'on' : ''}"><i>${i}</i>${t}</a>`).join('');
   }
   $navin.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); go(a.dataset.tab); });
-  function go(t) { TAB = t; store.set('mate_tab', t); drawNav(); (VIEWS[t] || VIEWS.home)(); }
+  function go(t) {
+    TAB = t; store.set('mate_tab', t); drawNav();
+    Promise.resolve().then(() => (VIEWS[t] || VIEWS.home)()).catch(e => {
+      if (!ME) return;
+      render(`<div>${header()}<div class="card empty" style="margin-top:24px">${bear('eat', 'sm')}<p>불러오지 못했어요</p><p class="small">${esc(e.message)}</p><button class="ghost" id="rt" style="margin-top:10px">다시 시도</button></div></div>`);
+      document.getElementById('rt').onclick = () => go(t);
+    });
+  }
 
   // ---------- 첫 화면 · 로그인 ----------
   function splash() {
@@ -32,37 +39,67 @@
       <div class="t2">산성 <em>MATE</em></div><img class="calli" src="img/calli-line.png" alt="고기, 누룩을 입다."></div>`);
   }
   const bear = (kind, cls) => `<img class="bear ${cls || ''}" src="img/bear-${kind}.png" alt="">`;
-  async function login() {
-    const list = await API.roster();
-    $nav.hidden = true;
-    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">
-      <div class="row" style="width:100%;justify-content:space-between;align-items:flex-end">
-        <div class="hello">NICE TO<br><span>MEAT</span> YOU.</div>${bear('grill', 'sm')}</div>
+  // 로그인: 이름 + 숫자 6자리. 임시 비밀번호(사장님이 만들어 줌)로 들어오면 본인 번호로 바꾸기
+  const pin = id => `<input id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="숫자 6자리" style="letter-spacing:6px;font-size:22px;font-weight:800">`;
+  const loginTop = () => `<div class="row" style="width:100%;justify-content:space-between;align-items:flex-end">
+        <div class="hello">NICE TO<br><span>MEAT</span> YOU.</div>${bear('grill', 'sm')}</div>`;
+  function login(msg) {
+    $nav.hidden = true; ME = null;
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
       <div class="card" style="width:100%;text-align:left;margin-top:18px">
-        <div class="row" style="gap:8px;margin-bottom:4px"><img src="icons/emblem.png" alt="" style="width:26px"><b>산성 MATE</b></div>
-        <label>내 이름</label><select id="nm"><option value="">이름 고르기</option>${list.map(p => `<option value="${esc(p.name)}">${esc(p.name)}${p.role ? ' (' + p.role + ')' : ''}</option>`).join('')}</select>
-        <p class="small" style="margin-top:10px">처음 한 번만 고르면 다음부터 바로 열려요.${API.demo ? ' 시험 화면에서는 사장님·매니저를 고르면 관리 화면이 나와요.' : ''}</p>
-        <button id="go" style="margin-top:12px">시작하기</button></div></div>`);
-    document.getElementById('go').onclick = () => { const v = document.getElementById('nm').value; if (!v) return toast('이름을 골라 주세요'); store.set('mate_me', v); start(); };
+        <div class="row" style="gap:8px;margin-bottom:4px"><img src="icons/emblem.png" alt="" style="width:26px"><b>산성 MATE 로그인</b></div>
+        <label>이름 (성까지)</label><input id="nm" autocomplete="username" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
+        <label>비밀번호</label>${pin('pw')}
+        <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '처음이거나 비밀번호를 잊었으면 사장님께 임시 비밀번호를 받아 그 번호로 들어오세요.')}</p>
+        <button id="go" style="margin-top:8px">로그인</button></div></div>`);
+    const $m = document.getElementById('lm'), say = t => { $m.textContent = t; $m.style.color = 'var(--bad)'; };
+    document.getElementById('go').onclick = async e => {
+      const name = document.getElementById('nm').value.trim(), pw = document.getElementById('pw').value.trim();
+      if (!name) return say('이름을 써 주세요'); if (!/^\d{6}$/.test(pw)) return say('비밀번호는 숫자 6자리예요');
+      e.target.disabled = true; e.target.textContent = '확인 중…';
+      let r; try { r = await API.login(name, pw); } catch (x) { r = { ok: false, err: x.message }; }
+      store.set('mate_last', name);
+      if (r.ok) return start();
+      if (r.needNew) return newPin(name, pw);
+      e.target.disabled = false; e.target.textContent = '로그인'; say(r.err || '로그인하지 못했어요');
+    };
+  }
+  function newPin(name, temp) {
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
+      <div class="card" style="width:100%;text-align:left;margin-top:18px"><b>${esc(name)}님, 내 비밀번호 정하기</b>
+        <p class="small">임시 비밀번호 대신 쓸 숫자 6자리를 정해 주세요. 사장님도 이 번호는 몰라요.</p>
+        <label>새 비밀번호</label>${pin('p1')}<label>한 번 더</label>${pin('p2')}
+        <p class="small" id="lm" style="margin-top:10px;color:var(--bad)"></p><button id="go" style="margin-top:8px">저장하고 시작</button></div></div>`);
+    const $m = document.getElementById('lm');
+    document.getElementById('go').onclick = async e => {
+      const a = document.getElementById('p1').value.trim(), b = document.getElementById('p2').value.trim();
+      if (!/^\d{6}$/.test(a)) return $m.textContent = '숫자 6자리로 정해 주세요'; if (a !== b) return $m.textContent = '두 번 쓴 번호가 달라요';
+      e.target.disabled = true;
+      let r; try { r = await API.signup(name, temp, a); } catch (x) { r = { ok: false, err: x.message }; }
+      if (r.ok) { toast('비밀번호를 정했어요'); return start(); }
+      e.target.disabled = false; $m.textContent = r.err || '저장하지 못했어요';
+    };
   }
   async function start() {
-    const name = store.get('mate_me');
-    if (!name) return login();
-    ME = await API.me(name);
+    if (API.hasToken && !API.hasToken()) return login();
+    try { ME = await API.me(); } catch (e) { return login(API.hasToken && API.hasToken() ? e.message : ''); }
     const t = store.get('mate_tab');
     go(tabs().some(x => x[0] === t) || (ME.role && SUB[t]) ? t : tabs()[0][0]);
   }
-  document.addEventListener('click', e => { if (e.target.id === 'logout') { store.del('mate_me'); store.del('mate_tab'); ME = null; login(); } });
+  window.addEventListener('mate-logout', () => login('다시 로그인해 주세요'));
+  document.addEventListener('click', async e => { if (e.target.id === 'logout') { if (!confirm('로그아웃할까요?')) return; await API.logout(); store.del('mate_tab'); login(); } });
 
   const VIEWS = {};
 
   // ---------- 직원: 홈 ----------
   VIEWS.home = async function () {
     loading(); ME = await API.me(ME.name);
-    const t = ME.today, work = t.code === 'O' || t.code === '오전';
+    const t = ME.today, work = t.code === 'O' || t.code === '오전' || t.code === '오전+오후';
+    const ck = t.clock ? (t.clock.out ? `<span class="pill ok">퇴근 ${esc(t.clock.out)}</span>` : t.clock.in ? `<span class="pill ok">출근 ${esc(t.clock.in)} 찍음</span>` : '') : '';
     render(`<div>${header()}
       <div class="card hero"><div class="row between"><span class="small">오늘 ${esc(t.label)}</span>${work ? '<span class="pill on">근무</span>' : '<span class="pill off">쉬는 날</span>'}</div>
-        <div class="big" style="margin-top:6px">${work ? (t.code === '오전' ? '12:00 출근 (주말 오전)' : t.start ? t.start + ' 출근' : '오늘 근무') : '오늘은 쉬는 날'}</div>
+        <div class="big" style="margin-top:6px">${work ? (t.code !== 'O' ? '12:00 출근 (주말 오전)' : t.start ? t.start + ' 출근' + (t.early ? ' <span class="pill warn">일찍 부름</span>' : '') : '오늘 근무') : ME.covered === false ? '스케줄 확정 전' : '오늘은 쉬는 날'}</div>
+        ${ck ? '<div style="margin-top:6px">' + ck + '</div>' : ''}
         ${work && ME.group === '알' ? '<p class="small">출근·퇴근은 매장 스티커에 폰을 대 주세요.</p>' : work ? '<p class="small">퇴근할 때 매장 스티커에 폰을 대 주세요.</p>' : bear('eat') + '<p class="small" style="text-align:center">맛있는 거 먹고 푹 쉬세요!</p>'}</div>
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
@@ -79,7 +116,7 @@
     const color = {}; s.rows.filter(r => r.group === '알').forEach((r, k) => { color[r.disp] = PAL[k % PAL.length]; });
     const cell = (r, c, i) => {
       const t = s.days[i].today ? ' today' : '';
-      if (c === 'O') return r.group === '알' ? `<td class="sc o${t}" style="background:${color[r.disp]}"><span>${esc(r.disp)}</span></td>` : `<td class="sc o j${t}"><span>${esc(r.disp)}</span></td>`;
+      if (c === 'O' || c === '오전+오후') return r.group === '알' ? `<td class="sc o${t}" style="background:${color[r.disp]}"><span>${esc(r.disp)}</span></td>` : `<td class="sc o j${t}"><span>${esc(r.disp)}</span></td>`;
       if (c === '오전') return `<td class="sc am${t}"><span>${esc(r.disp)} 오전</span></td>`;
       if (c === 'X') return `<td class="sc x${t}">✕</td>`;
       return `<td class="sc${t}"></td>`;
@@ -88,7 +125,7 @@
       const n = r.codes.filter(c => c === 'O' || c === '오전').length;
       return `<tr class="${r.disp === ME.disp ? 'me' : ''}"><td class="name">${esc(r.disp)}</td>${r.codes.map((c, i) => cell(r, c, i)).join('')}<td class="tot">${r.group === '알' ? n + '일' : ''}</td></tr>`;
     };
-    render(`<div>${header()}<h2>근무표 · ${esc(s.title)}</h2><div class="card scroll sched"><table>
+    render(`<div>${header()}<h2>근무표 · ${esc(s.title)}</h2>${s.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 아직 확정 전이에요.</p></div>' : ''}<div class="card scroll sched"><table>
       <tr><th class="name">이름</th>${s.days.map(d => `<th class="${d.today ? 'today' : ''}">${esc(d.label)}</th>`).join('')}<th>총근무</th></tr>
       ${s.rows.filter(r => r.group === '정').map(row).join('')}<tr class="gap"><td colspan="9"></td></tr>
       ${s.rows.filter(r => r.group === '알').map(row).join('')}
@@ -99,6 +136,15 @@
   // ---------- 휴무신청 ----------
   VIEWS.leave = async function () {
     loading(); const f = await API.leaveForm(ME.name);
+    if (!API.demo) {
+      // 1단계: 신청은 지금 쓰는 휴무신청 폼으로 (앱에서 바로 내기는 2단계). 앱에서는 내가 낸 내용만 보여 줌
+      const s = f.saved, offL = s ? f.days.filter(d => s.off.indexOf(d.date) >= 0).map(d => d.label) : [];
+      return render(`<div>${header()}<h2>휴무신청 <span class="small">· ${esc(f.title)}</span></h2>
+        <div class="card hero"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">' + (f.past ? '다음 신청은 금요일 0시' : '마감') + '</span>'}</span><span class="small">${f.past ? '' : '마감 ' + esc(f.closes)}</span></div>
+          ${s ? `<p style="color:var(--text)">내가 낸 신청 (${esc(s.at)})<br>못 나오는 날: <b>${offL.map(esc).join(', ') || '없음'}</b><br>주말 오전 가능: <b>${s.am.join('·') || '불가'}</b></p>` : `<p style="color:var(--text)">${f.past ? '이 주에는' : '아직'} 낸 신청이 없어요.</p>`}</div>
+        ${f.url && f.open ? `<a class="btn" href="${esc(f.url)}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:12px">휴무신청 폼 열기</a>` : ''}
+        <p class="small">안 내면 모든 요일 저녁 가능으로 짜요. 휴무신청은 매주 금요일 0시에 열리고 토요일 밤 10시에 마감돼요. 마감 뒤 바꾸려면 본인이 대타를 구해 주세요.</p></div>`);
+    }
     const off = (f.saved && f.saved.off) || [], am = (f.saved && f.saved.am) || [];
     render(`<div>${header()}<h2>다음 주 휴무신청</h2>
       <div class="card"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">마감</span>'}</span><span class="small">마감 ${esc(f.closes)}</span></div>
@@ -128,7 +174,7 @@
     // 이번 주 출근 예정(오늘부터, 아직 기록 없는 날) = 초록
     const plan = {}; (ME.week || []).forEach(w => {
       const y = +w.date.slice(0, 4), m = +w.date.slice(5, 7), d = +w.date.slice(8);
-      if (y === r.year && m === r.mon && d >= r.today && !by[d] && (w.code === 'O' || w.code === '오전')) plan[d] = w.code === '오전' ? '오전' : '예정';
+      if (y === r.year && m === r.mon && d >= r.today && !by[d] && (w.code === 'O' || w.code === '오전' || w.code === '오전+오후')) plan[d] = w.code === 'O' ? '예정' : '오전';
     });
     const first = (new Date(r.year, r.mon - 1, 1).getDay() + 6) % 7, last = new Date(r.year, r.mon, 0).getDate();
     const hhmm = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
@@ -136,19 +182,19 @@
     for (let i = 0; i < first; i++) cells += '<div class="cd empty"></div>';
     for (let d = 1; d <= last; d++) {
       const x = by[d], dow = (first + d - 1) % 7;
-      cells += `<div class="cd${x ? ' w' : plan[d] ? ' plan' : ''}${x && x.note ? ' ex' : ''}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${x ? '<span>' + hhmm(x.mins) + '</span>' : plan[d] ? '<span>' + plan[d] + '</span>' : ''}</div>`;
+      cells += `<div class="cd${x ? ' w' : plan[d] ? ' plan' : ''}${x && x.note ? ' ex' : ''}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${x ? '<span>' + (r.hours === false ? x.out : hhmm(x.mins)) + '</span>' : plan[d] ? '<span>' + plan[d] + '</span>' : ''}</div>`;
     }
     const detail = d => { const x = by[d]; return x
       ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b>${x.note ? '<span class="pill warn">' + esc(x.note) + '</span>' : ''}</div>
-         <div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}</p>`
+         ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}</p>`}`
       : plan[d] ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b><span class="pill ok">출근 예정</span></div>
          <p style="color:var(--text)">${plan[d] === '오전' ? '주말 오전 12:00 ~ 15:00' : ME.today.start ? ME.today.start + ' 출근' : '근무'} 예정이에요.</p>`
       : `<b>${r.mon}/${d}</b><p class="small">이날은 근무 기록이 없어요.</p>`; };
-    const pick = by[r.today] ? r.today : (r.list.length ? r.list[r.list.length - 1].day : 0);
+    const pick = by[r.today] || plan[r.today] ? r.today : (r.list.length ? r.list[r.list.length - 1].day : 0);
     render(`<div>${header()}<h2>${esc(r.month)} 내 출퇴근</h2>
-      <div class="card hero"><div class="small">이번 달 근무</div><div class="big">${r.list.length}일 · ${hm(r.total)}</div><p class="small">계산 기준 시각(정시·일찍 부름)으로 센 시간이에요. 급여는 월말에 확정돼요.</p></div>
+      <div class="card hero"><div class="small">이번 달 근무</div><div class="big">${r.list.length}일${r.hours === false ? '' : ' · ' + hm(r.total)}</div><p class="small">${r.hours === false ? '정직원은 퇴근 기록만 보여요.' : '계산 기준 시각(정시·일찍 부름)으로 센 시간이에요. 급여는 월말결제 기준으로 확정돼요.'}</p></div>
       <div class="card cal"><div class="cw">${'월화수목금토일'.split('').map((w, i) => `<i class="${i === 6 ? 'sun' : i === 5 ? 'sat' : ''}">${w}</i>`).join('')}</div><div class="cg">${cells}</div></div>
-      ${r.list.length ? `<div class="card" id="cdet">${pick ? detail(pick) : ''}</div>` : `<div class="card empty">${bear('grill', 'sm')}<p>이번 달 기록이 아직 없어요.</p></div>`}
+      <div class="card" id="cdet">${pick ? detail(pick) : '<p class="small">날짜를 누르면 자세히 나와요.</p>'}</div>${r.list.length ? '' : `<div class="card empty">${bear('grill', 'sm')}<p>이번 달 기록이 아직 없어요.</p></div>`}
       <p class="small">빨간 칸 = 일한 날, 작은 숫자 = 근무시간(시:분). <span style="color:var(--ok)">초록 칸</span> = 이번 주 출근 예정. <span style="color:var(--yellow)">노란 숫자</span> = 일찍 부른 날. 날짜를 누르면 출근·퇴근 시각이 나와요. 기록이 틀리면 사장님·매니저님께 말해 주세요.</p></div>`);
     const det = document.getElementById('cdet');
     const mark = d => $app.querySelectorAll('.cd[data-d]').forEach(c => c.classList.toggle('sel', +c.dataset.d === d));
@@ -157,129 +203,119 @@
   };
 
   // ---------- 관리: 오늘 ----------
+  const STEP2 = '<p class="small">승인·일찍 부르기·기록 고치기는 지금처럼 NFC 관리 화면에서 해 주세요. (앱에서 바로 하기는 2단계)</p>';
   VIEWS.atoday = async function () {
-    loading(); const d = await API.adminToday(), lv = await API.leaveAll();
-    const lvSent = lv.rows.filter(r => r.sent).length;
-    const lvShort = lv.days.filter(x => lv.rows.filter(r => r.off.indexOf(x.date) < 0).length < x.need).map(x => x.label);
-    const lvCard = `<a href="#" id="golv" class="card row between" style="color:inherit;text-decoration:none;display:flex"><div><b>📝 다음 주 휴무신청</b><div class="small">${lvSent}/${lv.rows.length}명 신청 · ${lvShort.length ? '<span style="color:var(--bad)">부족: ' + lvShort.map(esc).join(', ') + '</span>' : '부족한 날 없음'}</div></div><span class="small">›</span></a>`;
-    const pill = s => s === '출근' ? 'ok' : s === '미출근' ? 'bad' : /지각/.test(s) ? 'warn' : '';
-    const cnt = k => d.rows.filter(r => r.state === k || (k === '지각' && /지각/.test(r.state))).length;
+    loading(); const d = await API.adminToday();
+    let lvCard = '';
+    try {
+      const lv = await API.leaveAll(), lvSent = lv.rows.filter(r => r.sent).length;
+      const lvShort = lv.past ? [] : lv.days.filter(x => lv.rows.filter(r => r.off.indexOf(x.date) < 0).length < x.need).map(x => x.label);
+      lvCard = `<a href="#" id="golv" class="card row between" style="color:inherit;text-decoration:none;display:flex"><div><b>📝 ${lv.past ? '휴무신청 (금 0시에 열림)' : '다음 주 휴무신청'}</b><div class="small">${esc(lv.title)} · ${lvSent}/${lv.rows.length}명 신청${lvShort.length ? ' · <span style="color:var(--bad)">부족: ' + lvShort.map(esc).join(', ') + '</span>' : ''}</div></div><span class="small">›</span></a>`;
+    } catch (e) {}
+    const pill = s => s === '출근' || s === '퇴근' ? 'ok' : s === '미출근' ? 'bad' : /지각|스케줄 없음/.test(s) ? 'warn' : '';
+    const cnt = re => d.rows.filter(r => re.test(r.state)).length;
     render(`<div>${header()}<h2>오늘 ${esc(d.label)} 출근 현황</h2>
-      <div class="row" style="gap:8px"><span class="pill ok">출근 ${cnt('출근')}</span><span class="pill warn">지각 ${cnt('지각')}</span><span class="pill bad">미출근 ${cnt('미출근')}</span></div>
-      <div class="card list">${d.rows.map(r => `<div class="item"><div><b>${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.in ? ' · ' + esc(r.in) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>`).join('')}</div>
-      ${lvCard}
-      <h2>일찍 부르기</h2><div class="card"><div class="row"><select id="en">${d.rows.filter(r => r.group === '알').map(r => `<option>${esc(r.disp)}</option>`).join('')}</select><input id="et" type="time" value="17:00" style="max-width:130px"></div>
-        <button id="eb" style="margin-top:10px">오늘 이 시각으로 출근 등록</button></div></div>`);
-    document.getElementById('golv').onclick = e => { e.preventDefault(); go('aleave'); };
-    document.getElementById('eb').onclick = async () => { const r = await API.addEarly(document.getElementById('en').value, document.getElementById('et').value); toast(r.msg); };
+      ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
+      <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
+      <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item"><div><b>${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.in ? ' · 출근 ' + esc(r.in) : ''}${r.out ? ' · 퇴근 ' + esc(r.out) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
+      ${lvCard}${STEP2}</div>`);
+    const g = document.getElementById('golv'); if (g) g.onclick = e => { e.preventDefault(); go('aleave'); };
   };
 
-  // ---------- 관리: 승인 ----------
+  // ---------- 관리: 승인 대기 (보기만) ----------
   VIEWS.aok = async function () {
     loading(); const list = await API.pending();
     render(`<div>${header()}<h2>승인 대기 ${list.length}건</h2>
-      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div>
-        <p>${esc(p.when)} · ${esc(p.detail)}</p><div class="row" style="margin-top:8px"><button class="sm" data-ok="${p.id}">승인</button><button class="sm ghost" data-no="${p.id}">거절</button></div></div>`).join('')
-        : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}</div>`);
-    $app.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
-      b.disabled = true; const r = await API.decide(b.dataset.ok || b.dataset.no, !!b.dataset.ok); toast(r.msg); VIEWS.aok();
-    });
+      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p>${esc(p.when)} · ${esc(p.detail)}</p></div>`).join('')
+        : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}${STEP2}</div>`);
   };
 
-  // ---------- 관리: 지난 기록 넣기 ----------
-  VIEWS.afix = async function () {
-    const list = await API.roster();
-    render(`<div>${header()}<h2>지난 기록 넣기 / 고치기</h2><div class="card">
-      <label>이름</label><select id="fn">${list.map(p => `<option>${esc(p.name)}</option>`).join('')}</select>
-      <label>날짜</label><input id="fd" type="date" value="2026-11-17">
-      <div class="row"><div style="flex:1"><label>출근 (비우면 정시)</label><input id="fi" type="time"></div><div style="flex:1"><label>퇴근</label><input id="fo" type="time" value="22:00"></div></div>
-      <button id="fs" style="margin-top:14px">저장</button></div>
-      <p class="small">실제 앱에서는 이름·날짜를 고르면 지금 기록이 미리 채워져요.</p></div>`);
-    document.getElementById('fs').onclick = async () => { const g = id => document.getElementById(id).value; const r = await API.manualRecord(g('fn'), g('fd'), g('fi'), g('fo')); toast(r.msg); };
-  };
-
-  // ---------- 관리: 대시보드 (결산 "대시보드" 요약) ----------
-  const won = n => '₩' + Math.round(n).toLocaleString('ko-KR');
-  const man = n => n >= 10000 ? (Math.round(n / 10000)).toLocaleString('ko-KR') + '만' : n.toLocaleString('ko-KR');
+  // ---------- 관리: 대시보드 (결산 "대시보드" 화면 글자 그대로) ----------
   VIEWS.adash = async function () {
     loading(); const d = await API.dashboard();
-    // 매출은 오르면 초록, 인건비는 오르면 빨강
-    const chg = (v, p, up, pp) => {
-      if (!p) return '<span class="small">–</span>';
-      const x = pp ? v - p : (v / p - 1) * 100; if (Math.abs(x) < 0.05) return '<span class="small">0.0' + (pp ? '%p' : '%') + '</span>';
-      const good = (x > 0) === up;
-      return `<span style="color:${good ? 'var(--ok)' : 'var(--bad)'};font-weight:700">${x > 0 ? '▲' : '▼'}${Math.abs(x).toFixed(1)}${pp ? '%p' : '%'}</span>`;
-    };
-    const big = d.rate[1];
-    render(`<div>${header()}<h2>대시보드 <span class="small">· ${esc(d.period)} (지난달 ${esc(d.prevPeriod)}와 비교)</span></h2>
-      <div class="card hero"><div class="row between"><span class="small">총 인건비 비율</span>${chg(big.v, big.p, false, true)}</div>
-        <div class="big">${big.v.toFixed(1)}%</div><p class="small">지난달 같은 기간 ${big.p.toFixed(1)}% · 알바비 비율 ${d.rate[0].v.toFixed(1)}% (${chg(d.rate[0].v, d.rate[0].p, false, true)})</p></div>
-      <div class="card list">${d.rows.map(r => `<div class="item"><div><b style="font-size:15px">${esc(r.k)}</b><div class="small">${r.note ? '지난달 전체' : '지난달'} ${won(r.p)}</div></div>
-        <div style="text-align:right"><div style="font-weight:800">${won(r.v)}</div>${chg(r.v, r.p, r.up)}</div></div>`).join('')}</div>
-      <div class="card"><div class="row between"><b>이번 달 지각 (NFC)</b><span class="pill warn">${esc(d.late)}</span></div><p class="small">${esc(d.lateTop)}</p></div>
-      <div class="card"><div class="row between"><b>근태이상 (확인 안 한 것)</b><span class="pill ${d.issues ? 'bad' : 'ok'}">${d.issues}건</span></div>
-        <div class="row between" style="margin-top:8px"><b>중복 제출 (#REF! 위험)</b><span class="pill ${d.dup ? 'bad' : 'ok'}">${d.dup}건</span></div></div>
-      <p class="small">결산 시트 대시보드 값 · 마지막 갱신 ${esc(d.asOf)} (매시간)</p></div>`);
+    // 매출은 오르면 초록, 인건비·비율은 오르면 빨강
+    const color = (label, c) => { if (!/[▲▼]/.test(c)) return 'var(--sub)'; const up = c.indexOf('▲') >= 0, good = /매출/.test(label) ? up : !up; return good ? 'var(--ok)' : 'var(--bad)'; };
+    let sec = '';
+    const body = d.rows.map(r => {
+      const head = r[0] && r[0] !== sec ? (sec = r[0], `<div class="small" style="color:var(--gold);font-weight:700;margin-top:10px">${esc(r[0])}</div>`) : '';
+      const label = r[1] || '', val = r[2] || '', prev = r[3] || '', chg = r[4] || '', note = r[5] || '';
+      if (!label) return head;
+      return head + `<div class="item"><div><b style="font-size:15px">${esc(label)}</b>${prev ? `<div class="small">${note ? esc(note) : '지난달'} ${esc(prev)}</div>` : ''}</div>
+        <div style="text-align:right"><div style="font-weight:800">${esc(val) || '–'}</div>${chg ? `<span style="color:${color(label, chg)};font-weight:700;font-size:13px">${esc(chg)}</span>` : ''}</div></div>`;
+    }).join('');
+    render(`<div>${header()}<h2>대시보드</h2><p class="small">${(d.head || []).map(esc).join(' · ')}</p>
+      <div class="card list">${body || '<p class="small">대시보드 값을 못 읽었어요.</p>'}</div>
+      <p class="small">결산 시트 "대시보드" 값 그대로예요 (10분마다 새로 읽음).</p></div>`);
   };
 
-  // ---------- 관리: 매출 입력 (결산 "일별매출") ----------
+  // ---------- 관리: 매출 (보기만) ----------
+  const won = n => '₩' + Math.round(n).toLocaleString('ko-KR');
+  const man = n => n >= 10000 ? (Math.round(n / 10000)).toLocaleString('ko-KR') + '만' : n.toLocaleString('ko-KR');
   VIEWS.asales = async function () {
     loading(); const s = await API.sales();
-    const y = new Date(Date.now() - 6 * 3600e3 - 864e5); const def = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
-    render(`<div>${header()}<h2>매출 입력</h2><div class="card">
-      <label>날짜</label><input id="sd" type="date" value="${API.demo ? '2026-11-18' : def}">
-      <label>매출 (원)</label><input id="sa" inputmode="numeric" placeholder="예: 1,850,000" style="font-size:22px;font-weight:800">
-      <p class="small" id="sh" style="margin-top:6px"></p>
-      <button id="ss" style="margin-top:10px">저장</button></div>
-      <h2>최근 7일 <span class="small">· 이번 달 ${man(s.monthTotal)}원</span></h2>
-      <div class="card list">${s.list.map(x => `<div class="item"><span>${esc(x.label)}</span><b>${won(x.amount)}</b></div>`).join('')}</div>
-      <p class="small">저장하면 결산 "일별매출"에 들어가고 대시보드 매출·비율이 바로 바뀌어요. 같은 날짜를 다시 저장하면 고쳐져요.</p></div>`);
-    const $a = document.getElementById('sa'), $h = document.getElementById('sh');
-    $a.oninput = () => { const n = Number($a.value.replace(/[^0-9]/g, '')); $a.value = n ? n.toLocaleString('ko-KR') : ''; $h.textContent = n ? man(n) + '원' : ''; };
-    document.getElementById('ss').onclick = async e => {
-      const n = Number($a.value.replace(/[^0-9]/g, '')); if (!n) return toast('금액을 넣어 주세요');
-      e.target.disabled = true; const r = await API.saveSales(document.getElementById('sd').value, n); toast(r.msg); VIEWS.asales();
-    };
+    render(`<div>${header()}<h2>매출 <span class="small">· 이번 달 ${man(s.monthTotal)}원</span></h2>
+      <div class="card list">${s.list.length ? s.list.map(x => `<div class="item"><span>${esc(x.label)}</span><b>${won(x.amount)}</b></div>`).join('') : '<p class="small">이번 달 매출 기록이 아직 없어요.</p>'}</div>
+      <p class="small">결산 "일별매출" 최근 7일이에요. 앱에서 매출 넣기는 2단계에서 열려요 — 지금은 하던 대로 시트에 넣어 주세요.</p></div>`);
   };
 
-  // ---------- 관리: 더보기 ----------
-  // ---------- 관리: 다음 주 휴무신청 현황 ----------
+  // ---------- 관리: 휴무신청 현황 ----------
   VIEWS.aleave = async function () {
     loading(); const f = await API.leaveAll();
     const sent = f.rows.filter(r => r.sent), not = f.rows.filter(r => !r.sent);
     const avail = f.days.map(d => f.rows.filter(r => r.off.indexOf(d.date) < 0).length);
-    const short = f.days.map((d, i) => ({ d, i, lack: d.need - avail[i] })).filter(x => x.lack > 0);
+    const short = f.past ? [] : f.days.map((d, i) => ({ d, i, lack: d.need - avail[i] })).filter(x => x.lack > 0);
     const offNames = d => f.rows.filter(r => r.off.indexOf(d.date) >= 0).map(r => r.disp);
     const amNames = w => f.rows.filter(r => r.am.indexOf(w) >= 0).map(r => r.disp);
     const msg = short.map(x => `[휴무신청 안내] ${x.d.label.replace(' ', '일(')})은 출근 가능한 알바가 ${avail[x.i]}명이라 ${x.lack}명이 부족해요. 이날 휴무 신청한 ${offNames(x.d).join(', ')} 중 ${x.lack}명은 출근해야 해요. 서로 정해서(복불복도 좋아요) 사장님께 알려 주세요!`).join('\n');
     const cell = (r, d) => r.off.indexOf(d.date) >= 0 ? '<td class="sc x">✕</td>' : '<td class="sc"></td>';
-    render(`<div>${header()}<h2>다음 주 휴무신청 · ${esc(f.title)}</h2>
-      <div class="card hero"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">마감</span>'}</span><span class="small">마감 ${esc(f.closes)}</span></div>
+    render(`<div>${header()}<h2>휴무신청 · ${esc(f.title)}</h2>
+      ${f.past ? '<div class="card"><p style="color:var(--text)">다음 주 신청은 금요일 0시에 열려요. 지금 보이는 건 이번 주 신청이에요.</p></div>' : ''}
+      <div class="card hero"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">마감</span>'}</span><span class="small">${f.past ? '' : '마감 ' + esc(f.closes)}</span></div>
         <div class="big" style="margin-top:6px">${sent.length}명 신청 <span class="small">/ 알바 ${f.rows.length}명</span></div>
-        ${not.length ? `<p class="small">아직 안 낸 사람: <b style="color:var(--text)">${not.map(r => esc(r.disp)).join(', ')}</b> — 안 내면 모든 요일 저녁 가능으로 짜요.</p>` : '<p class="small">모두 냈어요.</p>'}</div>
+        ${not.length ? `<p class="small">안 낸 사람: <b style="color:var(--text)">${not.map(r => esc(r.disp)).join(', ')}</b> — 안 내면 모든 요일 저녁 가능으로 짜요.</p>` : '<p class="small">모두 냈어요.</p>'}</div>
       ${short.length ? `<div class="card" style="border-color:rgba(255,107,107,.45)"><b style="color:var(--bad)">⚠️ 인원 부족한 날 ${short.length}일</b>
         ${short.map(x => `<p>${esc(x.d.label)}: 가능 ${avail[x.i]}명 / 필요 ${x.d.need}명 · 신청자 ${offNames(x.d).map(esc).join(', ')}</p>`).join('')}
-        <button class="sm" id="cp" style="margin-top:6px">단톡 공지 멘트 복사</button></div>` : '<div class="card"><span class="pill ok">인원 부족한 날 없음</span></div>'}
+        <button class="sm" id="cp" style="margin-top:6px">단톡 공지 멘트 복사</button></div>` : f.past ? '' : '<div class="card"><span class="pill ok">인원 부족한 날 없음</span></div>'}
       <div class="card scroll sched"><table>
         <tr><th class="name">이름</th>${f.days.map(d => `<th>${esc(d.label)}</th>`).join('')}</tr>
         ${f.rows.map(r => `<tr><td class="name"${r.sent ? '' : ' style="color:var(--dim)"'}>${esc(r.disp)}</td>${r.sent ? f.days.map(d => cell(r, d)).join('') : `<td colspan="7" class="small" style="text-align:center">미신청 (모두 가능)</td>`}</tr>`).join('')}
         <tr class="sum"><td class="name">가능</td>${f.days.map((d, i) => `<td style="${avail[i] < d.need ? 'color:var(--bad)' : ''}">${avail[i]}/${d.need}</td>`).join('')}</tr></table></div>
       <div class="card"><b>주말 오전(12~15시) 가능</b><p>토: ${amNames('토').map(esc).join(', ') || '없음'}<br>일: ${amNames('일').map(esc).join(', ') || '없음'}</p></div>
-      <div class="card list">${sent.map(r => `<div class="item"><span>${esc(r.disp)}</span><span class="small">${esc(r.at)} 보냄</span></div>`).join('')}</div>
-      <button id="mk">이 신청으로 스케줄 짜기</button>
-      <p class="small">✕ = 못 나오는 날. 가능 = 그날 나올 수 있는 알바 수 / 필요한 알바 수. 같은 사람이 여러 번 내면 마지막 것만 써요.</p></div>`);
+      ${sent.length ? `<div class="card list">${sent.map(r => `<div class="item"><span>${esc(r.disp)}</span><span class="small">${esc(r.at)} 보냄</span></div>`).join('')}</div>` : ''}
+      <p class="small">✕ = 못 나오는 날. 가능 = 그날 나올 수 있는 알바 수 / 필요한 알바 수. 같은 사람이 여러 번 내면 마지막 것만 써요. 스케줄 짜기는 지금처럼 스케줄 시트 메뉴로 해 주세요.</p></div>`);
     const cp = document.getElementById('cp');
     if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('복사했어요. 단톡방에 붙여 넣으세요'); } catch (e) { prompt('아래 글을 길게 눌러 복사하세요', msg); } };
-    document.getElementById('mk').onclick = () => toast(API.demo ? '시험 화면이에요. 실제 연결 후엔 스케줄 파일에서 바로 짜져요' : '스케줄 짜는 중…');
+  };
+
+  // ---------- 관리: 직원 계정 (임시 비밀번호) ----------
+  VIEWS.aacc = async function () {
+    loading(); const list = await API.accounts();
+    render(`<div>${header()}<h2>직원 계정</h2>
+      <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? '가입함' + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
+        <button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button></div>`).join('')}</div>
+      <p class="small">처음 가입하거나 비밀번호를 잊은 직원은 [임시 비번]을 눌러 나온 6자리를 알려 주세요. 직원이 그 번호로 들어오면 바로 자기 번호로 바꾸게 돼요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 48시간 동안만 쓸 수 있어요.</p></div>`);
+    $app.querySelectorAll('[data-n]').forEach(b => b.onclick = async () => {
+      const n = b.dataset.n;
+      if (!confirm(n + '님 임시 비밀번호를 만들까요?\n(가입한 사람이면 지금 비밀번호는 그대로 쓸 수 있고, 임시 번호로 들어오면 새로 정하게 돼요)')) return;
+      b.disabled = true;
+      try {
+        const r = await API.issueCode(n);
+        render(`<div>${header()}<div class="card hero" style="margin-top:24px;text-align:center"><div class="small">${esc(r.name)}님 임시 비밀번호</div>
+          <div class="big" style="font-size:44px;letter-spacing:8px;margin:10px 0">${esc(r.code)}</div><p class="small">${r.hours}시간 안에 이 번호로 로그인하면 본인 번호로 바꾸게 돼요. 이 화면을 나가면 다시 볼 수 없어요.</p></div>
+          <button class="ghost" id="bk">목록으로</button></div>`);
+        document.getElementById('bk').onclick = () => VIEWS.aacc();
+      } catch (e) { toast(e.message); b.disabled = false; }
+    });
   };
 
   VIEWS.amore = function () {
     render(`<div>${header()}<h2>더보기</h2>
       <div class="card list">
-        <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 다음 주 휴무신청 현황</span><span class="small">›</span></a>
+        <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
+        <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
-        <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 지난 기록 넣기 / 고치기</span><span class="small">›</span></a>
-      </div><p class="small">나중에 들어갈 것: 스케줄 짜기·확정, 월말결제 요약, 알림 설정</p></div>`);
+        <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
+      </div><p class="small">2단계에서 들어갈 것: 승인·일찍 부르기·기록 고치기, 매출 넣기, 휴무신청 앱에서 바로 내기</p></div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
   };
 
