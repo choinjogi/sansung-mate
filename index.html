@@ -92,8 +92,10 @@ tr.gap td { border: 0; padding: 4px; }
 .sched td.tot { color: var(--sub); font-weight: 700; }
 .sched tr.me td.name { color: var(--gold); }
 .sched tr.me td.sc.o { box-shadow: inset 0 0 0 1.5px var(--gold); }
-.sched tr.me td { background: transparent; }
-.sched tr.me td.sc.o { background: var(--wine2); }
+.sched tr.me td.tot, .sched tr.me td.sc:not(.o) { background: transparent; }
+.sched tr.me td.name { background: #2a1a29; }
+.sched td.sc.o.j { background: rgba(255,255,255,.05); }
+.sched td.sc.o.j span { color: var(--text); font-weight: 600; }
 .sched tr.sum td { color: var(--sub); font-weight: 700; font-size: 12px; border-top: 1px solid var(--line); }
 /* 내 기록 달력 */
 .cal { padding: 12px 8px; }
@@ -105,6 +107,7 @@ tr.gap td { border: 0; padding: 4px; }
 .cal .cd span { font-size: 11px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
 .cal .sun, .cal .cd.sun b { color: #ff8a8a; } .cal .sat, .cal .cd.sat b { color: #8ab4ff; }
 .cal .cd.w { background: var(--wine); } .cal .cd.w b { color: #fff; }
+.cal .cd.plan { background: #2e7a4f; } .cal .cd.plan b { color: #fff; } .cal .cd.plan span { color: #d8f5e3; font-weight: 600; }
 .cal .cd.ex span { color: var(--yellow); }
 .cal .cd.today { border-color: var(--gold); }
 .cal .cd.sel { box-shadow: 0 0 0 2px #fff inset; }

@@ -74,9 +74,12 @@
   VIEWS.sched = async function () {
     loading(); const s = await API.schedule();
     // 출력 시트와 같은 방식: 근무 칸 = 이름(색 배경), ✕ = 휴무/불가, 빈칸 = 미배정, 주말 오전 = "이름 오전"(노란 글씨), 알바만 총근무
+    // 정직원 = 색 없이 이름만, 알바 = 사람마다 다른 배경색
+    const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
+    const color = {}; s.rows.filter(r => r.group === '알').forEach((r, k) => { color[r.disp] = PAL[k % PAL.length]; });
     const cell = (r, c, i) => {
       const t = s.days[i].today ? ' today' : '';
-      if (c === 'O') return `<td class="sc o${t}"><span>${esc(r.disp)}</span></td>`;
+      if (c === 'O') return r.group === '알' ? `<td class="sc o${t}" style="background:${color[r.disp]}"><span>${esc(r.disp)}</span></td>` : `<td class="sc o j${t}"><span>${esc(r.disp)}</span></td>`;
       if (c === '오전') return `<td class="sc am${t}"><span>${esc(r.disp)} 오전</span></td>`;
       if (c === 'X') return `<td class="sc x${t}">✕</td>`;
       return `<td class="sc${t}"></td>`;
@@ -122,24 +125,31 @@
     loading(); const r = await API.records(ME.name);
     // 한 달 달력: 일한 날 = 빨간 칸 + 작은 글씨로 근무시간(시:분), 누르면 아래에 출근~퇴근 자세히
     const by = {}; r.list.forEach(x => { by[x.day] = x; });
+    // 이번 주 출근 예정(오늘부터, 아직 기록 없는 날) = 초록
+    const plan = {}; (ME.week || []).forEach(w => {
+      const y = +w.date.slice(0, 4), m = +w.date.slice(5, 7), d = +w.date.slice(8);
+      if (y === r.year && m === r.mon && d >= r.today && !by[d] && (w.code === 'O' || w.code === '오전')) plan[d] = w.code === '오전' ? '오전' : '예정';
+    });
     const first = (new Date(r.year, r.mon - 1, 1).getDay() + 6) % 7, last = new Date(r.year, r.mon, 0).getDate();
     const hhmm = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
     let cells = '';
     for (let i = 0; i < first; i++) cells += '<div class="cd empty"></div>';
     for (let d = 1; d <= last; d++) {
       const x = by[d], dow = (first + d - 1) % 7;
-      cells += `<div class="cd${x ? ' w' : ''}${x && x.note ? ' ex' : ''}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${x ? '<span>' + hhmm(x.mins) + '</span>' : ''}</div>`;
+      cells += `<div class="cd${x ? ' w' : plan[d] ? ' plan' : ''}${x && x.note ? ' ex' : ''}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${x ? '<span>' + hhmm(x.mins) + '</span>' : plan[d] ? '<span>' + plan[d] + '</span>' : ''}</div>`;
     }
     const detail = d => { const x = by[d]; return x
       ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b>${x.note ? '<span class="pill warn">' + esc(x.note) + '</span>' : ''}</div>
          <div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}</p>`
+      : plan[d] ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b><span class="pill ok">출근 예정</span></div>
+         <p style="color:var(--text)">${plan[d] === '오전' ? '주말 오전 12:00 ~ 15:00' : ME.today.start ? ME.today.start + ' 출근' : '근무'} 예정이에요.</p>`
       : `<b>${r.mon}/${d}</b><p class="small">이날은 근무 기록이 없어요.</p>`; };
     const pick = by[r.today] ? r.today : (r.list.length ? r.list[r.list.length - 1].day : 0);
     render(`<div>${header()}<h2>${esc(r.month)} 내 출퇴근</h2>
       <div class="card hero"><div class="small">이번 달 근무</div><div class="big">${r.list.length}일 · ${hm(r.total)}</div><p class="small">계산 기준 시각(정시·일찍 부름)으로 센 시간이에요. 급여는 월말에 확정돼요.</p></div>
       <div class="card cal"><div class="cw">${'월화수목금토일'.split('').map((w, i) => `<i class="${i === 6 ? 'sun' : i === 5 ? 'sat' : ''}">${w}</i>`).join('')}</div><div class="cg">${cells}</div></div>
       ${r.list.length ? `<div class="card" id="cdet">${pick ? detail(pick) : ''}</div>` : `<div class="card empty">${bear('grill', 'sm')}<p>이번 달 기록이 아직 없어요.</p></div>`}
-      <p class="small">빨간 칸 = 일한 날, 작은 숫자 = 근무시간(시:분). <span style="color:var(--yellow)">노란 숫자</span> = 일찍 부른 날. 날짜를 누르면 출근·퇴근 시각이 나와요. 기록이 틀리면 사장님·매니저님께 말해 주세요.</p></div>`);
+      <p class="small">빨간 칸 = 일한 날, 작은 숫자 = 근무시간(시:분). <span style="color:var(--ok)">초록 칸</span> = 이번 주 출근 예정. <span style="color:var(--yellow)">노란 숫자</span> = 일찍 부른 날. 날짜를 누르면 출근·퇴근 시각이 나와요. 기록이 틀리면 사장님·매니저님께 말해 주세요.</p></div>`);
     const det = document.getElementById('cdet');
     const mark = d => $app.querySelectorAll('.cd[data-d]').forEach(c => c.classList.toggle('sel', +c.dataset.d === d));
     if (pick) mark(pick);
