@@ -9,7 +9,7 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 12</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 13</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
@@ -116,6 +116,11 @@
   const VIEWS = {};
 
   // ---------- 직원: 홈 ----------
+  // 비상용: 앱이나 NFC가 안 될 때는 예전처럼 구글폼으로 (주소는 서버가 줌)
+  const backup = () => { const L = ME.links || {}; if (!L.leave && !L.clock) return '';
+    const a = (u, t) => u ? `<a class="item" href="${esc(u)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><span>${t}</span><span class="small">›</span></a>` : '';
+    return `<h2>문제가 생겼을 때 <span class="small">· 비상용</span></h2><div class="card list">${a(L.clock, '🕙 퇴근 폼 (NFC가 안 될 때만)')}${a(L.leave, '📝 휴무신청 폼 (앱이 안 될 때)')}</div>
+      <p class="small">스티커가 안 찍히거나 앱이 안 열리면 예전처럼 폼으로 내고 매니저님께 말해 주세요. 같은 날 NFC와 퇴근 폼을 둘 다 내지는 마세요.</p>`; };
   VIEWS.home = async function () {
     loading(); ME = await API.me(ME.name);
     const t = ME.today, work = t.code === 'O' || t.code === '오전' || t.code === '오전+오후';
@@ -128,6 +133,7 @@
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
       <h2>공지</h2>${ME.notice.map(n => `<div class="card"><div class="small">${esc(n.d)}</div><p style="color:var(--text)">${esc(n.t)}</p></div>`).join('')}
+      ${backup()}
     </div>`);
   };
 
@@ -350,7 +356,23 @@
     render(`<div>${header()}<h2>직원 계정</h2>
       <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? '가입함' + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
         <button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button></div>`).join('')}</div>
+      ${ME.role === '사장님' && list.some(a => !a.joined) ? '<button id="all" style="margin-bottom:10px">미가입 ' + list.filter(a => !a.joined).length + '명 임시 비번 한 번에 만들기</button>' : ''}
       <p class="small">처음 가입하거나 비밀번호를 잊은 직원은 [임시 비번]을 눌러 나온 6자리를 알려 주세요. 직원이 그 번호로 들어오면 바로 자기 번호로 바꾸게 돼요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 48시간 동안만 쓸 수 있어요.</p></div>`);
+    const all = document.getElementById('all');
+    if (all) all.onclick = async () => {
+      if (!confirm('아직 가입 안 한 직원 모두에게 임시 비밀번호를 만들까요?\n(각자 1:1 카톡으로 보내 주세요. 단톡방에 올리면 안 돼요)')) return;
+      all.disabled = true;
+      try {
+        const r = await API.issueAll();
+        const msg = x => `[산성 MATE] ${x.name}님 임시 비밀번호: ${x.code}\n${r.hours}시간 안에 아래 주소에서 [처음 가입 / 비밀번호 잊음]을 누르고 이름과 이 번호를 넣은 뒤, 본인 비밀번호 6자리로 바꿔 주세요.\n${location.origin + location.pathname}`;
+        render(`<div>${header()}<h2>임시 비밀번호 ${r.list.length}명</h2>
+          <div class="card list">${r.list.map((x, i) => `<div class="item"><div><b>${esc(x.name)}</b> <span class="big" style="font-size:20px;letter-spacing:3px;margin-left:6px">${esc(x.code)}</span></div><button class="sm ghost" data-i="${i}">카톡 문구 복사</button></div>`).join('')}</div>
+          <p class="small">[카톡 문구 복사]를 누르고 그 직원과의 <b>1:1 카톡</b>에 붙여 넣으세요. ${r.hours}시간이 지나면 이 번호는 못 써요(다시 만들면 돼요). 이 화면을 나가도 다시 누르면 같은 번호가 나와요.</p>
+          <button class="ghost" id="bk">목록으로</button></div>`);
+        $app.querySelectorAll('[data-i]').forEach(b => b.onclick = async () => { const t = msg(r.list[+b.dataset.i]); try { await navigator.clipboard.writeText(t); b.textContent = '복사됨 ✓'; } catch (e) { prompt('길게 눌러 복사하세요', t); } });
+        document.getElementById('bk').onclick = () => VIEWS.aacc();
+      } catch (e) { toast(e.message); all.disabled = false; }
+    };
     $app.querySelectorAll('[data-n]').forEach(b => b.onclick = async () => {
       const n = b.dataset.n;
       if (!confirm(n + '님 임시 비밀번호를 만들까요?\n(가입한 사람이면 지금 비밀번호는 그대로 쓸 수 있고, 임시 번호로 들어오면 새로 정하게 돼요)')) return;
@@ -372,7 +394,7 @@
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
-      </div><p class="small">2단계에서 들어갈 것: 승인·일찍 부르기·기록 고치기, 매출 넣기, 휴무신청 앱에서 바로 내기</p></div>`);
+      </div>${backup()}<p class="small">2단계에서 들어갈 것: 승인·일찍 부르기·기록 고치기, 매출 넣기, 휴무신청 앱에서 바로 내기</p></div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
   };
 

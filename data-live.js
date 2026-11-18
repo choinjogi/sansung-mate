@@ -37,5 +37,6 @@
     sales: () => call('sales'),
     accounts: () => call('accounts').then(r => r.list),
     issueCode: name => call('issueCode', { name }),
+    issueAll: () => call('issueAll'),
   };
 })();
