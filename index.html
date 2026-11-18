@@ -109,6 +109,13 @@ tr.gap td { border: 0; padding: 4px; }
 .cal .cd.w { background: var(--wine); } .cal .cd.w b { color: #fff; }
 .cal .cd.plan { background: #2e7a4f; } .cal .cd.plan b { color: #fff; } .cal .cd.plan span { color: #d8f5e3; font-weight: 600; }
 .cal .cd.ex span { color: var(--yellow); }
+.cal .cd.lv { background: #24456b; } .cal .cd.lv b { color: #fff; } .cal .cd.lv span { color: #cfe2ff; font-weight: 600; }
+.cal .cd.miss { border: 1.5px dashed var(--warn); } .cal .cd.miss span { color: var(--warn); font-weight: 600; }
+.pill.lv { background: rgba(120,170,255,.16); color: #9cc3ff; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+table.kv { margin-top: 6px; } table.kv td, table.kv th { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 400; }
+table.kv th { color: var(--dim); font-size: 12.5px; } table.kv td:last-child, table.kv th:last-child { text-align: right; }
+table.ev td:last-child { text-align: left; } table.ev td:first-child { white-space: nowrap; color: var(--sub); width: 1%; padding-right: 10px; } table.ev tr { cursor: pointer; }
 .cal .cd.today { border-color: var(--gold); }
 .cal .cd.sel { box-shadow: 0 0 0 2px #fff inset; }
 .list .item { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--line); }
@@ -152,7 +159,7 @@ nav a.on i { filter: none; opacity: 1; }
 <body>
 <div id="app"></div>
 <nav id="nav" hidden><div class="in" id="navin"></div></nav>
-<script src="data-live.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="data-live.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

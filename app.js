@@ -9,7 +9,7 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 11</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 12</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
@@ -193,8 +193,11 @@
   // ---------- 내 기록 ----------
   VIEWS.rec = async function () {
     loading(); const r = await API.records(ME.name);
-    // 한 달 달력: 일한 날 = 빨간 칸 + 작은 글씨로 근무시간(시:분), 누르면 아래에 출근~퇴근 자세히
-    const by = {}; r.list.forEach(x => { by[x.day] = x; });
+    // 한 달 달력: 일한 날 = 빨간 칸 + 작은 글씨로 근무시간(시:분), 누르면 아래에 자세히
+    const by = {}; r.list.forEach(x => { x.tags = x.tags || (x.note ? [x.note] : []); by[x.day] = x; });
+    // 안 나온 날: 연차·반차·병가·무급 = 파란 칸, 스케줄 있었는데 쉼 = 노란 점선
+    const off = {}; (r.off || []).forEach(o => { if (o.tags[0] !== '휴무' || o.tags.length > 1) off[o.day] = o; });
+    const LV = ['연차', '반차', '병가', '무급'];
     // 이번 주 출근 예정(오늘부터, 아직 기록 없는 날) = 초록
     const plan = {}; (ME.week || []).forEach(w => {
       const y = +w.date.slice(0, 4), m = +w.date.slice(5, 7), d = +w.date.slice(8);
@@ -202,28 +205,58 @@
     });
     const first = (new Date(r.year, r.mon - 1, 1).getDay() + 6) % 7, last = new Date(r.year, r.mon, 0).getDate();
     const hhmm = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+    const W = d => '월화수목금토일'[(first + d - 1) % 7];
     let cells = '';
     for (let i = 0; i < first; i++) cells += '<div class="cd empty"></div>';
     for (let d = 1; d <= last; d++) {
-      const x = by[d], dow = (first + d - 1) % 7;
-      cells += `<div class="cd${x ? ' w' : plan[d] ? ' plan' : ''}${x && x.note ? ' ex' : ''}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${x ? '<span>' + (r.hours === false ? x.out : hhmm(x.mins)) + '</span>' : plan[d] ? '<span>' + plan[d] + '</span>' : ''}</div>`;
+      const x = by[d], o = off[d], dow = (first + d - 1) % 7;
+      const lv = o && LV.indexOf(o.tags[0]) >= 0, miss = o && !lv && o.tags[0] !== '휴무';
+      const cls = x ? ' w' + (x.tags.length ? ' ex' : '') : lv ? ' lv' : miss ? ' miss' : plan[d] ? ' plan' : '';
+      const lab = x ? (r.hours === false ? x.out : hhmm(x.mins)) : lv ? o.tags[0] : miss ? '빠짐' : plan[d] || '';
+      cells += `<div class="cd${cls}${d === r.today ? ' today' : ''}${dow === 6 ? ' sun' : dow === 5 ? ' sat' : ''}" data-d="${d}"><b>${d}</b>${lab ? '<span>' + esc(lab) + '</span>' : ''}</div>`;
     }
-    const detail = d => { const x = by[d]; return x
-      ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b>${x.note ? '<span class="pill warn">' + esc(x.note) + '</span>' : ''}</div>
+    const pills = tags => tags.map(t => `<span class="pill ${LV.indexOf(t) >= 0 ? 'lv' : /대타|추가/.test(t) && !/쉼/.test(t) ? 'ok' : 'warn'}">${esc(t)}</span>`).join(' ');
+    const detail = d => { const x = by[d], o = off[d], h = `<b>${r.mon}/${d} (${W(d)})</b>`; return x
+      ? `<div class="row between">${h}</div>${x.tags.length ? '<div class="tags">' + pills(x.tags) + '</div>' : ''}
          ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}</p>`}`
-      : plan[d] ? `<div class="row between"><b>${r.mon}/${d} (${'월화수목금토일'[(first + d - 1) % 7]})</b><span class="pill ok">출근 예정</span></div>
+      : o ? `<div class="row between">${h}</div><div class="tags">${pills(o.tags)}</div><p class="small">${LV.indexOf(o.tags[0]) >= 0 ? '스케줄에 ' + esc(o.tags[0]) + '(으)로 적힌 날이에요.' : '스케줄에는 근무였는데 출퇴근 기록이 없어요. 사장님이 쉬라고 한 날이나 대타를 구한 날도 여기 나와요.'}</p>`
+      : plan[d] ? `<div class="row between">${h}<span class="pill ok">출근 예정</span></div>
          <p style="color:var(--text)">${plan[d] === '오전' ? '주말 오전 12:00 ~ 15:00' : ME.today.start ? ME.today.start + ' 출근' : '근무'} 예정이에요.</p>`
-      : `<b>${r.mon}/${d}</b><p class="small">이날은 근무 기록이 없어요.</p>`; };
+      : `${h}<p class="small">이날은 근무 기록이 없어요.</p>`; };
     const pick = by[r.today] || plan[r.today] ? r.today : (r.list.length ? r.list[r.list.length - 1].day : 0);
+
+    // 이번 달 요약
+    const S = r.sum || null, won = n => Number(n || 0).toLocaleString('ko-KR') + '원';
+    let sumCard = '';
+    if (S) {
+      const lv = LV.filter(k => S.leave[k]).map(k => `${k} ${S.leave[k]}`).join(' · ');
+      const rows = [['출근', S.work + '일'], ['쉰 날', S.off + '일' + (r.hours ? '' : ' (고정휴무 포함)')]];
+      if (r.hours) rows.push(['스케줄', S.sched + '일'], ['스케줄 있었는데 쉼', S.missed + '일'], ['대타 서 준 날', S.cover + '일'], ['스케줄 없던 날 출근', S.extra + '일']);
+      else if (S.missed) rows.push(['스케줄 있었는데 기록 없음', S.missed + '일']);
+      rows.push(['연차·반차·병가·무급', lv || '없음']);
+      sumCard = `<div class="card"><div class="row between"><b>이번 달 요약</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto}</span></div>
+        <table class="kv">${rows.map(x => `<tr><td>${x[0]}</td><td>${esc(x[1])}</td></tr>`).join('')}</table></div>`;
+      if (r.hours && S.weeks) sumCard += `<div class="card"><div class="row between"><b>근무시간 · 주휴</b><span class="small">결산 기준</span></div>
+        <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">총 근무시간</div><div class="big" style="font-size:22px">${S.totalH != null ? S.totalH + '시간' : hm(r.total)}</div></div>
+        <div><div class="small">주휴수당</div><div class="big" style="font-size:22px">${S.noJuhu ? '해당 없음' : won(S.juhu)}</div></div></div>
+        <table class="kv"><tr><th>주차</th><th>시간</th><th>주휴</th></tr>${S.weeks.map(w => `<tr><td>${esc(w.wk)}</td><td>${w.h.toFixed(1)}h</td><td>${S.noJuhu ? '-' : w.pay ? won(w.pay) : '<span class="small">' + (w.h < 15 ? '15시간 미만' : '0원') + '</span>'}</td></tr>`).join('')}</table>
+        <p class="small">주휴는 한 주 15시간 이상 일하면 생겨요(1~7일·8~14일처럼 7일씩 끊어서 계산). 최종 금액은 월말결제 기준이에요.</p></div>`;
+      const ev = r.list.filter(x => x.tags.length).map(x => ({ d: x.day, t: x.tags })).concat(Object.values(off).map(o => ({ d: o.day, t: o.tags }))).sort((a, b) => a.d - b.d);
+      sumCard += `<div class="card"><b>근무 특이사항</b>${ev.length ? `<table class="kv ev">${ev.map(e => `<tr data-d="${e.d}"><td>${r.mon}/${e.d} (${W(e.d)})</td><td><div class="tags" style="margin:0">${pills(e.t)}</div></td></tr>`).join('')}</table>` : '<p class="small" style="margin-top:6px">이번 달은 특이사항이 없어요.</p>'}</div>`;
+    }
+
     render(`<div>${header()}<h2>${esc(r.month)} 내 출퇴근</h2>
       <div class="card hero"><div class="small">이번 달 근무</div><div class="big">${r.list.length}일${r.hours === false ? '' : ' · ' + hm(r.total)}</div><p class="small">${r.hours === false ? '정직원은 퇴근 기록만 보여요.' : '계산 기준 시각(정시·일찍 부름)으로 센 시간이에요. 급여는 월말결제 기준으로 확정돼요.'}</p></div>
       <div class="card cal"><div class="cw">${'월화수목금토일'.split('').map((w, i) => `<i class="${i === 6 ? 'sun' : i === 5 ? 'sat' : ''}">${w}</i>`).join('')}</div><div class="cg">${cells}</div></div>
       <div class="card" id="cdet">${pick ? detail(pick) : '<p class="small">날짜를 누르면 자세히 나와요.</p>'}</div>${r.list.length ? '' : `<div class="card empty">${bear('grill', 'sm')}<p>이번 달 기록이 아직 없어요.</p></div>`}
-      <p class="small">빨간 칸 = 일한 날, 작은 숫자 = 근무시간(시:분). <span style="color:var(--ok)">초록 칸</span> = 이번 주 출근 예정. <span style="color:var(--yellow)">노란 숫자</span> = 일찍 부른 날. 날짜를 누르면 출근·퇴근 시각이 나와요. 기록이 틀리면 사장님·매니저님께 말해 주세요.</p></div>`);
+      ${sumCard}
+      <p class="small">빨간 칸 = 일한 날(작은 숫자 = 근무시간), <span style="color:var(--yellow)">노란 숫자</span> = 특이사항 있는 날, <span style="color:var(--ok)">초록</span> = 이번 주 출근 예정, <span style="color:#9cc3ff">파란 칸</span> = 연차·반차·병가·무급, <span style="color:var(--warn)">노란 점선</span> = 스케줄 있었는데 쉰 날. 기록이 틀리면 사장님·매니저님께 말해 주세요.</p></div>`);
     const det = document.getElementById('cdet');
     const mark = d => $app.querySelectorAll('.cd[data-d]').forEach(c => c.classList.toggle('sel', +c.dataset.d === d));
+    const show = d => { if (!det) return; det.innerHTML = detail(d); det.classList.remove('fade'); void det.offsetWidth; det.classList.add('fade'); mark(d); };
     if (pick) mark(pick);
-    $app.querySelector('.cg').addEventListener('click', e => { const c = e.target.closest('.cd[data-d]'); if (!c || !det) return; const d = +c.dataset.d; det.innerHTML = detail(d); det.classList.remove('fade'); void det.offsetWidth; det.classList.add('fade'); mark(d); });
+    $app.querySelector('.cg').addEventListener('click', e => { const c = e.target.closest('.cd[data-d]'); if (c) show(+c.dataset.d); });
+    $app.querySelectorAll('.ev tr[data-d]').forEach(tr => tr.onclick = () => { show(+tr.dataset.d); det.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   };
 
   // ---------- 관리: 오늘 ----------
