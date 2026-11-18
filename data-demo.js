@@ -25,9 +25,9 @@
   const WEEK = {
     김민준: 'OO OOOO', 이서연: 'O OOOOO', 박지훈: ' OOOOOO', 아리아: 'OXOOOOX', 최유나: 'OOO OOO',
     정하준: 'OOOXOXO', 강도윤: 'XXOOXOO', 윤서아: 'XXOXOXO', 장시우: 'OO XOO ', 임하은: 'OXOXOXX',
-    한지호: 'XXXXXOX', 오수아: ' O OOXX', 서준서: 'XO OXOX', 신예린: 'O XXXOO',
+    한지호: 'XXXXXOX', 오수아: ' O OOAX', 서준서: 'XO OXOX', 신예린: 'O XXXOO',
   };
-  const code = (n, i) => ({ O: 'O', X: 'X', ' ': '' })[WEEK[n][i]];
+  const code = (n, i) => ({ O: 'O', X: 'X', A: '오전', ' ': '' })[WEEK[n][i]];
 
   // 이번 달 출퇴근 기록 (시험용)
   const REC = {
@@ -68,8 +68,8 @@
       await sleep(200);
       const rows = ROSTER.map(p => ({ disp: p.disp, group: p.group, codes: DAYS.map((d, i) => code(p.name, i)) }));
       const count = DAYS.map((d, i) => {
-        const j = rows.filter(r => r.group === '정' && r.codes[i] === 'O').length, a = rows.filter(r => r.group === '알' && r.codes[i] === 'O').length;
-        return j + '+' + a;
+        const j = rows.filter(r => r.group === '정' && r.codes[i] === 'O').length, a = rows.filter(r => r.group === '알' && r.codes[i] === 'O').length, am = rows.filter(r => r.codes[i] === '오전').length;
+        return j + '+' + a + (am ? ' (오전' + am + ')' : '');
       });
       return { title: '11/16(월) – 11/22(일)', days: DAYS.map((d, i) => ({ label: Number(d.slice(8)) + ' ' + DOW[i], today: d === TODAY })), rows, count };
     },

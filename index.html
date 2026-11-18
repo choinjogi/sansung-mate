@@ -73,6 +73,28 @@ th.today, td.today { background: rgba(201,162,122,.10); }
 tr.me td { background: rgba(163,48,74,.22); }
 tr.gap td { border: 0; padding: 4px; }
 .scroll { overflow-x: auto; margin: 0 -4px; }
+/* 근무표 (출력 시트 방식) */
+.sched { padding: 10px 6px; }
+.sched table { width: 100%; table-layout: fixed; font-size: 11.5px; letter-spacing: -.4px; border-collapse: separate; border-spacing: 2px; }
+.sched th, .sched td { padding: 7px 0; border: 0; overflow: hidden; }
+.sched th { font-size: 10.5px; }
+.sched th.name, .sched td.name { width: 40px; position: sticky; left: 0; background: #2a1a29; z-index: 1; font-size: 12px; }
+.sched th:last-child, .sched td.tot { width: 30px; }
+.sched td.sc { border-radius: 6px; }
+.sched td.sc.am span { white-space: normal; line-height: 1.15; display: block; }
+.sched td.sc.o { background: var(--wine); }
+.sched td.sc.o span { color: #fff; font-weight: 700; }
+.sched td.sc.am { background: rgba(225,196,78,.16); }
+.sched td.sc.am span { color: var(--yellow); font-weight: 700; font-size: 11.5px; }
+.sched td.sc.x { color: var(--bad); font-weight: 700; }
+.sched th.today { color: var(--gold); }
+.sched td.sc.today { box-shadow: inset 0 0 0 1.5px var(--gold); }
+.sched td.tot { color: var(--sub); font-weight: 700; }
+.sched tr.me td.name { color: var(--gold); }
+.sched tr.me td.sc.o { box-shadow: inset 0 0 0 1.5px var(--gold); }
+.sched tr.me td { background: transparent; }
+.sched tr.me td.sc.o { background: var(--wine2); }
+.sched tr.sum td { color: var(--sub); font-weight: 700; font-size: 12px; border-top: 1px solid var(--line); }
 .list .item { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .list .item:last-child { border-bottom: 0; }
 .chk { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

@@ -73,13 +73,24 @@
   // ---------- 근무표 (모두) ----------
   VIEWS.sched = async function () {
     loading(); const s = await API.schedule();
-    const row = r => `<tr class="${r.disp === ME.disp ? 'me' : ''}"><td class="name">${esc(r.disp)}</td>${r.codes.map((c, i) => `<td class="${c === 'O' || c === '오전' ? 'o' : c === 'X' ? 'x' : ''} ${s.days[i].today ? 'today' : ''}">${c === 'O' ? '●' : c === '오전' ? '오전' : c === 'X' ? '✕' : ''}</td>`).join('')}</tr>`;
-    render(`<div>${header()}<h2>근무표 · ${esc(s.title)}</h2><div class="card scroll"><table>
-      <tr><th></th>${s.days.map(d => `<th class="${d.today ? 'today' : ''}">${esc(d.label)}</th>`).join('')}</tr>
-      ${s.rows.filter(r => r.group === '정').map(row).join('')}<tr class="gap"><td colspan="8"></td></tr>
+    // 출력 시트와 같은 방식: 근무 칸 = 이름(색 배경), ✕ = 휴무/불가, 빈칸 = 미배정, 주말 오전 = "이름 오전"(노란 글씨), 알바만 총근무
+    const cell = (r, c, i) => {
+      const t = s.days[i].today ? ' today' : '';
+      if (c === 'O') return `<td class="sc o${t}"><span>${esc(r.disp)}</span></td>`;
+      if (c === '오전') return `<td class="sc am${t}"><span>${esc(r.disp)} 오전</span></td>`;
+      if (c === 'X') return `<td class="sc x${t}">✕</td>`;
+      return `<td class="sc${t}"></td>`;
+    };
+    const row = r => {
+      const n = r.codes.filter(c => c === 'O' || c === '오전').length;
+      return `<tr class="${r.disp === ME.disp ? 'me' : ''}"><td class="name">${esc(r.disp)}</td>${r.codes.map((c, i) => cell(r, c, i)).join('')}<td class="tot">${r.group === '알' ? n + '일' : ''}</td></tr>`;
+    };
+    render(`<div>${header()}<h2>근무표 · ${esc(s.title)}</h2><div class="card scroll sched"><table>
+      <tr><th class="name">이름</th>${s.days.map(d => `<th class="${d.today ? 'today' : ''}">${esc(d.label)}</th>`).join('')}<th>총근무</th></tr>
+      ${s.rows.filter(r => r.group === '정').map(row).join('')}<tr class="gap"><td colspan="9"></td></tr>
       ${s.rows.filter(r => r.group === '알').map(row).join('')}
-      <tr><td class="name small">정+알</td>${s.count.map((c, i) => `<td class="small ${s.days[i].today ? 'today' : ''}">${c}</td>`).join('')}</tr></table></div>
-      <p class="small">● 근무 · ✕ 휴무/불가 · 빈칸 미배정. 내 줄은 빨갛게 표시돼요.</p></div>`);
+      <tr class="sum"><td class="name">정+알</td>${s.count.map((c, i) => `<td class="${s.days[i].today ? 'today' : ''}">${c}</td>`).join('')}<td></td></tr></table></div>
+      <p class="small">이름 = 근무 · <span style="color:var(--bad)">✕</span> 휴무/불가 · 빈칸 = 미배정 · 노란 "오전" = 주말 오전(12~15시). 내 줄은 금색 테두리, 오늘은 금색 칸이에요.</p></div>`);
   };
 
   // ---------- 휴무신청 ----------
