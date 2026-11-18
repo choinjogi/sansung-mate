@@ -93,6 +93,23 @@
     },
 
     // ----- 관리 -----
+    // 다음 주 휴무신청 현황 (알바만). 실제 연결 시 = 스케줄 파일 "휴무신청 응답" 시트(같은 사람 여러 번이면 마지막 것)
+    async leaveAll() {
+      await sleep(250);
+      const next = ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29'];
+      const F = {  // 가짜 신청: [불가 요일 번호, 오전 가능, 보낸 시각]
+        정하준: [[3, 5], ['일'], '11/20 21:10'], 강도윤: [[0, 5], [], '11/20 23:02'], 윤서아: [[1, 5], ['일'], '11/21 09:15'],
+        임하은: [[5, 6], [], '11/21 12:40'], 한지호: [[0, 1, 2, 5], [], '11/21 18:05'], 신예린: [[2, 5], ['토', '일'], '11/21 20:30'],
+      };
+      const rows = ROSTER.filter(p => p.group === '알').map(p => {
+        const ls = JSON.parse(localStorage.getItem('mate_leave_' + p.name) || 'null');
+        if (ls) return { name: p.name, disp: p.disp, sent: true, off: ls.off, am: ls.am, at: ls.at };
+        const f = F[p.name];
+        return f ? { name: p.name, disp: p.disp, sent: true, off: f[0].map(i => next[i]), am: f[1], at: f[2] } : { name: p.name, disp: p.disp, sent: false, off: [], am: [], at: '' };
+      });
+      return { title: '11/23(월) – 11/29(일)', closes: '11/21(토) 22:00', open: true,
+        days: next.map((d, i) => ({ date: d, label: Number(d.slice(8)) + ' ' + DOW[i], dow: DOW[i], need: [4, 4, 4, 4, 5, 5, 4][i] })), rows };
+    },
     async adminToday() {
       await sleep(250);
       const ti = DAYS.indexOf(TODAY);
