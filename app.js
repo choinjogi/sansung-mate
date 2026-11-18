@@ -248,7 +248,15 @@
   };
 
   // ---------- 시작 ----------
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  // 새 버전 바로 받기: 서비스 워커를 캐시 없이 확인하고, 앱을 다시 볼 때마다 새 버전 검사 → 바뀌면 한 번 새로고침
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    const had = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+    let done = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !done) { done = true; location.reload(); } });
+  }
   splash();
   setTimeout(start, 900);
 })();
