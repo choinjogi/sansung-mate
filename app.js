@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 23</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 24</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -136,7 +136,7 @@
     const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
     if (Notification.permission === 'denied') { st.textContent = '알림이 막혀 있어요. 폰 설정 → 알림에서 산성 MATE(또는 크롬)를 허용해 주세요.'; btn.hidden = true; return; }
     if (sub && Notification.permission === 'granted') {
-      st.textContent = '켜짐 · 휴무신청 열림(금 10시) · 마감 1시간 전(토 21시)'; btn.textContent = ME.role === '사장님' ? '시험' : '끄기'; btn.className = 'sm ghost';
+      st.textContent = '켜짐 · 휴무신청 열림(금 0시) · 마감 1시간 전(토 21시)'; btn.textContent = ME.role === '사장님' ? '시험' : '끄기'; btn.className = 'sm ghost';
       btn.onclick = () => busy(btn, async () => {
         if (ME.role === '사장님') { const r = await API.pushTest(); return r.warn ? alert(r.msg) : toast(r.msg); }
         if (!confirm('알림을 끌까요?')) return; await API.pushOff({ endpoint: sub.endpoint }); await sub.unsubscribe(); toast('알림을 껐어요'); pushCard();
@@ -620,7 +620,7 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 23;
+  const APP_VER = 24;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
