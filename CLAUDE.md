@@ -53,7 +53,7 @@
 **진행 상황 (2026-11-20 메인 노트북)**: 1~9 완료. Firestore (default) asia-northeast3 Standard·프로덕션, Google·이메일 로그인 켬, 승인 도메인 choinjogi.github.io,
 웹 앱 = 예전에 만든 "산성 MATE" 재사용(config.js 채움), 규칙·색인 배포, 서비스 계정 mate-server(roles/datastore.user만) 열쇠 → Cloudflare 비밀 SERVICE_ACCOUNT (열쇠 파일 삭제),
 서버 https://mate-server.choinjogi.workers.dev (/myIp 200, /punch 로그인 없이 401 확인). 작업 사본은 드라이브 밖 C:/Users/samsung/sansung-mate-work (node_modules가 드라이브 동기화를 막지 않게).
-윈도우 PowerShell은 npx가 막혀 있어 npx.cmd 사용. 남은 것: 9 폰으로 /myIp 확인, 10 main 합치기(사용자에게 묻기), 11 orgs/org1, 서버가 Firestore에 실제로 쓰는지는 11 뒤 첫 출근 시험 때 확인
+윈도우 PowerShell은 npx가 막혀 있어 npx.cmd 사용. 10 main 합침(11/20, 사용자 승인), 11 orgs/org1 = 산성 그룹(adminUids = 대표님 구글 uid) 만듦. 남은 것: 9 매장 폰으로 /myIp 확인, 새 앱에서 직영 매장 만들기 → 출근 찍어 서버가 Firestore에 쓰는지 확인
 사용자가 노트북에서 "Firebase·Cloudflare 설정하자"라고 하면 아래 순서로 진행. 사용자는 비개발자 → 한 단계씩 쉬운 말로.
 브랜치: `ccr-c3515536-fm1cvn` (먼저 `git checkout` + `git pull`). 작업 폴더: `firebase/`.
 1. 준비: `node -v`(없으면 nodejs.org LTS 설치 안내), `cd firebase && npm install`
