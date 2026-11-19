@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 22</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 23</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -125,6 +125,35 @@
 
   const VIEWS = {};
 
+  // ---------- 폰 알림 (11/19) ----------
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const keyBytes = k => { const s = atob(k.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((k.length + 3) % 4)); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+  async function pushCard() {
+    const st = document.getElementById('pushst'), btn = document.getElementById('pushbtn'); if (!st || !btn) return;
+    const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    if (!ok || (isIOS() && !isStandalone())) { st.textContent = isIOS() ? '홈 화면에 추가한 앱에서만 받을 수 있어요 (사파리 → 공유 → 홈 화면에 추가)' : '이 브라우저는 알림을 못 받아요. 크롬으로 열어 주세요.'; btn.hidden = true; return; }
+    const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+    if (Notification.permission === 'denied') { st.textContent = '알림이 막혀 있어요. 폰 설정 → 알림에서 산성 MATE(또는 크롬)를 허용해 주세요.'; btn.hidden = true; return; }
+    if (sub && Notification.permission === 'granted') {
+      st.textContent = '켜짐 · 휴무신청 열림(금 10시) · 마감 1시간 전(토 21시)'; btn.textContent = ME.role === '사장님' ? '시험' : '끄기'; btn.className = 'sm ghost';
+      btn.onclick = () => busy(btn, async () => {
+        if (ME.role === '사장님') { const r = await API.pushTest(); return r.warn ? alert(r.msg) : toast(r.msg); }
+        if (!confirm('알림을 끌까요?')) return; await API.pushOff({ endpoint: sub.endpoint }); await sub.unsubscribe(); toast('알림을 껐어요'); pushCard();
+      });
+      API.pushSub({ endpoint: sub.endpoint }).catch(() => {});   // 서버 목록에 계속 있게
+      return;
+    }
+    btn.onclick = () => busy(btn, async () => {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') { toast('알림을 허용해야 받을 수 있어요'); return pushCard(); }
+      const m = await API.pushMine();
+      const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(m.key) });
+      const r = await API.pushSub({ endpoint: s.endpoint });
+      toast(r.msg || '알림을 켰어요'); pushCard();
+    });
+  }
+
   // ---------- 직원: 홈 ----------
   // 비상용: 앱이나 NFC가 안 될 때는 예전처럼 구글폼으로 (주소는 서버가 줌)
   const backup = () => { const L = ME.links || {}; if (!L.leave && !L.clock) return '';
@@ -147,10 +176,12 @@
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
       <h2>공지</h2>${ME.notice.map(n => `<div class="card"><div class="small">${esc(n.d)}</div><p style="color:var(--text)">${esc(n.t)}</p></div>`).join('')}
+      <div class="card row between" id="pushcard" style="display:flex"><div><b>🔔 폰 알림</b><div class="small" id="pushst">휴무신청 열림 · 마감 1시간 전 알림</div></div><button class="sm" id="pushbtn" style="width:auto;margin:0">알림 받기</button></div>
       <a href="#" id="goinfo" class="card row between" style="color:inherit;text-decoration:none;display:flex"><div><b>👤 내 정보</b><div class="small">급여 받을 계좌 · 이메일 · 주민번호</div></div><span class="small">›</span></a>
       ${backup()}
     </div>`);
     const gi = document.getElementById('goinfo'); if (gi) gi.onclick = e => { e.preventDefault(); go('info'); };
+    pushCard();
   };
 
   // ---------- 근무표 (모두) ----------
@@ -572,8 +603,11 @@
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="info" style="color:inherit;text-decoration:none"><span>👤 내 정보 (계좌·이메일·주민번호)</span><span class="small">›</span></a>
-      </div>${backup()}</div>`);
+      </div>
+      <div class="card row between" id="pushcard" style="display:flex"><div><b>🔔 폰 알림</b><div class="small" id="pushst">휴무신청 열림 · 마감 1시간 전 알림</div></div><button class="sm" id="pushbtn" style="width:auto;margin:0">알림 받기</button></div>
+      ${backup()}</div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+    pushCard();
   };
 
   // ---------- 시작 ----------
@@ -586,7 +620,7 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 22;
+  const APP_VER = 23;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
