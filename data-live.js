@@ -51,6 +51,7 @@
     demo: false,
     hasToken: () => !!get(),
     async login(name, pw) { const j = await raw('login', { name, pw }); if (j.ok && j.token) set(j.token); return j; },
+    async register(name, pw) { const j = await raw('register', { name, pw }); if (j.ok && j.token) set(j.token); return j; },
     async signup(name, code, pw) { const j = await raw('signup', { name, code, pw }); if (j.ok && j.token) set(j.token); return j; },
     async logout() { try { await raw('logout'); } catch (e) {} set(null); },
     me: () => view('me'),

@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 17</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 18</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -51,9 +51,9 @@
         <div class="row" style="gap:8px;margin-bottom:4px"><img src="icons/emblem.png" alt="" style="width:26px"><b>산성 MATE 로그인</b></div>
         <label>이름 (성까지)</label><input id="nm" autocomplete="username" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
         <label>비밀번호</label>${pin('pw')}
-        <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '처음이거나 비밀번호를 잊었으면 사장님께 임시 비밀번호를 받아 그 번호로 들어오세요.')}</p>
+        <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '처음이면 [처음 가입]을 눌러 내 비밀번호를 정하세요. 비밀번호를 잊었으면 사장님께 임시 비밀번호를 받아 여기 넣으면 돼요.')}</p>
         <button id="go" style="margin-top:8px">로그인</button>
-        <button class="ghost" id="join" style="margin-top:10px">처음 가입 / 비밀번호 잊음</button></div></div>`);
+        <button class="ghost" id="join" style="margin-top:10px">처음 가입</button></div></div>`);
     const $m = document.getElementById('lm'), say = t => { $m.textContent = t; $m.style.color = 'var(--bad)'; };
     document.getElementById('join').onclick = () => join();
     document.getElementById('go').onclick = async e => {
@@ -67,26 +67,26 @@
       e.target.disabled = false; e.target.textContent = '로그인'; say(r.err || '로그인하지 못했어요');
     };
   }
-  // 가입: 사장님께 받은 임시 비밀번호(6자리) 확인 → 내 비밀번호 정하기
+  // 가입 (11/19): 이름 + 내 비밀번호 6자리를 직접 정함. 처음 한 번만, 가입하면 사장님·매니저 승인 탭에 "새 가입"으로 뜸
   function join() {
     render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
-      <div class="card" style="width:100%;text-align:left;margin-top:18px"><b>처음 가입 / 비밀번호 다시 정하기</b>
-        <p class="small">사장님·매니저님께 받은 <b style="color:var(--text)">임시 비밀번호 6자리</b>를 넣어 주세요. 다음 화면에서 내 비밀번호를 정해요.</p>
+      <div class="card" style="width:100%;text-align:left;margin-top:18px"><b>처음 가입</b>
+        <p class="small">이름(성까지)을 쓰고 내가 쓸 <b style="color:var(--text)">숫자 6자리</b>를 정해 주세요. 사장님도 이 번호는 몰라요.</p>
         <label>이름 (성까지)</label><input id="nm" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
-        <label>임시 비밀번호</label>${pin('pw')}
+        <label>내 비밀번호</label>${pin('p1')}<label>한 번 더</label>${pin('p2')}
         <p class="small" id="lm" style="margin-top:10px;color:var(--bad)"></p>
-        <button id="go" style="margin-top:8px">다음</button><button class="ghost" id="back" style="margin-top:10px">로그인으로 돌아가기</button></div></div>`);
+        <button id="go" style="margin-top:8px">가입하고 시작</button><button class="ghost" id="back" style="margin-top:10px">로그인으로 돌아가기</button>
+        <p class="small" style="margin-top:10px">꼭 본인 이름으로 가입해 주세요. 가입하면 사장님께 알림이 가요.</p></div></div>`);
     const $m = document.getElementById('lm');
     document.getElementById('back').onclick = () => login();
     document.getElementById('go').onclick = async e => {
-      const name = document.getElementById('nm').value.trim(), pw = document.getElementById('pw').value.trim();
-      if (!name) return $m.textContent = '이름을 써 주세요'; if (!/^\d{6}$/.test(pw)) return $m.textContent = '임시 비밀번호는 숫자 6자리예요';
-      e.target.disabled = true; e.target.textContent = '확인 중…';
-      let r; try { r = await API.login(name, pw); } catch (x) { r = { ok: false, err: x.message }; }
+      const name = document.getElementById('nm').value.trim(), a = document.getElementById('p1').value.trim(), b = document.getElementById('p2').value.trim();
+      if (!name) return $m.textContent = '이름을 써 주세요'; if (!/^\d{6}$/.test(a)) return $m.textContent = '비밀번호는 숫자 6자리로 정해 주세요'; if (a !== b) return $m.textContent = '두 번 쓴 번호가 달라요';
+      e.target.disabled = true; e.target.textContent = '가입 중…';
+      let r; try { r = await API.register(name, a); } catch (x) { r = { ok: false, err: x.message }; }
       store.set('mate_last', name);
-      if (r.needNew) return newPin(name, pw);
-      if (r.ok) return start();
-      e.target.disabled = false; e.target.textContent = '다음'; $m.textContent = r.err || '확인하지 못했어요';
+      if (r.ok) { toast('가입했어요'); return start(); }
+      e.target.disabled = false; e.target.textContent = '가입하고 시작'; $m.textContent = r.err || '가입하지 못했어요';
     };
   }
   function newPin(name, temp) {
@@ -316,15 +316,16 @@
   // ---------- 관리: 승인 대기 (NFC 관리 화면과 같은 승인) ----------
   VIEWS.aok = async function () {
     loading(); const list = await API.pending();
-    const can = p => p.kind !== '새 폰' || ME.role === '사장님', nExc = list.filter(p => p.kind !== '새 폰').length;
+    const can = p => p.kind !== '새 폰' || ME.role === '사장님', nExc = list.filter(p => p.kind === '조기 출근').length;
     render(`<div>${header()}<h2>승인 대기 ${list.length}건</h2>
       ${nExc > 1 ? `<button id="all" style="margin-bottom:10px">조기 출근 ${nExc}건 전부 승인</button>` : ''}
       ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p>${esc(p.when)} · ${esc(p.detail)}</p>
         ${can(p) ? `<div class="row" style="gap:8px;margin-top:8px"><button class="sm" data-id="${esc(p.id)}" data-ok="1">승인</button><button class="sm ghost" data-id="${esc(p.id)}" data-ok="">거절</button></div>` : '<p class="small">새 폰 승인은 사장님만 해요.</p>'}</div>`).join('')
         : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}
-      <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터.</p>${STEP2}</div>`);
+      <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터. 새 가입 = 직원이 앱에 직접 가입한 것 — 본인이 아니면 거절(가입 지움).</p>${STEP2}</div>`);
     $app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => busy(b, async () => {
-      const ok = !!b.dataset.ok; if (!confirm(ok ? '승인할까요?' : '거절할까요?')) return;
+      const ok = !!b.dataset.ok, j = /^acc/.test(b.dataset.id);
+      if (!confirm(j ? (ok ? '본인이 가입한 게 맞나요? 승인할까요?' : '본인이 아니면 가입을 지워요(그 폰 로그인도 풀림). 지울까요?') : ok ? '승인할까요?' : '거절할까요?')) return;
       const r = await API.decide(b.dataset.id, ok); r.warn ? alert(r.msg) : toast(r.msg); VIEWS.aok();
     }));
     const all = document.getElementById('all');
@@ -408,10 +409,9 @@
   VIEWS.aacc = async function () {
     loading(); const list = await API.accounts();
     render(`<div>${header()}<h2>직원 계정</h2>
-      <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? '가입함' + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
+      <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? (a.pend ? '<span style="color:var(--warn)">새 가입(확인 전)</span>' : '가입함') + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
         <button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button></div>`).join('')}</div>
-      ${ME.role === '사장님' && list.some(a => !a.joined) ? '<button id="all" style="margin-bottom:10px">미가입 ' + list.filter(a => !a.joined).length + '명 임시 비번 한 번에 만들기</button>' : ''}
-      <p class="small">처음 가입하거나 비밀번호를 잊은 직원은 [임시 비번]을 눌러 나온 6자리를 알려 주세요. 직원이 그 번호로 들어오면 바로 자기 번호로 바꾸게 돼요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 48시간 동안만 쓸 수 있어요.</p></div>`);
+      <p class="small">처음 가입은 직원이 앱에서 [처음 가입]으로 직접 해요(가입하면 승인 탭에 "새 가입"으로 떠요). [임시 비번]은 비밀번호를 잊은 직원용 — 나온 6자리를 1:1로 알려 주면 직원이 로그인 칸에 넣고 새 번호로 바꿔요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 48시간 동안만 쓸 수 있어요.</p></div>`);
     const all = document.getElementById('all');
     if (all) all.onclick = async () => {
       if (!confirm('아직 가입 안 한 직원 모두에게 임시 비밀번호를 만들까요?\n(각자 1:1 카톡으로 보내 주세요. 단톡방에 올리면 안 돼요)')) return;
