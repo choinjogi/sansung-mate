@@ -9,7 +9,7 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 13</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 14</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
@@ -164,33 +164,32 @@
   };
 
   // ---------- 휴무신청 ----------
+  // 앱에서 내면 서버가 진짜 휴무신청 폼으로 제출한다 (폼으로 낸 것과 똑같음). 앱이 안 되면 폼 링크로
   VIEWS.leave = async function () {
     loading(); const f = await API.leaveForm(ME.name);
-    if (!API.demo) {
-      // 1단계: 신청은 지금 쓰는 휴무신청 폼으로 (앱에서 바로 내기는 2단계). 앱에서는 내가 낸 내용만 보여 줌
-      const s = f.saved, offL = s ? f.days.filter(d => s.off.indexOf(d.date) >= 0).map(d => d.label) : [];
-      return render(`<div>${header()}<h2>휴무신청 <span class="small">· ${esc(f.title)}</span></h2>
-        <div class="card hero"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">' + (f.past ? '다음 신청은 금요일 0시' : '마감') + '</span>'}</span><span class="small">${f.past ? '' : '마감 ' + esc(f.closes)}</span></div>
-          ${s ? `<p style="color:var(--text)">내가 낸 신청 (${esc(s.at)})<br>못 나오는 날: <b>${offL.map(esc).join(', ') || '없음'}</b><br>주말 오전 가능: <b>${s.am.join('·') || '불가'}</b></p>` : `<p style="color:var(--text)">${f.past ? '이 주에는' : '아직'} 낸 신청이 없어요.</p>`}</div>
-        ${f.url && f.open ? `<a class="btn" href="${esc(f.url)}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:12px">휴무신청 폼 열기</a>` : ''}
-        <p class="small">안 내면 모든 요일 저녁 가능으로 짜요. 휴무신청은 매주 금요일 0시에 열리고 토요일 밤 10시에 마감돼요. 마감 뒤 바꾸려면 본인이 대타를 구해 주세요.</p></div>`);
-    }
-    const off = (f.saved && f.saved.off) || [], am = (f.saved && f.saved.am) || [];
-    render(`<div>${header()}<h2>다음 주 휴무신청</h2>
-      <div class="card"><div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">마감</span>'}</span><span class="small">마감 ${esc(f.closes)}</span></div>
+    const s = f.saved, off = (s && s.off) || [], am = (s && s.am) || [], L = ME.links || {};
+    const fallback = L.leave ? `<a href="${esc(L.leave)}" target="_blank" rel="noopener" class="small" style="display:block;text-align:center;margin-top:12px;color:var(--sub)">앱이 안 되면 → 휴무신청 폼으로 내기</a>` : '';
+    const head = `<div class="row between"><span>${f.open ? '<span class="pill ok">신청 받는 중</span>' : '<span class="pill off">' + (f.past ? '다음 신청은 금요일 0시' : '마감') + '</span>'}</span><span class="small">${f.past ? '' : '마감 ' + esc(f.closes)}</span></div>`;
+    const savedTxt = s ? `<p style="color:var(--text)">내가 낸 신청 (${esc(s.at)})<br>못 나오는 날: <b>${f.days.filter(d => off.indexOf(d.date) >= 0).map(d => esc(d.label)).join(', ') || '없음'}</b><br>주말 오전 가능: <b>${am.join('·') || '불가'}</b></p>` : `<p style="color:var(--text)">${f.past ? '이 주에는' : '아직'} 낸 신청이 없어요.</p>`;
+    const note = '<p class="small">안 내면 모든 요일 저녁 가능으로 짜요. 매주 금요일 0시에 열리고 토요일 밤 10시에 마감돼요. 여러 번 내면 마지막 것만 써요. 마감 뒤 바꾸려면 본인이 대타를 구해 주세요.</p>';
+    if (!f.open || ME.group !== '알') return render(`<div>${header()}<h2>휴무신청 <span class="small">· ${esc(f.title)}</span></h2><div class="card hero">${head}${savedTxt}</div>${ME.group !== '알' ? '<p class="small">휴무신청은 스케줄 알바만 내요.</p>' : ''}${note}</div>`);
+    render(`<div>${header()}<h2>휴무신청 <span class="small">· ${esc(f.title)}</span></h2>
+      <div class="card">${head}
         <label>못 나오는 날 (저녁)</label><div class="chk">${f.days.map(d => `<label><input type="checkbox" name="off" value="${d.date}" ${off.indexOf(d.date) >= 0 ? 'checked' : ''}><span>${esc(d.label)}</span></label>`).join('')}</div>
         <label>주말 오전(12~15시) 가능한 날</label><div class="chk" style="grid-template-columns:repeat(2,1fr)">
           <label><input type="checkbox" name="am" value="토" ${am.indexOf('토') >= 0 ? 'checked' : ''}><span>토 오전</span></label>
           <label><input type="checkbox" name="am" value="일" ${am.indexOf('일') >= 0 ? 'checked' : ''}><span>일 오전</span></label></div>
-        <button id="send" style="margin-top:16px">${f.saved ? '다시 보내기' : '보내기'}</button>
-        ${f.saved ? `<p class="small" style="margin-top:10px">마지막으로 보낸 시각 ${esc(f.saved.at)} — 다시 보내면 마지막 것만 써요.</p>` : ''}</div>
-      <p class="small">안 내면 모든 요일 저녁 가능으로 짜요. 마감 뒤 바꾸려면 본인이 대타를 구해 주세요.</p></div>`);
+        <button id="send" style="margin-top:16px">${s ? '다시 보내기' : '보내기'}</button>
+        ${s ? `<p class="small" style="margin-top:10px">마지막으로 보낸 시각 ${esc(s.at)} — 다시 보내면 마지막 것만 써요.</p>` : ''}${fallback}</div>${note}</div>`);
     document.getElementById('send').onclick = async e => {
-      const b = e.target; b.disabled = true; b.textContent = '보내는 중…';
-      const pick = n => [...document.querySelectorAll('input[name=' + n + ']:checked')].map(x => x.value);
-      await API.submitLeave(ME.name, pick('off'), pick('am'));
+      const b = e.target, pick = n => [...document.querySelectorAll('input[name=' + n + ']:checked')].map(x => x.value);
+      const o = pick('off'), a = pick('am');
+      if (!confirm('이대로 보낼까요?\n못 나오는 날 ' + o.length + '일 · 주말 오전 ' + (a.join('·') || '불가'))) return;
+      b.disabled = true; b.textContent = '보내는 중…';
+      let r; try { r = await API.submitLeave(ME.name, o, a); } catch (x) { r = { saved: false, msg: x.message + ' — 안 되면 아래 폼으로 내 주세요.' }; }
+      if (!r.saved) { toast(r.msg); b.disabled = false; b.textContent = '다시 보내기'; return; }
       render(`<div>${header()}<div class="card empty" style="margin-top:30px">${bear('eat')}<p>휴무신청 보냈어요!</p>
-        <p class="small">못 나오는 날 ${pick('off').length}일 · 주말 오전 ${pick('am').join('·') || '불가'}<br>마감 전까지는 다시 고칠 수 있어요.</p>
+        <p class="small">못 나오는 날 ${o.length}일 · 주말 오전 ${a.join('·') || '불가'}<br>마감 전까지는 다시 고칠 수 있어요.</p>
         <button class="ghost" id="again" style="margin-top:14px">신청 내용 보기</button></div></div>`);
       document.getElementById('again').onclick = () => VIEWS.leave();
     };
@@ -266,7 +265,10 @@
   };
 
   // ---------- 관리: 오늘 ----------
-  const STEP2 = '<p class="small">승인·일찍 부르기·기록 고치기는 지금처럼 NFC 관리 화면에서 해 주세요. (앱에서 바로 하기는 2단계)</p>';
+  const STEP2 = '<p class="small">NFC 관리 화면도 그대로 쓸 수 있어요(앱이 안 될 때).</p>';
+  let PEOPLE = null; const people = async () => PEOPLE || (PEOPLE = (await API.people()).list);
+  const opts = (list, sel) => list.map(p => `<option value="${esc(p.name)}" ${p.name === sel ? 'selected' : ''}>${esc(p.disp)}${p.disp !== p.name ? ' (' + esc(p.name) + ')' : ''}</option>`).join('');
+  const busy = async (b, fn) => { const t = b.textContent; b.disabled = true; b.textContent = '처리 중…'; try { await fn(); } catch (x) { toast(x.message); } finally { b.disabled = false; b.textContent = t; } };
   VIEWS.atoday = async function () {
     loading(); const d = await API.adminToday();
     let lvCard = '';
@@ -281,16 +283,37 @@
       ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
       <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item"><div><b>${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.in ? ' · 출근 ' + esc(r.in) : ''}${r.out ? ' · 퇴근 ' + esc(r.out) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
+      <div class="card"><b>⏰ 일찍 부르기</b><p class="small">오늘 정시보다 일찍 나오라고 한 알바를 미리 적어 두면 그 시각부터 계산돼요. (늦게 오면 찍은 시각부터)</p>
+        <label>누구</label><select id="en"><option value="">불러오는 중…</option></select>
+        <label>몇 시</label><input type="time" id="et" value="17:00" step="300">
+        <button id="eb" style="margin-top:14px">등록</button></div>
       ${lvCard}${STEP2}</div>`);
     const g = document.getElementById('golv'); if (g) g.onclick = e => { e.preventDefault(); go('aleave'); };
+    people().then(l => { const en = document.getElementById('en'); if (en) en.innerHTML = '<option value="">이름 고르기</option>' + opts(l.filter(p => p.alba)); }).catch(() => {});
+    document.getElementById('eb').onclick = e => busy(e.target, async () => {
+      const n = document.getElementById('en').value, t = document.getElementById('et').value;
+      if (!n || !t) return toast('이름과 시각을 골라 주세요');
+      if (!confirm(n + ' 오늘 ' + t + ' 출근으로 등록할까요?')) return;
+      const r = await API.early(n, '', t); r.warn ? alert(r.msg) : toast(r.msg);
+    });
   };
 
-  // ---------- 관리: 승인 대기 (보기만) ----------
+  // ---------- 관리: 승인 대기 (NFC 관리 화면과 같은 승인) ----------
   VIEWS.aok = async function () {
     loading(); const list = await API.pending();
+    const can = p => p.kind !== '새 폰' || ME.role === '사장님', nExc = list.filter(p => p.kind !== '새 폰').length;
     render(`<div>${header()}<h2>승인 대기 ${list.length}건</h2>
-      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p>${esc(p.when)} · ${esc(p.detail)}</p></div>`).join('')
-        : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}${STEP2}</div>`);
+      ${nExc > 1 ? `<button id="all" style="margin-bottom:10px">조기 출근 ${nExc}건 전부 승인</button>` : ''}
+      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p>${esc(p.when)} · ${esc(p.detail)}</p>
+        ${can(p) ? `<div class="row" style="gap:8px;margin-top:8px"><button class="sm" data-id="${esc(p.id)}" data-ok="1">승인</button><button class="sm ghost" data-id="${esc(p.id)}" data-ok="">거절</button></div>` : '<p class="small">새 폰 승인은 사장님만 해요.</p>'}</div>`).join('')
+        : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}
+      <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터.</p>${STEP2}</div>`);
+    $app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => busy(b, async () => {
+      const ok = !!b.dataset.ok; if (!confirm(ok ? '승인할까요?' : '거절할까요?')) return;
+      const r = await API.decide(b.dataset.id, ok); r.warn ? alert(r.msg) : toast(r.msg); VIEWS.aok();
+    }));
+    const all = document.getElementById('all');
+    if (all) all.onclick = () => busy(all, async () => { if (!confirm('조기 출근 대기를 전부 승인할까요?')) return; const r = await API.decideAll(); alert(r.msg); VIEWS.aok(); });
   };
 
   // ---------- 관리: 대시보드 (결산 "대시보드" 화면 글자 그대로) ----------
@@ -316,9 +339,25 @@
   const man = n => n >= 10000 ? (Math.round(n / 10000)).toLocaleString('ko-KR') + '만' : n.toLocaleString('ko-KR');
   VIEWS.asales = async function () {
     loading(); const s = await API.sales();
+    const td = (ME.today && ME.today.date) || '';
     render(`<div>${header()}<h2>매출 <span class="small">· 이번 달 ${man(s.monthTotal)}원</span></h2>
+      <div class="card"><b>💰 매출 넣기</b>
+        <label>날짜</label><input type="date" id="sd" value="${td}" max="${td}">
+        <label>매출 (원)</label><input id="sa" inputmode="numeric" autocomplete="off" placeholder="예: 1,850,000">
+        <button id="ss" style="margin-top:14px">저장</button>
+        <p class="small" style="margin-top:8px">결산 "일별매출"에 바로 들어가요. 이미 값이 있는 날은 바꿀지 한 번 더 물어봐요.</p></div>
       <div class="card list">${s.list.length ? s.list.map(x => `<div class="item"><span>${esc(x.label)}</span><b>${won(x.amount)}</b></div>`).join('') : '<p class="small">이번 달 매출 기록이 아직 없어요.</p>'}</div>
-      <p class="small">결산 "일별매출" 최근 7일이에요. 앱에서 매출 넣기는 2단계에서 열려요 — 지금은 하던 대로 시트에 넣어 주세요.</p></div>`);
+      <p class="small">결산 "일별매출" 최근 7일이에요. 앱이 안 되면 하던 대로 시트에 넣어 주세요.</p></div>`);
+    const sa = document.getElementById('sa');
+    sa.oninput = () => { const n = sa.value.replace(/[^\d]/g, ''); sa.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
+    const btn = document.getElementById('ss');
+    btn.onclick = () => busy(btn, async () => {
+      const d = document.getElementById('sd').value, n = Number(sa.value.replace(/[^\d]/g, ''));
+      if (!d || !n) return toast('날짜와 금액을 넣어 주세요');
+      let r = await API.saveSales(d, n, false);
+      if (r.confirm) { if (!confirm(r.msg)) return; r = await API.saveSales(d, n, true); }
+      toast(r.msg); if (r.saved) setTimeout(() => VIEWS.asales(), 600);
+    });
   };
 
   // ---------- 관리: 휴무신청 현황 ----------
@@ -387,14 +426,55 @@
     });
   };
 
+  // ---------- 관리: 출퇴근 기록 넣기·고치기 (NFC "지난 기록 넣기"와 같음) ----------
+  VIEWS.afix = async function () {
+    loading(); const list = await people(), td = (ME.today && ME.today.date) || '';
+    render(`<div>${header()}<h2>출퇴근 기록 넣기·고치기</h2>
+      <div class="card">
+        <label>누구</label><select id="fn"><option value="">이름 고르기</option>${opts(list)}</select>
+        <label>날짜</label><input type="date" id="fd" value="${td}" max="${td}">
+        <p class="small" id="fs" style="margin-top:8px">이름과 날짜를 고르면 지금 기록을 불러와요.</p>
+        <div id="fin"><label>출근 (비우면 정시)</label><input type="time" id="fi" step="300"></div>
+        <label>퇴근</label><input type="time" id="fo" step="300">
+        <label>근무 구분</label><select id="fk"><option value="normal">스케줄대로</option><option value="sub">대타</option><option value="extra">추가 출근 (사장님·매니저 요청)</option></select>
+        <div id="fsw" hidden><label>누구 대신? (풀네임)</label><input id="fb" placeholder="예: 홍길동"></div>
+        <button id="fsv" style="margin-top:16px">저장</button></div>
+      <p class="small">퇴근을 안 찍은 날이나 잘못 찍힌 날을 고쳐요. 결산 "설문지 응답 시트1"에도 바로 반영돼요(같은 날 퇴근 폼 줄이 있으면 경고만 하고 안 넣어요). 정직원은 퇴근만 넣어요.</p>${STEP2}</div>`);
+    const $ = id => document.getElementById(id);
+    const kind = () => { $('fsw').hidden = $('fk').value !== 'sub'; };
+    $('fk').onchange = kind;
+    const look = async () => {
+      const n = $('fn').value, d = $('fd').value, p = list.find(x => x.name === n);
+      $('fin').hidden = p ? !p.alba : false;
+      if (!n || !d) return;
+      $('fs').textContent = '불러오는 중…';
+      try {
+        const r = await API.lookup(n, d);
+        if (r.found) { $('fi').value = r.inTag || ''; $('fo').value = (r.out || '').replace(/^2([4-9]):/, (m, h) => '0' + (h - 4) + ':'); $('fk').value = r.kind || 'normal'; $('fb').value = r.sub || ''; $('fs').textContent = '지금 기록: 출근 ' + (r.inTag || '-') + ' · 계산 ' + (r.start || '-') + ' · 퇴근 ' + (r.out || '-'); }
+        else { $('fi').value = ''; $('fo').value = ''; $('fk').value = 'normal'; $('fb').value = ''; $('fs').textContent = '이날은 기록이 없어요. 새로 넣어요.'; }
+        kind();
+      } catch (x) { $('fs').textContent = x.message; }
+    };
+    $('fn').onchange = look; $('fd').onchange = look;
+    $('fsv').onclick = () => busy($('fsv'), async () => {
+      const n = $('fn').value, d = $('fd').value, o = $('fo').value;
+      if (!n || !d || !o) return toast('이름·날짜·퇴근을 넣어 주세요');
+      if ($('fk').value === 'sub' && !$('fb').value.trim()) return toast('누구 대신인지 적어 주세요');
+      if (!confirm(n + ' ' + d.slice(5) + ' ' + ($('fin').hidden ? '' : ($('fi').value || '정시') + ' ~ ') + o + ' 로 저장할까요?')) return;
+      const r = await API.manual({ name: n, wd: d, inT: $('fin').hidden ? '' : $('fi').value, outT: o, kind: $('fk').value, sub: $('fb').value });
+      r.warn ? alert(r.msg) : toast(r.msg); look();
+    });
+  };
+
   VIEWS.amore = function () {
     render(`<div>${header()}<h2>더보기</h2>
       <div class="card list">
+        <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
-      </div>${backup()}<p class="small">2단계에서 들어갈 것: 승인·일찍 부르기·기록 고치기, 매출 넣기, 휴무신청 앱에서 바로 내기</p></div>`);
+      </div>${backup()}</div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
   };
 

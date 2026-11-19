@@ -38,5 +38,14 @@
     accounts: () => call('accounts').then(r => r.list),
     issueCode: name => call('issueCode', { name }),
     issueAll: () => call('issueAll'),
+    // 2단계 쓰기
+    saveSales: (date, amount, force) => call('saveSales', { date, amount, force: !!force }),
+    submitLeave: (name, off, am) => call('submitLeave', { off, am }),
+    people: () => call('people'),
+    early: (name, wd, time) => call('early', { name, wd, time }),
+    decide: (id, ok) => call('decide', { id, ok }),
+    decideAll: () => call('decideAll'),
+    manual: o => call('manual', o),
+    lookup: (name, wd) => call('lookup', { name, wd }),
   };
 })();
