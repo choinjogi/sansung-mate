@@ -1,64 +1,8 @@
-// 산성 MATE 여러 매장용 — 2단계 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙
+// 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
 import * as api from './fb.js';
 import { STORE_RULES_DEFAULT } from './defaults.js';
-import { qrcode } from './vendor/firebase.js';
-
-const $ = id => document.getElementById(id);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const BASE = location.origin + location.pathname;
-const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
-const clone = o => JSON.parse(JSON.stringify(o));
-
-function toast(msg) {
-  document.querySelectorAll('.toast').forEach(x => x.remove());
-  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2600);
-}
-function show(html) { $('app').innerHTML = `<div class="fade">${html}</div>`; window.scrollTo(0, 0); }
-function top(title, back) {
-  return `<div class="top"><div class="brand">${back ? '<button class="sm ghost" id="back">‹</button>' : ''}<span>${esc(title)}</span></div>
-    ${api.auth.currentUser ? '<button class="sm ghost" id="out">로그아웃</button>' : ''}</div>`;
-}
-function wireTop(back) {
-  if ($('out')) $('out').onclick = async () => { await api.logout(); };
-  if ($('back')) $('back').onclick = back;
-}
-// 버튼 눌렀을 때: 잠그고, 실패하면 이유를 보여 줌
-async function busy(btn, fn) {
-  const old = btn.textContent; btn.disabled = true; btn.textContent = '잠시만요…';
-  try { await fn(); } catch (e) { console.error(e); toast(niceErr(e)); } finally { if (btn.isConnected) { btn.disabled = false; btn.textContent = old; } }
-}
-function niceErr(e) {
-  const c = e && e.code || '';
-  if (c === 'taken') return e.message;
-  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return '이름이나 번호가 맞지 않아요';
-  if (/too-many-requests/.test(c)) return '여러 번 틀려서 잠시 막혔어요. 조금 뒤에 다시 해 주세요';
-  if (/permission-denied/.test(c)) return '권한이 없어요';
-  if (/network|unavailable/.test(c)) return '인터넷 연결을 확인해 주세요';
-  if (/popup-closed|cancelled-popup/.test(c)) return '로그인 창이 닫혔어요';
-  return (e && e.message) || '오류가 났어요';
-}
-async function copy(text) {
-  try { await navigator.clipboard.writeText(text); toast('복사했어요'); } catch (e) { prompt('아래 주소를 복사하세요', text); }
-}
-async function share(title, text, url) {
-  if (navigator.share) { try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-  copy(url);
-}
-function qrSvg(text) { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); }
-function linkCard({ title, desc, url, qr, extra = '' }) {
-  return `<div class="card"><b>${title}</b><p class="small">${desc}</p>
-    ${qr ? `<div class="qr">${qrSvg(url)}</div>` : ''}
-    <div class="url">${esc(url)}</div>
-    <div class="row" style="margin-top:10px"><button class="sm" data-copy="${esc(url)}">링크 복사</button><button class="sm ghost" data-share="${esc(url)}" data-title="${esc(title)}">공유</button>${extra}</div></div>`;
-}
-function wireLinks() {
-  document.querySelectorAll('[data-copy]').forEach(b => { b.onclick = () => copy(b.dataset.copy); });
-  document.querySelectorAll('[data-share]').forEach(b => { b.onclick = () => share(b.dataset.title, b.dataset.title, b.dataset.share); });
-}
-
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks } from './ui.js';
+import * as attend from './attend.js';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -157,7 +101,7 @@ function staffLoginScreen() {
   $('own').onclick = ev => { ev.preventDefault(); landing(); };
 }
 
-// ---------- 직원 홈 (3단계에서 출퇴근·스케줄이 들어옴) ----------
+// ---------- 직원 홈 (승인 전·퇴사 안내, 승인 뒤에는 출퇴근 화면) ----------
 async function staffHome(storeId) {
   const m = await api.myMember(storeId);
   if (!m) {
@@ -177,10 +121,7 @@ async function staffHome(storeId) {
   }
   const s = await api.getStore(storeId);
   ls.set('mate_store_name', s.name);
-  show(`${top(s.name)}<div class="card hero"><div class="small">${m.role === 'manager' ? '매니저' : '직원'}</div><div class="big">${esc(m.name)}님</div>
-    <p>가입이 끝났어요.</p></div>
-    <div class="card"><p class="small">출퇴근, 스케줄, 휴무신청, 내 기록 화면은 다음 단계에서 이 앱으로 옮겨 와요.</p></div>`);
-  wireTop();
+  return attend.staffHome(storeId, m, s, () => staffHome(storeId));
 }
 
 // ---------- 사장님·총괄 홈 ----------
@@ -276,11 +217,12 @@ function storeForm(ctx) {
 
 // ---------- 매장 화면 (그 매장 사장님) ----------
 async function storeScreen(id) {
-  const [s, ms, rules] = await Promise.all([api.getStore(id), api.members(id), api.rulesOf(id)]);
+  const s = await api.getStore(id);
+  const [ms, rules, attendHtml] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s)]);
   const pending = ms.filter(m => m.status === 'pending');
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
-  show(`${top(s.name, true)}
+  show(`${top(s.name, true)}${attendHtml.head}
     ${pending.length ? `<div class="card hero"><b>가입 신청 ${pending.length}명</b><div class="list">${pending.map(m => `
       <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
         <button class="sm" data-ok="${m.id}">승인</button><button class="sm ghost" data-no="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
@@ -302,8 +244,10 @@ async function storeScreen(id) {
       <tr><td>급여일</td><td>${r.pay.payday ? '매달 ' + r.pay.payday + '일' : '-'}</td></tr>
       <tr><td>휴무신청</td><td>${DOW[r.leave.opensDow]} ${esc(r.leave.opensTime)} ~ ${DOW[r.leave.closesDow]} ${esc(r.leave.closesTime)}</td></tr></table>
       <p class="small">${r.id}부터 적용${rules.next ? ` · <b>${rules.next.id}부터 바뀐 규칙 예약됨</b>` : ''}</p>` : '<p class="small">규칙이 없어요.</p>'}
-      <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>`);
+      <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>
+    ${attendHtml.settings}`);
   wireTop(ownerHome); wireLinks();
+  attend.wireOwnerSection(s, () => storeScreen(id));
   document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.ok, { status: 'active' }); toast('승인했어요'); storeScreen(id); }); });
   document.querySelectorAll('[data-no]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(id, b.dataset.no); storeScreen(id); }); }; });
   document.querySelectorAll('[data-role]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.role, { role: b.dataset.to }); storeScreen(id); }); });

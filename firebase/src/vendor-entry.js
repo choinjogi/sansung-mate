@@ -4,5 +4,6 @@ export { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPas
   signInWithPopup, signInWithRedirect, signInWithCredential, GoogleAuthProvider, signOut } from 'firebase/auth';
 export { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where,
   writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+export { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 import qrcode from 'qrcode-generator';
 export { qrcode };

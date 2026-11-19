@@ -155,28 +155,53 @@ test('시급은 사장님과 본인만, 바꾸기는 사장님만', async () => 
 });
 
 // ---------- 출퇴근 ----------
-test('직원은 지금 시각으로만 출근을 찍는다', async () => {
-  const c = collection(as('alba', P), 'stores/sansung/punches');
-  await assertSucceeds(addDoc(c, { uid: 'alba', date: '2026-11-19', kind: 'out', at: serverTimestamp(), via: 'nfc', by: 'alba' }));
-  await assertFails(addDoc(c, { uid: 'alba', date: '2026-11-19', kind: 'in', at: Timestamp.fromMillis(Date.now() - 3600e3), via: 'nfc', by: 'alba' }));
-  await assertFails(addDoc(c, { uid: 'mgr', date: '2026-11-19', kind: 'in', at: serverTimestamp(), via: 'nfc', by: 'alba' }));
+const P_IN = { uid: 'alba', name: '알바', date: '2026-11-19', kind: 'in', via: 'manual' };
+test('직원은 출퇴근 기록을 직접 못 쓴다 (서버 함수가 와이파이 확인 후 기록)', async () => {
+  const db = as('alba', P);
+  await assertFails(setDoc(doc(db, 'stores/sansung/punches/2026-11-20_alba_in'), { uid: 'alba', date: '2026-11-20', kind: 'in', at: serverTimestamp(), via: 'app', by: 'alba', wifi: true, flag: false }));
+  await assertFails(updateDoc(doc(db, 'stores/sansung/punches/p1'), { flag: false }));
 });
-test('승인 대기·다른 매장 사람은 산성 출근을 못 찍는다', async () => {
-  await assertFails(addDoc(collection(as('newbie', P), 'stores/sansung/punches'), { uid: 'newbie', date: '2026-11-19', kind: 'in', at: serverTimestamp(), via: 'nfc', by: 'newbie' }));
-  await assertFails(addDoc(collection(as('other', P), 'stores/sansung/punches'), { uid: 'other', date: '2026-11-19', kind: 'in', at: serverTimestamp(), via: 'nfc', by: 'other' }));
+test('승인 대기·다른 매장 사람은 산성 기록을 못 쓴다', async () => {
+  await assertFails(setDoc(doc(as('newbie', P), 'stores/sansung/punches/2026-11-19_newbie_in'), { ...P_IN, uid: 'newbie', at: serverTimestamp(), by: 'newbie' }));
+  await assertFails(setDoc(doc(as('other', P), 'stores/sansung/punches/2026-11-19_other_in'), { ...P_IN, uid: 'other', at: serverTimestamp(), by: 'other' }));
+});
+test('매니저는 빠진 기록을 넣을 수 있다 (문서 이름 규칙 지킴)', async () => {
+  const db = as('mgr', P);
+  await assertSucceeds(setDoc(doc(db, 'stores/sansung/punches/2026-11-19_alba_out'), { ...P_IN, kind: 'out', at: Timestamp.now(), by: 'mgr' }));
+  await assertFails(setDoc(doc(db, 'stores/sansung/punches/아무거나'), { ...P_IN, at: Timestamp.now(), by: 'mgr' }));
+  await assertFails(setDoc(doc(db, 'stores/sansung/punches/2026-11-19_alba_in'), { ...P_IN, at: Timestamp.now(), by: 'mgr', flag: false }));
 });
 test('직원은 찍은 기록을 고치거나 지울 수 없고, 매니저는 고친 사람이 남는다', async () => {
   await assertFails(updateDoc(doc(as('alba', P), 'stores/sansung/punches/p1'), { at: Timestamp.fromMillis(0) }));
   await assertFails(deleteDoc(doc(as('alba', P), 'stores/sansung/punches/p1')));
   await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/punches/p1'), { at: Timestamp.fromMillis(0) }));
+  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/punches/p1'), { uid: 'mgr', editedBy: 'mgr', editedAt: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(as('mgr', P), 'stores/sansung/punches/p1'), { at: Timestamp.fromMillis(0), editedBy: 'mgr', editedAt: serverTimestamp() }));
+});
+test('⚠ 기록 확인 표시는 매니저 이상, 확인한 사람이 남는다', async () => {
+  await assertFails(updateDoc(doc(as('alba', P), 'stores/sansung/punches/p1'), { reviewed: true, reviewedBy: 'alba', reviewedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/punches/p1'), { reviewed: true, reviewedBy: 'boss', reviewedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(as('mgr', P), 'stores/sansung/punches/p1'), { reviewed: true, reviewedBy: 'mgr', reviewedAt: serverTimestamp() }));
 });
 test('직원은 자기 출퇴근만 본다', async () => {
   const db = as('alba', P);
   await assertSucceeds(getDocs(query(collection(db, 'stores/sansung/punches'), where('uid', '==', 'alba'))));
+  await assertSucceeds(getDoc(doc(db, 'stores/sansung/punches/p1')));
+  await assertSucceeds(getDoc(doc(db, 'stores/sansung/punches/2026-12-01_alba_in'))); // 아직 없는 오늘 기록
+  await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung/punches/2026-12-01_newbie_in')));
   await assertFails(getDocs(collection(db, 'stores/sansung/punches')));
   await assertFails(getDoc(doc(db, 'stores/sansung/punches/p2')));
   await assertSucceeds(getDocs(collection(as('mgr', P), 'stores/sansung/punches')));
+});
+test('매장 와이파이 주소는 사장님만 보고, 아무도 앱에서 직접 못 바꾼다', async () => {
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/settings/wifi'), { ips: ['1.2.3.4'] }));
+  await assertFails(getDoc(doc(as('mgr', P), 'stores/sansung/settings/wifi')));
+  await assertSucceeds(getDoc(doc(as('boss', G), 'stores/sansung/settings/wifi')));
+});
+test('매장 위치는 사장님만 정한다', async () => {
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/settings/place'), { lat: 37.5, lng: 127.0, radius: 100 }));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/settings/place'), { lat: 37.5, lng: 127.0, radius: 5 }));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/settings/place'), { lat: 37.5, lng: 127.0, radius: 100 }));
 });
 
 // ---------- 휴무신청 ----------

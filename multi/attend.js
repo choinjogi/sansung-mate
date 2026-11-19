@@ -1,0 +1,209 @@
+// 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
+// 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
+import * as api from './fb.js';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js';
+
+const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
+const km = m => (m >= 1000 ? (m / 1000).toFixed(1) + 'km' : m + 'm');
+export const startOf = (member, rules) => (member && member.startTime) || (rules && rules.open && rules.open.startTime) || '18:00';
+export function lateMin(inHm, start, grace = 0) {
+  if (!inHm) return 0;
+  const d = toMin(inHm) - toMin(start);
+  return d > grace && d < 12 * 60 ? d : 0;
+}
+// 기록 옆에 붙는 설명
+export function how(p) {
+  if (!p) return '';
+  if (p.via === 'manual') return '<span class="small">직접 넣음</span>';
+  const edited = p.editedBy ? ' · 고침' : '';
+  if (p.flag) return `<span class="pill warn">⚠ ${p.why === 'far' && p.dist != null ? '매장에서 ' + km(p.dist) : '매장 와이파이 아님'}</span>${p.reviewed ? ' <span class="small">확인함</span>' : ''}${edited}`;
+  return `<span class="pill ok">✓ ${p.wifi ? '매장 와이파이' : '매장 ' + km(p.dist)}</span>${edited ? '<span class="small">' + edited + '</span>' : ''}`;
+}
+function box(label, p, late, attrs = '') {
+  const hm = p && api.hmOf(p.at);
+  return `<div class="tbox${late ? ' late' : ''}" ${attrs}><div class="small">${label}${late ? ` · <span style="color:var(--warn)">${late}분 늦음</span>` : ''}</div>
+    <div class="tval" style="color:${hm ? (late || p.flag ? 'var(--warn)' : 'var(--ok)') : 'var(--dim)'}">${esc(hm || '--:--')}</div><div class="thow">${how(p)}</div></div>`;
+}
+
+// ---------- 직원 홈 ----------
+let LAST = null; // 방금 찍은 결과 (⚠ 안내를 보여 주려고)
+export async function staffHome(storeId, me, store, again) {
+  const t = api.kst(), uid = api.auth.currentUser.uid;
+  const [rules, tin, tout] = await Promise.all([api.rulesOf(storeId), api.punchDoc(storeId, t.date, uid, 'in'), api.punchDoc(storeId, t.date, uid, 'out')]);
+  let date = t.date, pin = tin, pout = tout;
+  if (!tin && !tout && t.hour < 12) { // 자정 넘겨 일하는 중이면 어제 근무를 보여 줌
+    const y = api.addDays(t.date, -1);
+    const [yin, yout] = await Promise.all([api.punchDoc(storeId, y, uid, 'in'), api.punchDoc(storeId, y, uid, 'out')]);
+    if (yin && !yout) { date = y; pin = yin; pout = null; }
+  }
+  const r = rules.current, start = startOf(me, r), late = lateMin(pin && api.hmOf(pin.at), start, r ? r.open.lateGraceMin : 0);
+  const mStart = t.date.slice(0, 8) + '01';
+  const [mine, flagged] = await Promise.all([
+    api.myPunches(storeId, mStart, t.date),
+    me.role === 'manager' ? api.flaggedSince(storeId, api.addDays(t.date, -31)) : Promise.resolve([]),
+  ]);
+  const todo = flagged.filter(p => !p.reviewed).length;
+  const byDay = {};
+  mine.forEach(p => { (byDay[p.date] = byDay[p.date] || {})[p.kind] = p; });
+  const days = Object.keys(byDay).sort().reverse();
+  const next = !pin && !pout ? 'in' : !pout ? 'out' : null;
+  const res = LAST && LAST.date === date ? LAST : null;
+
+  show(`${top(store.name)}
+    <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1>${me.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}</div>
+    <div class="card hero">
+      <div class="row between"><b>${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">정시 ${esc(start)}</span></div>
+      <div class="tgrid">${box('출근', pin, late)}${box('퇴근', pout, 0)}</div>
+      ${next === 'in' ? `<button id="pIn" class="big-btn">출근</button><button class="ghost sm" id="pOut0" style="width:100%;margin-top:8px">출근을 못 찍었어요 · 퇴근 찍기</button>`
+        : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : '<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>'}
+      <p class="small" style="margin-top:8px">매장 와이파이에 연결된 상태로 찍어 주세요. 일찍 찍어도 계산은 정시부터예요.</p>
+    </div>
+    ${res && res.flag ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">⚠ 매장 와이파이로 찍히지 않았어요</b>
+      <p>기록은 됐고, 사장님이 확인해요.</p>
+      <p class="small">· 폰이 매장 와이파이에 연결돼 있는지 확인해 주세요 (모바일 데이터 말고)<br>
+      · 아이폰: 설정 → Wi-Fi → 매장 와이파이 옆 ⓘ → <b>IP 주소 추적 제한</b> 끄기<br>
+      ${res.geo ? '' : '· 위치 허용도 켜 주세요 (퇴근 확인에 써요)'}</p></div>` : ''}
+    ${me.role === 'manager' ? `<div class="row" style="gap:8px"><button class="ghost" id="goToday">오늘 출근 현황</button><button class="ghost" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>` : ''}
+    <h2>이번 달 기록</h2>
+    <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${days.map(d => {
+      const x = byDay[d], i = x.in, o = x.out, li = lateMin(i && api.hmOf(i.at), start, r ? r.open.lateGraceMin : 0);
+      const cell = p => (p ? `${esc(api.hmOf(p.at))}${p.flag ? ' ⚠' : ''}` : '<span class="small">-</span>');
+      return `<tr><td>${dayLabel(d)}</td><td style="text-align:center">${cell(i)}${li ? ` <span class="small" style="color:var(--warn)">+${li}분</span>` : ''}</td><td>${cell(o)}</td></tr>`;
+    }).join('')}</table>` : '<p class="small">이번 달 기록이 아직 없어요.</p>'}</div>`);
+  wireTop();
+  const go = kind => e => {
+    if (kind === 'out' && !confirm('퇴근할까요?')) return;
+    busy(e.target, async () => {
+      LAST = await api.punch(storeId, kind);
+      toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
+      await again();
+    });
+  };
+  if ($('pIn')) $('pIn').onclick = go('in');
+  if ($('pOut')) $('pOut').onclick = go('out');
+  if ($('pOut0')) $('pOut0').onclick = go('out');
+  if ($('goToday')) $('goToday').onclick = () => todayScreen(store, again);
+  if ($('goReview')) $('goReview').onclick = () => reviewScreen(store, again);
+}
+
+// ---------- 오늘 출근 현황 (매니저·사장님) ----------
+export async function todayScreen(store, back, date) {
+  const t = api.kst(); date = date || t.date;
+  const [ms, ps, rules] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, date, date), api.rulesOf(store.id)]);
+  const r = rules.current, grace = r ? r.open.lateGraceMin : 0;
+  const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
+  const P = {}; ps.forEach(p => { (P[p.uid] = P[p.uid] || {})[p.kind] = p; });
+  const rows = act.map(m => {
+    const x = P[m.id] || {}, start = startOf(m, r), late = lateMin(x.in && api.hmOf(x.in.at), start, grace);
+    const state = x.out ? '퇴근' : x.in ? (late ? '지각' : '출근') : '기록 없음';
+    return { m, x, start, late, state };
+  });
+  const cnt = f => rows.filter(f).length;
+  show(`${top('출근 현황', true)}
+    <div class="row between"><h2 style="margin:12px 0">${date === t.date ? '오늘' : ''} ${dayLabel(date)}</h2>
+      <span class="row" style="gap:6px"><button class="sm ghost" id="prev">‹ 전날</button>${date < t.date ? '<button class="sm ghost" id="nextd">다음 ›</button>' : ''}</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(x => x.x.in || x.x.out)}</span><span class="pill warn">지각 ${cnt(x => x.late)}</span>
+      <span class="pill warn">⚠ ${ps.filter(p => p.flag && !p.reviewed).length}</span><span class="pill">기록 없음 ${cnt(x => !x.x.in && !x.x.out)}</span></div>
+    <div class="card list">${rows.length ? rows.map(({ m, x, start, late, state }) => `<div class="item" style="display:block;padding:12px 0">
+      <div class="row between"><div><b style="font-size:17px">${esc(m.name)}</b> <span class="small">정시 ${esc(start)}</span></div>
+        <span class="pill ${state === '지각' ? 'warn' : state === '기록 없음' ? '' : 'ok'}">${state === '지각' ? '지각 ' + late + '분' : state}</span></div>
+      <div class="tgrid">${box('출근', x.in, late, `data-ed="${m.id}" data-k="in"`)}${box('퇴근', x.out, 0, `data-ed="${m.id}" data-k="out"`)}</div>
+      <div id="ed_${m.id}"></div></div>`).join('') : '<p class="small">승인된 직원이 없어요.</p>'}</div>
+    <p class="small">시각 칸을 누르면 고치거나 빠진 기록을 넣을 수 있어요. 고친 사람은 기록에 남아요.</p>`);
+  wireTop(back);
+  $('prev').onclick = () => todayScreen(store, back, api.addDays(date, -1));
+  if ($('nextd')) $('nextd').onclick = () => todayScreen(store, back, api.addDays(date, 1));
+  const again = () => todayScreen(store, back, date);
+  document.querySelectorAll('[data-ed]').forEach(el => {
+    el.onclick = () => {
+      const row = rows.find(x => x.m.id === el.dataset.ed), k = el.dataset.k, p = row.x[k];
+      editor($('ed_' + row.m.id), store, row.m, date, k, p, row.x.in, again);
+    };
+  });
+}
+
+function editor(host, store, m, date, kind, p, pin, again) {
+  const cur = p ? api.hmOf(p.at) : kind === 'in' ? null : '';
+  host.innerHTML = `<div class="card" style="margin:10px 0 0"><b>${esc(m.name)} ${kind === 'in' ? '출근' : '퇴근'} ${p ? '고치기' : '넣기'}</b>
+    <div class="row" style="margin-top:8px"><input type="time" id="edt" step="60" value="${esc(cur || '')}"><button class="sm" id="eds">저장</button><button class="sm ghost" id="edc">취소</button></div></div>`;
+  $('edc').onclick = () => { host.innerHTML = ''; };
+  $('eds').onclick = e => busy(e.target, async () => {
+    const hm = $('edt').value;
+    if (!hm) throw new Error('시각을 넣어 주세요');
+    const at = api.atOf(date, hm, kind === 'out' && pin ? api.hmOf(pin.at) : null);
+    if (p) await api.editPunch(store.id, p.id, at);
+    else await api.addPunch(store.id, { uid: m.id, name: m.name, date, kind, at });
+    toast('저장했어요'); await again();
+  });
+}
+
+// ---------- 확인 필요 (⚠ 기록 모아 보기) ----------
+export async function reviewScreen(store, back) {
+  const t = api.kst(), mStart = t.date.slice(0, 8) + '01', from = [api.addDays(t.date, -31), mStart].sort()[0];
+  const fl = (await api.flaggedSince(store.id, from)).sort((a, b) => (a.date + a.kind < b.date + b.kind ? 1 : -1));
+  const todo = fl.filter(p => !p.reviewed);
+  const month = {}; fl.filter(p => p.date >= mStart).forEach(p => { month[p.name] = (month[p.name] || 0) + 1; });
+  const why = p => (p.why === 'far' && p.dist != null ? `매장에서 ${km(p.dist)}` : p.kind === 'out' && p.dist == null ? '매장 와이파이 아님 · 위치 없음' : '매장 와이파이 아님');
+  show(`${top('확인 필요', true)}
+    <p class="small">매장 와이파이가 아닌 곳에서 찍은 기록이에요. 맞으면 [확인], 틀리면 [시각 고치기].</p>
+    ${todo.length ? todo.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">⚠ ${esc(why(p))}</span></div>
+      <p>${dayLabel(p.date)} ${p.kind === 'in' ? '출근' : '퇴근'} <b style="color:var(--text)">${esc(api.hmOf(p.at))}</b></p>
+      <div class="row" style="gap:8px"><button class="sm" data-ok="${p.id}">확인</button><button class="sm ghost" data-fix="${p.id}">시각 고치기</button></div>
+      <div id="fx_${p.id}"></div></div>`).join('') : '<div class="card"><p>확인할 기록이 없어요.</p></div>'}
+    <h2>이번 달 ⚠ 횟수</h2>
+    <div class="card">${Object.keys(month).length ? `<table class="kv">${Object.entries(month).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<tr><td>${esc(n)}</td><td>${c}번</td></tr>`).join('')}</table>` : '<p class="small">이번 달은 없어요.</p>'}</div>`);
+  wireTop(back);
+  const again = () => reviewScreen(store, back);
+  document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.reviewPunch(store.id, b.dataset.ok); await again(); }); });
+  document.querySelectorAll('[data-fix]').forEach(b => {
+    b.onclick = async () => {
+      const p = todo.find(x => x.id === b.dataset.fix);
+      const pin = p.kind === 'out' ? await api.punchDoc(store.id, p.date, p.uid, 'in') : null;
+      editor($('fx_' + p.id), store, { id: p.uid, name: p.name }, p.date, p.kind, p, pin, async () => { await api.reviewPunch(store.id, p.id); await again(); });
+    };
+  });
+}
+
+// ---------- 매장 화면에 붙는 부분 (사장님) ----------
+export async function ownerSection(store) {
+  const t = api.kst();
+  const [wifi, place, fl] = await Promise.all([api.getSetting(store.id, 'wifi'), api.getSetting(store.id, 'place'), api.flaggedSince(store.id, api.addDays(t.date, -31))]);
+  const n = wifi && wifi.ips ? wifi.ips.length : 0, todo = fl.filter(p => !p.reviewed).length;
+  const head = `
+    <div class="row" style="gap:8px;margin-top:12px"><button id="goToday">오늘 출근 현황</button><button class="${todo ? '' : 'ghost'}" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
+    ${n ? '' : '<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">매장 와이파이 등록 전이에요</b><p class="small">등록하기 전에는 모든 출근에 ⚠가 붙어요. 맨 아래 [출퇴근 확인]에서 등록해 주세요.</p></div>'}
+    `;
+  const settings = `
+    <h2>출퇴근 확인</h2>
+    <div class="card"><div class="row between"><b>매장 와이파이</b>${n ? `<span class="pill ok">등록 ${n}개</span>` : '<span class="pill warn">등록 전</span>'}</div>
+      <p class="small">매장 안에서, 이 폰을 매장 와이파이에 연결하고 누르세요. 와이파이가 둘이면 각각 연결해서 한 번씩 누르세요.
+      출근에 ⚠가 갑자기 많아지면 인터넷 주소가 바뀐 거라 다시 누르면 돼요.</p>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="sm" id="wReg">이 와이파이를 매장으로 등록</button>${n ? '<button class="sm ghost" id="wReset">처음부터 다시</button>' : ''}</div>
+      <div class="row between" style="margin-top:16px"><b>매장 위치</b>${place ? `<span class="pill ok">저장됨 · 반경 ${place.radius}m</span>` : '<span class="pill">없음</span>'}</div>
+      <p class="small">퇴근 확인에 써요 (와이파이가 아니어도 반경 안이면 ✓). 매장 안에서 누르세요.</p>
+      <div class="row" style="margin-top:8px"><input id="rad" type="number" min="20" max="1000" step="10" inputmode="numeric" value="${place ? place.radius : 100}" style="width:110px"><span class="small">m</span>
+        <button class="sm" id="pSave">지금 위치를 매장 위치로</button></div></div>`;
+  return { head, settings };
+}
+export function wireOwnerSection(store, again) {
+  $('goToday').onclick = () => todayScreen(store, again);
+  $('goReview').onclick = () => reviewScreen(store, again);
+  const reg = reset => e => busy(e.target, async () => {
+    if (reset && !confirm('등록한 와이파이를 모두 지우고 지금 와이파이만 등록할까요?')) return;
+    const r = await api.registerWifi(store.id, reset);
+    toast(r.added || reset ? '매장 와이파이로 등록했어요' : '이미 등록된 와이파이예요');
+    await again();
+  });
+  $('wReg').onclick = reg(false);
+  if ($('wReset')) $('wReset').onclick = reg(true);
+  $('pSave').onclick = e => busy(e.target, async () => {
+    const radius = Math.round(+$('rad').value || 100);
+    if (radius < 20 || radius > 1000) throw new Error('반경은 20~1000m로 넣어 주세요');
+    const g = await api.getGeo(15000);
+    if (!g) throw new Error('위치를 못 잡았어요. 위치 허용을 켜 주세요');
+    if (g.acc > 150 && !confirm(`위치 오차가 ${Math.round(g.acc)}m로 커요. 그래도 저장할까요? (창가나 문 쪽에서 다시 하면 더 정확해요)`)) return;
+    await api.savePlace(store.id, { lat: g.lat, lng: g.lng, radius });
+    toast('매장 위치를 저장했어요'); await again();
+  });
+}

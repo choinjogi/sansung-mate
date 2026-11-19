@@ -111,22 +111,30 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // 출퇴근. 직원은 지금 시각으로만 찍을 수 있고 고칠 수 없음. 고치기는 매니저 이상(누가 언제 고쳤는지 남김)
+      // 출퇴근. 직원은 직접 못 씀 → 서버 함수 punch가 매장 와이파이를 확인하고 기록(문서 이름 = 날짜_uid_in|out)
+      // 매니저 이상: 빠진 기록 넣기, 시각 고치기(누가 언제 고쳤는지 남김), ⚠ 기록 확인 표시
       match /punches/{p} {
-        allow read: if manager(s) || (active(s) && resource.data.uid == uid());
-        allow create: if
-          (active(s)
-            && d().keys().hasOnly(['uid', 'date', 'kind', 'at', 'via', 'by'])
-            && d().uid == uid() && d().by == uid() && d().at == request.time
-            && d().via in ['nfc', 'app'] && d().kind in ['in', 'out'] && isDate(d().date))
-          || (manager(s)
-            && d().keys().hasOnly(['uid', 'date', 'kind', 'at', 'via', 'by', 'note'])
-            && d().by == uid() && d().via == 'manual' && d().kind in ['in', 'out'] && isDate(d().date)
-            && exists(/databases/$(database)/documents/stores/$(s)/members/$(d().uid)));
-        allow update: if manager(s)
-          && changedOnly(['at', 'kind', 'date', 'note', 'editedBy', 'editedAt'])
-          && d().editedBy == uid() && d().editedAt == request.time;
+        // 직원: 자기 기록만. 아직 없는 기록(오늘 출근 전)을 조회하는 것은 허용 (드러나는 정보 없음)
+        allow read: if manager(s) || (active(s) && (resource == null || resource.data.uid == uid()));
+        allow create: if manager(s)
+          && d().keys().hasOnly(['uid', 'name', 'date', 'kind', 'at', 'via', 'by', 'note'])
+          && d().by == uid() && d().via == 'manual' && d().kind in ['in', 'out'] && isDate(d().date)
+          && d().at is timestamp && p == d().date + '_' + d().uid + '_' + d().kind
+          && exists(/databases/$(database)/documents/stores/$(s)/members/$(d().uid));
+        allow update: if manager(s) && (
+          (changedOnly(['at', 'note', 'editedBy', 'editedAt']) && d().at is timestamp
+            && d().editedBy == uid() && d().editedAt == request.time)
+          || (changedOnly(['reviewed', 'reviewedBy', 'reviewedAt']) && d().reviewed is bool
+            && d().reviewedBy == uid() && d().reviewedAt == request.time));
         allow delete: if manager(s);
+      }
+
+      // 매장 설정: wifi(등록한 회선 주소, 서버 함수만 씀), place(매장 위치·반경)
+      match /settings/{k} {
+        allow read: if owner(s);
+        allow write: if owner(s) && k == 'place'
+          && d().keys().hasOnly(['lat', 'lng', 'radius'])
+          && d().lat is number && d().lng is number && d().radius is int && d().radius >= 20 && d().radius <= 1000;
       }
 
       // 주간 스케줄 (문서 이름 = 주 시작일). leaveOpensAt~leaveClosesAt 동안만 휴무신청 받음

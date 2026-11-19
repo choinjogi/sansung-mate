@@ -21,12 +21,16 @@ const server = http.createServer(async (req, res) => {
 const APP = 'http://localhost:5173/multi/';
 
 const browser = await chromium.launch();
-const phone = () => browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, locale: 'ko-KR' });
+const STORE = { latitude: 37.5665, longitude: 126.978 }; // 매장 위치 (시험용)
+const phone = () => browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, locale: 'ko-KR',
+  permissions: ['geolocation'], geolocation: { ...STORE, accuracy: 20 } });
+const net = (page, ip) => page.evaluate(v => { window.__mateTestIp = v; }, ip); // 연습용: 어느 회선에서 찍는지 흉내
 let step = 0;
 async function shot(page, name) { if (SHOTS) await page.waitForTimeout(400), await page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, '0')}-${name}.png`, fullPage: true }); }
 function watch(page, who) {
   page.on('dialog', d => d.accept());
   page.on('pageerror', e => { console.error(`[${who}] 화면 오류:`, e.message); process.exitCode = 1; });
+  page.on('console', m => { if (m.type() === 'error') console.error(`[${who}] console:`, m.text()); });
 }
 const text = page => page.locator('#app').innerText();
 async function googleIn(page, email, name) {
@@ -127,7 +131,7 @@ try {
   // 6) 직원: 승인 확인
   await alba.getByText('승인됐는지 다시 보기').click();
   await alba.getByText('김알바님').waitFor();
-  await alba.getByText('매니저', { exact: true }).waitFor();
+  await alba.locator('.pill.on', { hasText: '매니저' }).waitFor();
   await shot(alba, '직원홈');
 
   // 7) 직원: 로그아웃 → 다시 로그인 (매장은 기억됨). 틀린 번호는 막힘
@@ -139,6 +143,70 @@ try {
   await alba.fill('#pw', '123456');
   await alba.getByText('로그인', { exact: true }).click();
   await alba.getByText('김알바님').waitFor();
+
+  // 7-1) 출퇴근: 사장님이 매장 와이파이·위치 등록
+  await net(boss, '211.36.1.9');
+  await boss.getByText('매장 와이파이 등록 전이에요').waitFor();
+  await boss.getByText('이 와이파이를 매장으로 등록').click();
+  await boss.getByText('등록 1개').waitFor();
+  await boss.getByText('지금 위치를 매장 위치로').click();
+  await boss.getByText('저장됨 · 반경 100m').waitFor();
+  assert.doesNotMatch(await text(boss), /등록 전이에요/);
+  await shot(boss, '출퇴근설정');
+
+  // 7-2) 김알바: 매장 와이파이에서 출근 → ✓
+  await net(alba, '211.36.1.9');
+  await alba.locator('#pIn').click();
+  await alba.getByText('✓ 매장 와이파이').waitFor();
+  assert.doesNotMatch(await text(alba), /찍히지 않았어요/);
+  await shot(alba, '출근완료');
+
+  // 7-3) 박알바: 가입·승인 후 모바일 데이터(다른 회선)로 출근 → ⚠, 집에서 퇴근 → ⚠ 거리
+  const park = await (await phone()).newPage(); watch(park, '박알바');
+  await park.goto(joinUrl);
+  await park.fill('#nm', '박알바'); await park.fill('#pw', '222222'); await park.fill('#pw2', '222222');
+  await park.getByText('가입 신청', { exact: true }).click();
+  await park.getByText('승인 기다리는 중').waitFor();
+  await boss.reload();
+  await boss.locator('[data-store]', { hasText: '산성' }).click();
+  await boss.getByText('가입 신청 1명').waitFor();
+  await boss.getByText('승인', { exact: true }).click();
+  await boss.getByText('직원 2명').waitFor();
+  await park.getByText('승인됐는지 다시 보기').click();
+  await net(park, '9.9.9.9');
+  await park.locator('#pIn').click();
+  await park.getByText('매장 와이파이로 찍히지 않았어요').waitFor();
+  await shot(park, '출근경고');
+  await park.context().setGeolocation({ latitude: 37.6, longitude: 126.978, accuracy: 20 }); // 약 3.7km 떨어진 집
+  await park.locator('#pOut').click();
+  await park.getByText('⚠ 매장에서 3.7km').waitFor();
+  await park.getByText('오늘 근무 끝').waitFor();
+
+  // 7-4) 김알바: 와이파이 끊고(다른 회선) 매장 안에서 퇴근 → 반경 안이라 ✓
+  await net(alba, '9.9.9.9');
+  await alba.locator('#pOut').click();
+  await alba.getByText('✓ 매장 0m').waitFor();
+
+  // 7-5) 사장님: 확인 필요 2건 → 1건 확인, 오늘 현황에서 박알바 출근 시각 고치기
+  await boss.reload();
+  await boss.locator('[data-store]', { hasText: '산성' }).click();
+  await boss.getByText('확인 필요 2').click();
+  await boss.getByText('이번 달 ⚠ 횟수').waitFor();
+  assert.equal(await boss.locator('[data-ok]').count(), 2);
+  assert.match(await text(boss), /박알바\s+2번/);
+  await shot(boss, '확인필요');
+  await boss.locator('[data-ok]').first().click();
+  await boss.waitForFunction(() => document.querySelectorAll('[data-ok]').length === 1);
+  await boss.locator('#back').click();
+  await boss.getByText('오늘 출근 현황').click();
+  await boss.getByText('출근 현황').first().waitFor();
+  await boss.locator('[data-ed][data-k="in"]').nth(1).click(); // 이름순: 김알바, 박알바
+  await boss.fill('#edt', '18:05');
+  await boss.locator('#eds').click();
+  await boss.getByText('18:05').waitFor();
+  await shot(boss, '오늘현황');
+  await boss.locator('#back').click();
+  await boss.getByText('규칙 바꾸기').waitFor();
 
   // 8) 대표님: 규칙 다음 달부터 바꾸기, 초대 링크 새로 → 옛 링크 무효
   await boss.getByText('규칙 바꾸기').click();
@@ -164,7 +232,7 @@ try {
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
 
-  console.log('✔ 2단계 화면 시험 통과');
+  console.log('✔ 화면 시험 통과 (가입·승인·출퇴근)');
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;

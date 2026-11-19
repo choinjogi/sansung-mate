@@ -6,9 +6,11 @@ export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
 export const auth = F.getAuth(app);
 export const db = F.getFirestore(app);
+const fns = F.getFunctions(app, 'asia-northeast3'); // 서버 함수 (서울)
 if (USE_EMULATOR) {
   F.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   F.connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  F.connectFunctionsEmulator(fns, '127.0.0.1', 5001);
 }
 
 const ref = p => F.doc(db, p);
@@ -101,5 +103,48 @@ export async function newJoinCode(store) {
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
 export const saveRules = (storeId, from, rules) => F.setDoc(ref(`stores/${storeId}/rules/${from}`), { from, ...rules });
+
+// ---------- 출퇴근 ----------
+// 한국 시각 기준 오늘 날짜·시각 문자열
+const KST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+export function kst(date = new Date()) {
+  const o = Object.fromEntries(KST.formatToParts(date).map(p => [p.type, p.value]));
+  return { date: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour}:${o.minute}`, hour: +o.hour };
+}
+export const addDays = (d, n) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+export const hmOf = ts => (ts && ts.toDate ? kst(ts.toDate()).hm : null);
+// 근무 날짜 + "HH:MM"(한국 시각) → 시각. 퇴근이 출근보다 이르면 자정 넘긴 것으로 봄
+export function atOf(date, hm, afterHm) {
+  const d = afterHm && hm < afterHm ? addDays(date, 1) : date;
+  return F.Timestamp.fromDate(new Date(`${d}T${hm}:00+09:00`));
+}
+
+// 위치: 허용 안 하거나 못 잡으면 null (막지 않음)
+export function getGeo(ms = 8000) {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
+      () => res(null), { enableHighAccuracy: true, timeout: ms, maximumAge: 0 });
+  });
+}
+const testIp = () => (USE_EMULATOR && window.__mateTestIp) || undefined; // 연습용 서버 시험에서만
+export async function punch(storeId, kind) {
+  const geo = await getGeo();
+  const r = await F.httpsCallable(fns, 'punch')({ storeId, kind, geo, _testIp: testIp() });
+  return { ...r.data, geo: !!geo };
+}
+export const registerWifi = (storeId, reset) => F.httpsCallable(fns, 'registerWifi')({ storeId, reset: !!reset, _testIp: testIp() }).then(r => r.data);
+export const getSetting = (storeId, k) => F.getDoc(ref(`stores/${storeId}/settings/${k}`)).then(data);
+export const savePlace = (storeId, place) => F.setDoc(ref(`stores/${storeId}/settings/place`), place);
+
+export const punchDoc = (storeId, date, uid, kind) => F.getDoc(ref(`stores/${storeId}/punches/${date}_${uid}_${kind}`)).then(data);
+export const myPunches = (storeId, from, to) => list(F.query(col(`stores/${storeId}/punches`), F.where('uid', '==', auth.currentUser.uid), F.where('date', '>=', from), F.where('date', '<=', to)));
+export const punchesBetween = (storeId, from, to) => list(F.query(col(`stores/${storeId}/punches`), F.where('date', '>=', from), F.where('date', '<=', to)));
+export const flaggedSince = (storeId, from) => list(F.query(col(`stores/${storeId}/punches`), F.where('flag', '==', true), F.where('date', '>=', from)));
+export const reviewPunch = (storeId, id) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { reviewed: true, reviewedBy: auth.currentUser.uid, reviewedAt: F.serverTimestamp() });
+export const editPunch = (storeId, id, at) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { at, editedBy: auth.currentUser.uid, editedAt: F.serverTimestamp() });
+export const addPunch = (storeId, { uid, name, date, kind, at }) =>
+  F.setDoc(ref(`stores/${storeId}/punches/${date}_${uid}_${kind}`), { uid, name, date, kind, at, via: 'manual', by: auth.currentUser.uid });
 
 export { F };

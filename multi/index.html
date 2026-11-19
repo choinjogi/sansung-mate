@@ -161,10 +161,17 @@ nav a.on i { filter: none; opacity: 1; }
 .chk7 { grid-template-columns: repeat(7, 1fr); gap: 5px; }
 .chk7 span { padding: 10px 0; }
 code { font-size: 13px; }
+/* 출퇴근 */
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; }
+.tbox.late { border-color: var(--warn); }
+.tval { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+.thow { min-height: 18px; font-size: 12px; } .thow .pill { font-size: 11.5px; padding: 2px 8px; }
+.big-btn { font-size: 22px; padding: 20px; margin-top: 14px; }
 </style>
 </head>
 <body>
 <div id="app"></div>
-<script type="module" src="app.js?v=1"></script>
+<script type="module" src="app.js?v=2"></script>
 </body>
 </html>

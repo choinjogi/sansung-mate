@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "산성 MATE 여러 매장용 Firebase 데이터 구조와 권한 규칙",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-mate \"node --test test/*.test.mjs\"",
-    "deploy": "firebase deploy --only firestore",
+    "test": "firebase emulators:exec --only firestore --project demo-mate \"node --test test/*.test.mjs functions/*.test.mjs\"",
+    "deploy": "firebase deploy --only firestore,functions",
     "build:vendor": "esbuild src/vendor-entry.js --bundle --format=esm --minify --legal-comments=none --outfile=../multi/vendor/firebase.js",
-    "e2e": "firebase emulators:exec --only auth,firestore --project demo-mate \"node test/e2e.mjs\""
+    "e2e": "firebase emulators:exec --only auth,firestore,functions --project demo-mate \"node test/e2e.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

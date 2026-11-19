@@ -24,7 +24,11 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
   members/{uid}               { name, role: staff|manager, status: pending|active|left, startTime, type }
   wages/{uid}                 { history: [{ from: 'YYYY-MM', wage }] }  사장님·본인만
   private/{uid}               { bank, account, email, req }  직원은 req(변경 요청)만 씀, 사장님이 승인
-  punches/{id}                { uid, date, kind: in|out, at, via: app|manual, by, editedBy, editedAt, note }
+  punches/{날짜_uid_in|out}    { uid, name, date, kind, at, via: app|manual, by, wifi, dist, acc, flag, why, ip,
+                                reviewed, reviewedBy, editedBy, editedAt, note }
+                              직원은 직접 못 씀 → 서버 함수 punch 가 기록. 매니저 이상은 넣기·고치기·확인 표시
+  settings/wifi               { ips }  매장 와이파이 회선 주소 (서버 함수 registerWifi 만 씀, 사장님만 봄)
+  settings/place              { lat, lng, radius }  매장 위치·반경 (사장님)
   schedules/{주 시작일}        주간 스케줄 + leaveOpensAt / leaveClosesAt
   leaves/{주_uid}             휴무신청 { uid, week, off[], am[], at }  열린 동안만 본인이 냄
   sales/{YYYY-MM-DD}          매출  매니저 이상
@@ -40,7 +44,10 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
 - **직영 매장**: 총괄이 [새 매장 만들기] → `stores` 생성 (`direct: true`)
 - **다른 사장님 매장**: 총괄이 초대 코드 생성 → 사장님이 구글로 로그인해서 매장을 만들면, 같은 묶음으로 초대가 "사용됨"이 됩니다. 초대 없이는 매장을 못 만듭니다.
 - **직원 가입**: 사장님이 `joinCodes` 생성 → 초대 링크와 QR (`?join=코드`) → 직원이 이름 + 6자리로 가입하면 `status: pending` → 사장님이 승인하면 `active`
-- **출퇴근**: 앱 버튼 + 위치 확인 (NFC·QR·태블릿은 쓰지 않음. 아이폰 NFC 인식률이 10% 정도라서).
+- **출퇴근**: 앱 버튼 → 서버 함수 `punch` (functions/index.js). NFC·QR·태블릿은 쓰지 않음 (아이폰 NFC 인식률 약 10%).
+  - 서버가 요청의 회선 주소(IP)를 보고 **매장 와이파이**인지 확인. 출근 ✓ = 매장 와이파이. 퇴근 ✓ = 매장 와이파이 또는 매장 반경 안.
+  - 나머지는 막지 않고 ⚠ (`flag`). 사장님·매니저 [확인 필요] 화면에 모임. 출근 안 찍은 날은 지금처럼 정시로 처리.
+  - 시각은 서버 시각. 같은 날 같은 종류는 한 번만 (두 번째는 거절). 자정 넘긴 퇴근은 전날 출근에 붙음.
 - **직원 로그인**: Firebase 이메일/비밀번호 계정을 씁니다. 이메일은 앱이 `{storeId}.{이름 UTF-8 16진수}@staff.mate.invalid` 로 만들고, 비밀번호는 6자리입니다. 같은 이름이 다른 매장에 있어도 겹치지 않습니다.
 - **출퇴근**: 직원은 서버 시각으로만 찍습니다 (`at == request.time`). 지난 시각으로 찍거나 고치거나 지울 수 없습니다. 매니저 이상이 고치면 `editedBy` / `editedAt` 가 남습니다.
 - **월 합계**: 사장님이 정산표를 만들 때 앱이 `stats` 를 같이 씁니다 (서버 함수가 없어도 됨 = 무료 요금제).
@@ -65,11 +72,15 @@ npm run e2e     # 실제 브라우저로 대표님·다른 사장님·직원 흐
 
 실제 프로젝트에 올리기 (처음 한 번, 내 컴퓨터에서):
 
+0. Firebase 콘솔에서 요금제를 **Blaze**로 바꾸고(카드 등록), Google Cloud 콘솔 → 결제 → 예산 및 알림에서
+   예산 1,000원 / 5,000원 알림을 걸어 둡니다. (서버 함수에 필요. 사용량은 무료 한도 안)
+
 ```bash
 cd firebase
 npx firebase login
 npx firebase use sansung-sheets   # 프로젝트 ID가 다르면 그 ID
-npm run deploy                    # 규칙과 색인만 올라감
+(cd functions && npm install)
+npm run deploy                    # 권한 규칙 + 색인 + 서버 함수(punch, registerWifi, 서울 지역)
 ```
 
 그다음 Firebase 콘솔에서 할 일:
