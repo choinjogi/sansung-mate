@@ -10,13 +10,13 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 20</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 21</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
   const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
   const ADMIN_TABS = [['atoday', '👀', '오늘'], ['aok', '✅', '승인'], ['asales', '💰', '매출'], ['adash', '📊', '대시보드'], ['amore', '☰', '더보기']];
-  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore', info: 'amore' };  // 더보기 안의 화면
+  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore', info: 'amore', astaff: 'amore' };  // 더보기 안의 화면
   function tabs() { return ME.role ? ADMIN_TABS : STAFF_TABS; }
   function drawNav() {
     $nav.hidden = false;
@@ -114,7 +114,7 @@
   }
   window.addEventListener('mate-logout', () => login('다시 로그인해 주세요'));
   // 뒤에서 새 값이 왔고 지금 그 화면을 보고 있으면 조용히 다시 그림 (입력 중이면 건드리지 않음)
-  const VIEW_FN = { home: ['me'], sched: ['schedule'], rec: ['records'], atoday: ['adminToday', 'leaveAll'], aok: ['pending'], adash: ['dashboard'], aleave: ['leaveAll'] };
+  const VIEW_FN = { home: ['me'], sched: ['schedule'], rec: ['records'], atoday: ['adminToday', 'leaveAll'], aok: ['pending'], adash: ['dashboard'], aleave: ['leaveAll'], astaff: ['people'] };
   window.addEventListener('mate-fresh', e => {
     if (!ME || !(VIEW_FN[TAB] || []).includes(e.detail)) return;
     const f = document.activeElement; if (f && /INPUT|SELECT|TEXTAREA/.test(f.tagName)) return;
@@ -442,6 +442,44 @@
     if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('복사했어요. 단톡방에 붙여 넣으세요'); } catch (e) { prompt('아래 글을 길게 눌러 복사하세요', msg); } };
   };
 
+  // ---------- 관리: 입사 · 퇴사 (결산 직원명부·월말근무내역·월말결제에 바로 반영) ----------
+  VIEWS.astaff = async function () {
+    loading(); PEOPLE = null; const list = await people(), td = (ME.today && ME.today.date) || '';
+    render(`<div>${header()}<h2>입사 · 퇴사</h2>
+      <div class="card"><b>🙋 새 알바 입사</b>
+        <label>이름 (성까지)</label><input id="sn" placeholder="예: 홍길동" autocomplete="off">
+        <label>스케줄에 보일 이름</label><input id="sd" placeholder="비우면 성 빼고 (예: 길동)" autocomplete="off">
+        <div class="row" style="gap:10px"><div style="flex:1"><label>시급 (원)</label><input id="sw" inputmode="numeric" value="10,500"></div>
+          <div style="flex:1"><label>정시 출근</label><input id="sp" type="time" value="18:00" step="300"></div></div>
+        <label>최소 출근일 (주)</label><select id="sm">${[1, 2, 3, 4, 5].map(n => `<option ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}</select>
+        <button id="sadd" style="margin-top:14px">입사 처리</button>
+        <p class="small" style="margin-top:8px">이번 달 결산(직원명부·월말근무내역·월말결제·대시보드)에 바로 들어가고, 앱 계정이 생겨요. 계좌·주민번호는 본인이 앱 "내 정보"로 넣어요. 정직원 입사는 Claude에게 요청해 주세요.</p></div>
+      <div class="card"><b>👋 퇴사</b>
+        <label>누구</label><select id="rn"><option value="">이름 고르기</option>${opts(list.filter(p => p.name !== ME.name))}</select>
+        <label>퇴사일 (마지막 근무일)</label><input type="date" id="rd" value="${td}">
+        <button class="ghost" id="rdel" style="margin-top:14px">퇴사 처리</button>
+        <p class="small" style="margin-top:8px">직원명부 퇴사일만 들어가요. 스케줄·휴무신청·앱 로그인에서 빠지고, 이번 달 급여·출퇴근 기록은 그대로 남아요.</p></div>
+      <p class="small">NFC 명단도 같이 바뀌어요. 새 직원은 바로 매장 스티커로 폰을 등록하면 돼요.</p></div>`);
+    const $ = id => document.getElementById(id), sw = $('sw');
+    sw.oninput = () => { const n = sw.value.replace(/[^\d]/g, ''); sw.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
+    $('sadd').onclick = e => busy(e.target, async () => {
+      const name = $('sn').value.trim(), disp = $('sd').value.trim(), wage = Number(sw.value.replace(/[^\d]/g, '')), plain = $('sp').value, minDays = $('sm').value;
+      if (!name) return toast('이름을 써 주세요');
+      if (!confirm(`${name} (${disp || '표시이름 자동'}) · 시급 ${wage.toLocaleString('ko-KR')}원 · ${plain} 출근\n이번 달 결산에 알바로 넣을까요?`)) return;
+      const r = await API.addStaff({ name, disp, wage, plain, minDays, kind: '알바' });
+      if (!r.saved) return alert(r.msg);
+      alert(r.msg + (r.detail ? '\n\n' + r.detail.join('\n') : '')); PEOPLE = null; VIEWS.astaff();
+    });
+    $('rdel').onclick = e => busy(e.target, async () => {
+      const n = $('rn').value, d = $('rd').value;
+      if (!n || !d) return toast('이름과 퇴사일을 골라 주세요');
+      if (!confirm(`${n}님을 ${d} 퇴사로 넣을까요?\n앱 로그인도 막혀요.`)) return;
+      const r = await API.removeStaff(n, d);
+      if (!r.saved) return alert(r.msg);
+      toast(r.msg); PEOPLE = null; VIEWS.astaff();
+    });
+  };
+
   // ---------- 관리: 직원 계정 (임시 비밀번호) ----------
   VIEWS.aacc = async function () {
     loading(); const list = await API.accounts();
@@ -522,6 +560,7 @@
     render(`<div>${header()}<h2>더보기</h2>
       <div class="card list">
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
+        <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>

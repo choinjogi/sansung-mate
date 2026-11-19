@@ -77,6 +77,8 @@
     decideAll: () => write('decideAll'),
     manual: o => write('manual', o),
     lookup: (name, wd) => call('lookup', { name, wd }),
+    addStaff: o => write('addStaff', o),
+    removeStaff: (name, date) => write('removeStaff', { name, date }),
     // 미리 받아 두기 (다른 탭을 누르면 바로 보이게)
     prefetch: fns => fns.forEach((fn, i) => setTimeout(() => { if (!FRESH[fn] && get()) fetchFresh(fn).catch(() => {}); }, 800 + i * 400)),
   };
