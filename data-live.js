@@ -1,10 +1,14 @@
 // 실제 데이터: 앱 전용 서버(구글 Apps Script "산성 MATE 서버", 원본은 읽기만)를 부른다.
 // 이 파일에는 이름·숫자가 없다. 로그인 열쇠는 이 폰에만 저장되고, 서버는 열쇠 없이는 아무것도 주지 않는다.
+// 빠르게 보이기(버전 16): 보기 전용 화면은 이 폰에 저장해 둔 지난 값을 바로 보여 주고, 뒤에서 새 값을 받아 바뀌었으면 화면을 다시 그린다.
 (function () {
   const URL = 'https://script.google.com/macros/s/AKfycbz5H1Q7qM2Ay1LR_XOl9jfw5tgBKjiohIIxjRcA8fV3qv7WgDVyZy_LMaBfk7Zd29CklA/exec';
-  const TK = 'mate_token';
-  const get = () => { try { return localStorage.getItem(TK); } catch (e) { return null; } };
-  const set = v => { try { v ? localStorage.setItem(TK, v) : localStorage.removeItem(TK); } catch (e) {} };
+  const TK = 'mate_token', CK = 'mate_c_';
+  const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
+  const get = () => ls.get(TK);
+  const clearCache = () => { try { Object.keys(localStorage).filter(k => k.indexOf(CK) === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {} FRESH = {}; FLY = {}; };
+  const set = v => { clearCache(); v ? ls.set(TK, v) : ls.del(TK); };
 
   async function raw(fn, args) {
     let r;
@@ -20,32 +24,57 @@
     return j;
   }
 
+  // 보기 전용: 저장된 값이 있으면 바로 주고, 뒤에서 새로 받아 바뀌면 'mate-fresh' 알림. 20초 안에 받은 건 다시 안 받음
+  const FRESH_MS = 20000;
+  let FRESH = {}, FLY = {};
+  function fetchFresh(fn) {
+    if (FLY[fn]) return FLY[fn];
+    const p = call(fn).then(j => {
+      const s = JSON.stringify(j), old = ls.get(CK + fn);
+      ls.set(CK + fn, s); FRESH[fn] = Date.now();
+      if (old && old !== s) window.dispatchEvent(new CustomEvent('mate-fresh', { detail: fn }));
+      return j;
+    }).finally(() => { delete FLY[fn]; });
+    FLY[fn] = p; return p;
+  }
+  function view(fn) {
+    const s = ls.get(CK + fn);
+    if (s && FRESH[fn] && Date.now() - FRESH[fn] < FRESH_MS) return Promise.resolve(JSON.parse(s));
+    const p = fetchFresh(fn);
+    if (s) { p.catch(() => {}); return Promise.resolve(JSON.parse(s)); }
+    return p;
+  }
+  // 쓰기 뒤에는 저장값을 "오래됨"으로 → 다음 화면은 바로 보이되 새 값으로 다시 그려짐
+  const write = (fn, args) => call(fn, args).finally(() => { FRESH = {}; });
+
   window.API = {
     demo: false,
     hasToken: () => !!get(),
     async login(name, pw) { const j = await raw('login', { name, pw }); if (j.ok && j.token) set(j.token); return j; },
     async signup(name, code, pw) { const j = await raw('signup', { name, code, pw }); if (j.ok && j.token) set(j.token); return j; },
     async logout() { try { await raw('logout'); } catch (e) {} set(null); },
-    me: () => call('me'),
-    schedule: () => call('schedule'),
-    records: () => call('records'),
+    me: () => view('me'),
+    schedule: () => view('schedule'),
+    records: () => view('records'),
     leaveForm: () => call('leaveForm'),
-    adminToday: () => call('adminToday'),
-    pending: () => call('pending').then(r => r.list),
-    leaveAll: () => call('leaveAll'),
-    dashboard: () => call('dashboard'),
+    adminToday: () => view('adminToday'),
+    pending: () => view('pending').then(r => r.list),
+    leaveAll: () => view('leaveAll'),
+    dashboard: () => view('dashboard'),
     sales: () => call('sales'),
     accounts: () => call('accounts').then(r => r.list),
-    issueCode: name => call('issueCode', { name }),
-    issueAll: () => call('issueAll'),
+    issueCode: name => write('issueCode', { name }),
+    issueAll: () => write('issueAll'),
     // 2단계 쓰기
-    saveSales: (date, amount, force) => call('saveSales', { date, amount, force: !!force }),
-    submitLeave: (name, off, am) => call('submitLeave', { off, am }),
-    people: () => call('people'),
-    early: (name, wd, time) => call('early', { name, wd, time }),
-    decide: (id, ok) => call('decide', { id, ok }),
-    decideAll: () => call('decideAll'),
-    manual: o => call('manual', o),
+    saveSales: (date, amount, force) => write('saveSales', { date, amount, force: !!force }),
+    submitLeave: (name, off, am) => write('submitLeave', { off, am }),
+    people: () => view('people'),
+    early: (name, wd, time) => write('early', { name, wd, time }),
+    decide: (id, ok) => write('decide', { id, ok }),
+    decideAll: () => write('decideAll'),
+    manual: o => write('manual', o),
     lookup: (name, wd) => call('lookup', { name, wd }),
+    // 미리 받아 두기 (다른 탭을 누르면 바로 보이게)
+    prefetch: fns => fns.forEach((fn, i) => setTimeout(() => { if (!FRESH[fn] && get()) fetchFresh(fn).catch(() => {}); }, 800 + i * 400)),
   };
 })();

@@ -7,10 +7,11 @@
   let ME = null, TAB = 'home';
 
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
-  function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
+  let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
+  function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 15</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
-  const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 16</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+  const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
   const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
@@ -109,8 +110,17 @@
     try { ME = await API.me(); } catch (e) { return login(API.hasToken && API.hasToken() ? e.message : ''); }
     const t = store.get('mate_tab');
     go(tabs().some(x => x[0] === t) || (ME.role && SUB[t]) ? t : tabs()[0][0]);
+    if (API.prefetch) API.prefetch(ME.role ? ['adminToday', 'pending', 'dashboard', 'schedule'] : ['schedule', 'records']);
   }
   window.addEventListener('mate-logout', () => login('다시 로그인해 주세요'));
+  // 뒤에서 새 값이 왔고 지금 그 화면을 보고 있으면 조용히 다시 그림 (입력 중이면 건드리지 않음)
+  const VIEW_FN = { home: ['me'], sched: ['schedule'], rec: ['records'], atoday: ['adminToday', 'leaveAll'], aok: ['pending'], adash: ['dashboard'], aleave: ['leaveAll'] };
+  window.addEventListener('mate-fresh', e => {
+    if (!ME || !(VIEW_FN[TAB] || []).includes(e.detail)) return;
+    const f = document.activeElement; if (f && /INPUT|SELECT|TEXTAREA/.test(f.tagName)) return;
+    const t = TAB; SILENT = true;
+    Promise.resolve().then(() => VIEWS[t]()).catch(() => {}).finally(() => { SILENT = false; });
+  });
   document.addEventListener('click', async e => { if (e.target.id === 'logout') { if (!confirm('로그아웃할까요?')) return; await API.logout(); store.del('mate_tab'); login(); } });
 
   const VIEWS = {};
