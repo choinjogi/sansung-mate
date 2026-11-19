@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 16</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 17</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -249,7 +249,7 @@
       if (r.hours) rows.push(['스케줄', S.sched + '일'], ['스케줄 있었는데 쉼', S.missed + '일'], ['대타 서 준 날', S.cover + '일'], ['스케줄 없던 날 출근', S.extra + '일']);
       else if (S.missed) rows.push(['스케줄 있었는데 기록 없음', S.missed + '일']);
       rows.push(['연차·반차·병가·무급', lv || '없음']);
-      sumCard = `<div class="card"><div class="row between"><b>이번 달 요약</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto}</span></div>
+      if (!r.hours) sumCard = `<div class="card"><div class="row between"><b>이번 달 요약</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto}</span></div>
         <table class="kv">${rows.map(x => `<tr><td>${x[0]}</td><td>${esc(x[1])}</td></tr>`).join('')}</table></div>`;
       if (r.hours && S.weeks) sumCard += `<div class="card"><div class="row between"><b>근무시간 · 주휴</b><span class="small">결산 기준</span></div>
         <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">총 근무시간</div><div class="big" style="font-size:22px">${S.totalH != null ? S.totalH + '시간' : hm(r.total)}</div></div>
@@ -258,9 +258,9 @@
         <p class="small">주휴는 한 주 15시간 이상 일하면 생겨요(1~7일·8~14일처럼 7일씩 끊어서 계산). 최종 금액은 월말결제 기준이에요.</p></div>`;
       if (r.hours && S.pay) sumCard += `<div class="card"><div class="row between"><b>내 급여</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto} 결산 기준</span></div>
         <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">현재까지 받을 돈</div><div class="big" style="font-size:22px">${won(S.pay.now)}</div></div>
-        ${S.pay.est != null ? `<div><div class="small">이번 달 예상 (대략)</div><div class="big" style="font-size:22px">약 ${won(S.pay.est)}</div></div>` : ''}</div>
+</div>
         <table class="kv"><tr><td>그중 주휴수당</td><td>${S.noJuhu ? '해당 없음' : won(S.juhu)}</td></tr></table>
-        <p class="small">현재까지 받을 돈 = 주휴수당 포함. 예상은 지금까지 하루 평균 × ${S.pay.days}일로 어림한 값이라 실제와 달라요. 최종 금액은 월말결제(사장님 확인) 기준이에요.</p></div>`;
+        <p class="small">현재까지 받을 돈 = 주휴수당 포함. 최종 금액은 월말결제(사장님 확인) 기준이에요.</p></div>`;
       const ev = r.list.filter(x => x.tags.length).map(x => ({ d: x.day, t: x.tags })).concat(Object.values(off).map(o => ({ d: o.day, t: o.tags }))).sort((a, b) => a.d - b.d);
       sumCard += `<div class="card"><b>근무 특이사항</b>${ev.length ? `<table class="kv ev">${ev.map(e => `<tr data-d="${e.d}"><td>${r.mon}/${e.d} (${W(e.d)})</td><td><div class="tags" style="margin:0">${pills(e.t)}</div></td></tr>`).join('')}</table>` : '<p class="small" style="margin-top:6px">이번 달은 특이사항이 없어요.</p>'}</div>`;
     }
