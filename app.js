@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 27</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 28</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -371,7 +371,7 @@
       <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item" style="display:block;padding:12px 0">
         <div class="row between"><div><b style="font-size:17px">${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.expect ? ' · 예정 ' + esc(r.expect) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>
         <div style="display:grid;grid-template-columns:${r.group === '정' && !r.in ? '1fr' : '1fr 1fr'};gap:8px;margin-top:8px">
-          ${r.group === '정' && !r.in ? '' : `<div style="background:var(--card);border:1px solid ${r.late ? 'var(--warn)' : 'var(--line)'};border-radius:12px;padding:8px 12px"><div class="small">출근${r.late ? ' · <span style="color:var(--warn)">' + r.late + '분 늦음</span>' : ''}</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.in ? (r.late ? 'var(--warn)' : 'var(--text)') : 'var(--dim)'}">${esc(r.in || '--:--')}</div></div>`}
+          ${r.group === '정' && !r.in ? '' : `<div style="background:var(--card);border:1px solid ${r.late ? 'var(--warn)' : 'var(--line)'};border-radius:12px;padding:8px 12px"><div class="small">출근${r.late ? ' · <span style="color:var(--warn)">' + r.late + '분 늦음</span>' : ''}</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.in ? (r.late ? 'var(--warn)' : 'var(--text)') : 'var(--dim)'}">${esc(r.in || r.start || '--:--')}</div>${!r.in && r.start ? '<div class="small" style="color:var(--warn)">안 찍음 · 등록 시각으로 계산</div>' : ''}</div>`}
           <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px"><div class="small">퇴근</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.out ? 'var(--ok)' : 'var(--dim)'}">${esc(r.out || '--:--')}</div></div>
         </div></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
       <div class="card"><b>⏰ 일찍 부르기</b><p class="small">오늘 정시보다 일찍 나오라고 한 알바를 미리 적어 두면 그 시각부터 계산돼요. (늦게 오면 찍은 시각부터)</p>
@@ -648,7 +648,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 27;
+  const APP_VER = 28;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
