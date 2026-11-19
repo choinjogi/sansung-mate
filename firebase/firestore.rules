@@ -1,0 +1,175 @@
+rules_version = '2';
+// 산성 MATE 여러 매장용 권한 규칙. 구조 설명은 README.md.
+// 원칙: 매장끼리는 서로 못 본다. 총괄은 직영이 아닌 매장의 "합계(stats)"만 본다.
+// 계좌·이메일(private)과 시급(wages)은 본인과 그 매장 사장님만 본다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- 공통 ----------
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function google() { return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+    function doc(path) { return get(path).data; }
+    function orgAdmin(orgId) {
+      return signedIn() && uid() in doc(/databases/$(database)/documents/orgs/$(orgId)).adminUids;
+    }
+    function storeData(s) { return doc(/databases/$(database)/documents/stores/$(s)); }
+    function owner(s) { return signedIn() && uid() in storeData(s).ownerUids; }
+    function mePath(s) { return /databases/$(database)/documents/stores/$(s)/members/$(uid()); }
+    function active(s) { return signedIn() && exists(mePath(s)) && get(mePath(s)).data.status == 'active'; }
+    function manager(s) { return owner(s) || (active(s) && get(mePath(s)).data.role == 'manager'); }
+    function inStore(s) { return owner(s) || active(s); }
+    function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    function d() { return request.resource.data; }
+    function isMonth(v) { return v is string && v.matches('^[0-9]{4}-[0-9]{2}$'); }
+    function isDate(v) { return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+
+    // ---------- 총괄 ----------
+    // 처음 한 번만 콘솔에서 만든다 (앱에서는 못 만듦 = 아무나 총괄이 될 수 없음)
+    match /orgs/{orgId} {
+      allow read: if orgAdmin(orgId);
+      allow write: if false;
+    }
+
+    // 총괄이 다른 사장님께 보내는 "매장 만들기 초대"
+    match /ownerInvites/{code} {
+      allow get: if google();
+      allow list: if orgAdmin(resource.data.orgId);
+      allow create: if orgAdmin(d().orgId)
+        && d().keys().hasOnly(['orgId', 'createdBy', 'createdAt', 'usedBy', 'storeId'])
+        && d().createdBy == uid() && d().createdAt == request.time
+        && d().usedBy == null && d().storeId == null;
+      // 초대받은 사장님이 매장을 만들면서 같은 묶음으로 "사용됨" 표시
+      allow update: if google() && resource.data.usedBy == null
+        && changedOnly(['usedBy', 'storeId'])
+        && d().usedBy == uid()
+        && getAfter(/databases/$(database)/documents/stores/$(d().storeId)).data.ownerUids == [uid()]
+        && getAfter(/databases/$(database)/documents/stores/$(d().storeId)).data.orgId == resource.data.orgId;
+      allow delete: if orgAdmin(resource.data.orgId) && resource.data.usedBy == null;
+    }
+
+    // ---------- 매장 ----------
+    match /stores/{s} {
+      allow read: if signedIn() && (uid() in resource.data.ownerUids || active(s) || orgAdmin(resource.data.orgId));
+      // 직영: 총괄이 직접 만듦. 그 외: 총괄 초대 코드가 있어야 만듦.
+      allow create: if google()
+        && d().keys().hasOnly(['orgId', 'name', 'ownerUids', 'direct', 'inviteCode', 'createdAt'])
+        && d().name is string && d().name.size() > 0 && d().name.size() <= 40
+        && d().ownerUids == [uid()] && d().createdAt == request.time
+        && ((d().direct == true && orgAdmin(d().orgId))
+          || (d().direct == false
+            && doc(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).usedBy == null
+            && doc(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).orgId == d().orgId
+            && getAfter(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).data.usedBy == uid()
+            && getAfter(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).data.storeId == s));
+      allow update: if owner(s) && changedOnly(['name']);
+      allow delete: if false;
+
+      // 매장 규칙: 문서 이름 = 적용 시작 달(YYYY-MM). 급여는 그 달 이전 중 가장 최근 규칙으로 계산.
+      match /rules/{from} {
+        allow read: if inStore(s);
+        allow write: if owner(s) && isMonth(from) && d().from == from;
+      }
+
+      // 직원 명단 (이름·역할·상태만. 시급과 계좌는 여기 없음)
+      match /members/{m} {
+        allow read: if inStore(s) || (signedIn() && uid() == m);
+        // 초대 링크로 들어온 직원의 가입 신청
+        allow create: if signedIn() && uid() == m
+          && d().keys().hasOnly(['name', 'role', 'status', 'joinCode', 'joinedAt'])
+          && d().name is string && d().name.size() > 0 && d().name.size() <= 20
+          && d().role == 'staff' && d().status == 'pending' && d().joinedAt == request.time
+          && doc(/databases/$(database)/documents/joinCodes/$(d().joinCode)).storeId == s;
+        // 승인·역할 변경·퇴사: 매장 사장님만
+        allow update: if owner(s)
+          && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type'])
+          && d().role in ['staff', 'manager'] && d().status in ['pending', 'active', 'left'];
+        // 가입 거절은 사장님, 승인 전 본인 취소
+        allow delete: if owner(s) || (signedIn() && uid() == m && resource.data.status == 'pending');
+      }
+
+      // 시급 이력 { history: [{from:'YYYY-MM', wage}] }
+      match /wages/{m} {
+        allow read: if owner(s) || (signedIn() && uid() == m && active(s));
+        allow write: if owner(s);
+      }
+
+      // 계좌·이메일: 직원은 req(변경 요청)만 쓰고, 사장님이 승인하면 실제 칸으로 옮김
+      match /private/{m} {
+        allow read: if owner(s) || (signedIn() && uid() == m && active(s));
+        allow create: if signedIn() && uid() == m && active(s)
+          && d().keys().hasOnly(['req']) && d().req.at == request.time
+          && d().req.keys().hasOnly(['bank', 'account', 'email', 'at']);
+        allow update: if owner(s)
+          || (signedIn() && uid() == m && active(s) && changedOnly(['req'])
+            && (d().req == null
+              || (d().req.at == request.time && d().req.keys().hasOnly(['bank', 'account', 'email', 'at']))));
+        allow delete: if false;
+      }
+
+      // 출퇴근. 직원은 지금 시각으로만 찍을 수 있고 고칠 수 없음. 고치기는 매니저 이상(누가 언제 고쳤는지 남김)
+      match /punches/{p} {
+        allow read: if manager(s) || (active(s) && resource.data.uid == uid());
+        allow create: if
+          (active(s)
+            && d().keys().hasOnly(['uid', 'date', 'kind', 'at', 'via', 'by'])
+            && d().uid == uid() && d().by == uid() && d().at == request.time
+            && d().via in ['nfc', 'app'] && d().kind in ['in', 'out'] && isDate(d().date))
+          || (manager(s)
+            && d().keys().hasOnly(['uid', 'date', 'kind', 'at', 'via', 'by', 'note'])
+            && d().by == uid() && d().via == 'manual' && d().kind in ['in', 'out'] && isDate(d().date)
+            && exists(/databases/$(database)/documents/stores/$(s)/members/$(d().uid)));
+        allow update: if manager(s)
+          && changedOnly(['at', 'kind', 'date', 'note', 'editedBy', 'editedAt'])
+          && d().editedBy == uid() && d().editedAt == request.time;
+        allow delete: if manager(s);
+      }
+
+      // 주간 스케줄 (문서 이름 = 주 시작일). leaveOpensAt~leaveClosesAt 동안만 휴무신청 받음
+      match /schedules/{week} {
+        allow read: if inStore(s);
+        allow write: if manager(s);
+      }
+
+      // 휴무신청: 문서 이름 = 주_직원uid (다시 내면 덮어씀 = 마지막 것만 씀)
+      match /leaves/{id} {
+        allow read: if manager(s) || (active(s) && resource.data.uid == uid());
+        allow create, update: if manager(s)
+          || (active(s)
+            && d().keys().hasOnly(['uid', 'week', 'off', 'am', 'at'])
+            && d().uid == uid() && id == d().week + '_' + uid() && d().at == request.time
+            && d().off is list && d().am is list
+            && request.time >= doc(/databases/$(database)/documents/stores/$(s)/schedules/$(d().week)).leaveOpensAt
+            && request.time < doc(/databases/$(database)/documents/stores/$(s)/schedules/$(d().week)).leaveClosesAt);
+        allow delete: if manager(s);
+      }
+
+      // 매출: 매니저 이상
+      match /sales/{date} {
+        allow read, write: if manager(s);
+      }
+
+      // 월 정산표: 사장님만
+      match /payroll/{month} {
+        allow read, write: if owner(s);
+      }
+
+      // 월 합계: 총괄이 보는 유일한 숫자. 개인 정보가 섞이지 않게 칸을 고정
+      match /stats/{month} {
+        allow read: if owner(s) || orgAdmin(storeData(s).orgId);
+        allow write: if owner(s) && isMonth(month)
+          && d().keys().hasOnly(['month', 'sales', 'laborCost', 'laborRatio', 'hours', 'headcount', 'byWeekday', 'updatedAt'])
+          && d().month == month;
+      }
+    }
+
+    // 직원 초대 코드 → 매장. 코드를 아는 사람만 하나씩 조회 가능(목록 불가)
+    match /joinCodes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if owner(d().storeId) && d().keys().hasOnly(['storeId', 'storeName']);
+      allow delete: if owner(resource.data.storeId);
+      allow update: if false;
+    }
+  }
+}
