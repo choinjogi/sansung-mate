@@ -18,7 +18,7 @@
 - 지금 시스템은 그대로 두고 산성에서 병행 검증 (급여 1원까지 비교)
 
 단계
-1. ✅ Firebase 뼈대 — `firebase/` (규칙, 구조, 시험 28개, `firebase/README.md` 참고). `cd firebase && npm install && npm test`
+1. ✅ Firebase 뼈대 — `firebase/` (규칙, 구조, `firebase/README.md` 참고). 시험: `cd firebase && npm install && npm test`, `npm run e2e`
    - ⏳ 실제 프로젝트(`sansung-sheets`)에 아직 안 올림: 사용자가 자기 컴퓨터에서 `npx firebase login` → `npm run deploy`, 콘솔에서 Google·이메일 로그인 켜기, `orgs/org1` 만들기
 2. ✅ 매장 만들기 + 초대 가입 화면 — `multi/` (새 앱, 지금 앱과 따로). `cd firebase && npm run e2e` 로 브라우저 시험
    - ⏳ 실제 Firebase에 올린 뒤 확인: 직원 가짜 이메일(`…@staff.mate.invalid`) 가입이 되는지, 구글 로그인 창(승인된 도메인)
@@ -48,6 +48,31 @@
        산성 요일별 필요 인원 실제 값(기본값 4·4·4·4·4·5·5는 임시), 정직원 근무표 기본값
    - ⬜ 급여·정산표 → ⬜ 알림
 4. ⬜ 산성 병행 검증  5. ⬜ 두 번째 매장 투입  6. ⬜ 나머지 매장
+
+## ▶ 다음 할 일: 실제 Firebase·Cloudflare 설정 (사용자 노트북 Claude Code에서)
+사용자가 노트북에서 "Firebase·Cloudflare 설정하자"라고 하면 아래 순서로 진행. 사용자는 비개발자 → 한 단계씩 쉬운 말로.
+브랜치: `ccr-c3515536-fm1cvn` (먼저 `git checkout` + `git pull`). 작업 폴더: `firebase/`.
+1. 준비: `node -v`(없으면 nodejs.org LTS 설치 안내), `cd firebase && npm install`
+2. Firebase 로그인: `npx firebase login` (사용자가 브라우저에서 허용) → `npx firebase use sansung-sheets` (`npx firebase projects:list`로 실제 ID 확인)
+3. Firestore: 데이터베이스가 없으면 만들기 (위치 asia-northeast3, 프로덕션 모드).
+   ⚠️ **이미 데이터·규칙이 있으면 멈추고 사용자에게 물어보기** (`npm run deploy`가 기존 규칙을 덮어씀)
+4. 로그인 방법 켜기: Firebase 콘솔 → Authentication → Sign-in method → **Google**, **이메일/비밀번호** (사용자가 콘솔에서 스위치. 콘솔 주소를 알려 주기)
+   + 승인된 도메인에 `choinjogi.github.io`
+5. 웹 앱 등록: `npx firebase apps:create web MATE` → `npx firebase apps:sdkconfig web <appId>` → `multi/config.js` 의 apiKey·appId 채우기 (공개값)
+6. 권한 규칙 올리기: `npm run deploy`
+7. 서비스 계정(Cloudflare가 Firestore에 쓸 열쇠): gcloud 있으면 `gcloud auth login` 후
+   `gcloud iam service-accounts create mate-server --project sansung-sheets`,
+   역할 `roles/datastore.user` 하나만 부여, `gcloud iam service-accounts keys create <임시경로>.json --iam-account mate-server@sansung-sheets.iam.gserviceaccount.com`.
+   gcloud 없으면 Google Cloud 콘솔(IAM 및 관리자 → 서비스 계정)로 안내. **열쇠 내용은 절대 화면에 출력하거나 커밋하지 말 것**
+8. Cloudflare: `npx wrangler login` (사용자가 가입·허용) → `npm run deploy:server` (workers.dev 이름 정하기) →
+   `npx wrangler secret put SERVICE_ACCOUNT < <열쇠파일>` (윈도우 PowerShell: `Get-Content <파일> -Raw | npx wrangler secret put SERVICE_ACCOUNT`)
+   → **열쇠 파일 삭제** → 나온 주소를 `multi/config.js` 의 `SERVER_URL` 에
+9. 확인: `<SERVER_URL>/myIp` 를 폰으로 열어 네이버 "내 아이피"와 같은지
+10. 커밋·푸시 (config.js). **main 합치기는 사용자에게 먼저 묻기** (GitHub Pages로 `…/sansung-mate/multi/` 를 열려면 필요.
+    `multi/`·`firebase/`만 새로 생기고 지금 산성 앱 파일은 그대로)
+11. main에 올라가면: 대표님이 새 앱에서 구글 로그인 → Firebase 콘솔 Authentication에서 uid 확인 →
+    Firestore에 `orgs/org1` = `{ name: "산성 그룹", adminUids: ["<uid>"] }` 만들기 (콘솔 또는 명령)
+12. 끝나면 이 섹션을 "✅ 설정 완료"로 바꾸고, 다음은 급여·정산표 (지금 시트 월말결제 계산 방식부터 확인)
 
 ## 작업 방식
 - 사용자에게는 한국어로, 쉬운 말로 설명
