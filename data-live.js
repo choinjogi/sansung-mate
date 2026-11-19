@@ -78,6 +78,7 @@
     manual: o => write('manual', o),
     lookup: (name, wd) => call('lookup', { name, wd }),
     addStaff: o => write('addStaff', o),
+    wages: () => call('wages', {}), setWage: (name, wage, when) => write('setWage', { name, wage, when }), cancelWage: name => write('cancelWage', { name }),
     pushMine: () => call('pushMine', {}), pushSub: s => call('pushSub', s), pushOff: s => call('pushOff', s), pushTest: () => call('pushTest', {}),
     removeStaff: (name, date) => write('removeStaff', { name, date }),
     // 미리 받아 두기 (다른 탭을 누르면 바로 보이게)

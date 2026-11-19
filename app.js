@@ -10,13 +10,13 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 24</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 25</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
   const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
   const ADMIN_TABS = [['atoday', '👀', '오늘'], ['aok', '✅', '승인'], ['asales', '💰', '매출'], ['adash', '📊', '대시보드'], ['amore', '☰', '더보기']];
-  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore', info: 'amore', astaff: 'amore' };  // 더보기 안의 화면
+  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore', info: 'amore', astaff: 'amore', awage: 'amore' };  // 더보기 안의 화면
   function tabs() { return ME.role ? ADMIN_TABS : STAFF_TABS; }
   function drawNav() {
     $nav.hidden = false;
@@ -517,6 +517,28 @@
     });
   };
 
+  // ---------- 관리: 알바 시급 (사장님만, 결산 직원명부 D) ----------
+  VIEWS.awage = async function () {
+    loading(); const d = await API.wages(), won = n => Number(n || 0).toLocaleString('ko-KR') + '원';
+    render(`<div>${header()}<h2>알바 시급</h2>
+      ${d.msg ? `<div class="card"><p>${esc(d.msg)}</p></div>` : ''}
+      ${d.list.map((p, i) => `<div class="card"><div class="row between"><b>${esc(p.disp)}</b><span class="big" style="font-size:20px">${won(p.wage)}</span></div>
+        ${p.next ? `<p class="small" style="margin-top:4px"><span class="pill warn">${Number(p.next.ym.slice(5))}월부터 ${won(p.next.wage)}</span>${p.next.reserved ? ` 예약 · <a href="#" data-cancel="${esc(p.name)}" style="color:var(--sub)">취소</a>` : ' (다음 달 파일)'}</p>` : ''}
+        <div class="row" style="gap:8px;margin-top:10px"><input id="w${i}" inputmode="numeric" placeholder="새 시급" style="flex:1;margin:0"><select id="s${i}" style="width:auto;margin:0"><option value="now">이번 달부터</option><option value="next">다음 달부터</option></select><button class="sm" data-i="${i}" style="width:auto;margin:0">바꾸기</button></div></div>`).join('')}
+      <p class="small">이번 달부터 = ${d.month}월 1일부터 다시 계산(지금까지 일한 시간도 새 시급). 다음 달부터 = ${d.nextMonth}월 1일부터 (새 달 파일이 생기면 자동으로 들어가요). 결산 직원명부 시급 칸만 바뀌고, 근무내역·주휴·월말결제는 알아서 따라가요.</p></div>`);
+    d.list.forEach((p, i) => { const el = document.getElementById('w' + i); el.oninput = () => { const n = el.value.replace(/[^\d]/g, ''); el.value = n ? Number(n).toLocaleString('ko-KR') : ''; }; });
+    $app.querySelectorAll('[data-i]').forEach(b => b.onclick = () => busy(b, async () => {
+      const p = d.list[+b.dataset.i], w = Number(document.getElementById('w' + b.dataset.i).value.replace(/[^\d]/g, ''));
+      if (!w) return toast('새 시급을 넣어 주세요');
+      const when = document.getElementById('s' + b.dataset.i).value;
+      if (!confirm(`${p.disp}  ${won(p.wage)} → ${won(w)}
+${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' : d.nextMonth + '월 1일부터 (예약)'}
+바꿀까요?`)) return;
+      const r = await API.setWage(p.name, w, when); r.saved ? alert(r.msg) : alert(r.msg); VIEWS.awage();
+    }));
+    $app.querySelectorAll('[data-cancel]').forEach(a => a.onclick = e => { e.preventDefault(); busy(a, async () => { if (!confirm(a.dataset.cancel + ' 시급 예약을 취소할까요?')) return; const r = await API.cancelWage(a.dataset.cancel); toast(r.msg); VIEWS.awage(); }); });
+  };
+
   // ---------- 관리: 직원 계정 (임시 비밀번호) ----------
   VIEWS.aacc = async function () {
     loading(); const list = await API.accounts();
@@ -598,6 +620,7 @@
       <div class="card list">
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
+        ${ME.role === '사장님' ? '<a class="item" href="#" data-go="awage" style="color:inherit;text-decoration:none"><span>💰 알바 시급</span><span class="small">›</span></a>' : ''}
         <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
@@ -620,7 +643,7 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 24;
+  const APP_VER = 25;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
