@@ -20,10 +20,24 @@ const server = http.createServer(async (req, res) => {
 }).listen(5173);
 const APP = 'http://localhost:5173/multi/';
 
+// 출퇴근 서버: 기본은 Cloudflare 판(worker)을 이 컴퓨터에서 띄움. E2E_SERVER=functions 이면 Firebase 서버 함수 판
+const USE_FUNCTIONS = process.env.E2E_SERVER === 'functions';
+const { default: worker } = await import('../worker/index.js');
+const WENV = { PROJECT_ID: 'demo-mate', EMULATOR: '1', FIRESTORE_EMULATOR: 'http://127.0.0.1:8080' };
+const wserver = http.createServer(async (req, res) => {
+  const chunks = []; for await (const c of req) chunks.push(c);
+  const r = await worker.fetch(new Request('http://127.0.0.1:8787' + req.url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), WENV);
+  res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
+}).listen(8787);
+
 const browser = await chromium.launch();
 const STORE = { latitude: 37.5665, longitude: 126.978 }; // 매장 위치 (시험용)
-const phone = () => browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, locale: 'ko-KR',
-  permissions: ['geolocation'], geolocation: { ...STORE, accuracy: 20 } });
+const phone = async () => {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, locale: 'ko-KR',
+    permissions: ['geolocation'], geolocation: { ...STORE, accuracy: 20 } });
+  if (USE_FUNCTIONS) await c.addInitScript(() => localStorage.setItem('mate_use_functions', '1'));
+  return c;
+};
 const net = (page, ip) => page.evaluate(v => { window.__mateTestIp = v; }, ip); // 연습용: 어느 회선에서 찍는지 흉내
 let step = 0;
 async function shot(page, name) { if (SHOTS) await page.waitForTimeout(400), await page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, '0')}-${name}.png`, fullPage: true }); }
@@ -232,11 +246,11 @@ try {
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
 
-  console.log('✔ 화면 시험 통과 (가입·승인·출퇴근)');
+  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;
 } finally {
   await browser.close();
-  server.close();
+  server.close(); wserver.close();
 }

@@ -3,17 +3,21 @@
   "version": "1.0.0",
   "description": "산성 MATE 여러 매장용 Firebase 데이터 구조와 권한 규칙",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-mate \"node --test test/*.test.mjs functions/*.test.mjs\"",
-    "deploy": "firebase deploy --only firestore,functions",
+    "test": "firebase emulators:exec --only firestore --project demo-mate \"node --test test/*.test.mjs functions/*.test.mjs worker/*.test.mjs\"",
+    "deploy": "firebase deploy --only firestore",
     "build:vendor": "esbuild src/vendor-entry.js --bundle --format=esm --minify --legal-comments=none --outfile=../multi/vendor/firebase.js",
-    "e2e": "firebase emulators:exec --only auth,firestore,functions --project demo-mate \"node test/e2e.mjs\""
+    "e2e": "firebase emulators:exec --only auth,firestore --project demo-mate \"node test/e2e.mjs\"",
+    "deploy:server": "wrangler deploy",
+    "deploy:functions": "firebase deploy --only functions",
+    "e2e:functions": "E2E_SERVER=functions firebase emulators:exec --only auth,firestore,functions --project demo-mate \"node test/e2e.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
     "esbuild": "^0.24.2",
     "firebase": "^11.1.0",
     "firebase-tools": "^13.29.1",
-    "qrcode-generator": "^1.4.4"
+    "qrcode-generator": "^1.4.4",
+    "wrangler": "^3.99.0"
   },
   "private": true
 }

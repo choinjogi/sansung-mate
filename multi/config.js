@@ -6,5 +6,8 @@ export const FIREBASE = {
   projectId: 'sansung-sheets',
   appId: 'TODO',
 };
+// 출퇴근 서버 주소. Cloudflare에 올리면 나오는 주소 (예: https://mate-server.<이름>.workers.dev)
+// 비워 두면 Firebase 서버 함수(Blaze 요금제)를 씀
+export const SERVER_URL = '';
 // 내 컴퓨터(localhost)에서 열면 연습용 서버(에뮬레이터)에 붙는다. 실제 데이터와 무관
 export const USE_EMULATOR = ['localhost', '127.0.0.1'].includes(location.hostname);

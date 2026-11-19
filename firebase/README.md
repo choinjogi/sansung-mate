@@ -70,23 +70,58 @@ npm test        # 에뮬레이터 위에서 권한 시험 (실제 데이터와 �
 npm run e2e     # 실제 브라우저로 대표님·다른 사장님·직원 흐름 시험 (playwright 필요: npm i -g playwright && npx playwright install chromium)
 ```
 
-실제 프로젝트에 올리기 (처음 한 번, 내 컴퓨터에서):
-
-0. Firebase 콘솔에서 요금제를 **Blaze**로 바꾸고(카드 등록), Google Cloud 콘솔 → 결제 → 예산 및 알림에서
-   예산 1,000원 / 5,000원 알림을 걸어 둡니다. (서버 함수에 필요. 사용량은 무료 한도 안)
-
 ```bash
-cd firebase
-npx firebase login
-npx firebase use sansung-sheets   # 프로젝트 ID가 다르면 그 ID
-(cd functions && npm install)
-npm run deploy                    # 권한 규칙 + 색인 + 서버 함수(punch, registerWifi, 서울 지역)
+npm run e2e:functions   # 같은 시험을 Firebase 서버 함수 판으로 (나중에 바꿀 때 확인용)
 ```
 
-### 와이파이 확인 먼저 (로그인·매장 설정 없이 됨)
+## 출퇴근 서버: 지금은 Cloudflare (카드 필요 없음)
 
-Blaze 전환 + `npx firebase deploy --only functions` 만 하면 됩니다. 올리면 나오는 `myIp` 주소
-(`https://asia-northeast3-<프로젝트ID>.cloudfunctions.net/myIp`)를 매장에서 폰 브라우저로 엽니다.
+출퇴근 서버는 두 가지 판이 있고, 처리 내용(`functions/core.js`)은 같습니다.
+
+| 판 | 위치 | 필요한 것 | 앱 설정 |
+|---|---|---|---|
+| **Cloudflare (지금 씀)** | `worker/` + `wrangler.toml` | Cloudflare 무료 계정 (이메일만) | `multi/config.js` 의 `SERVER_URL` 에 주소 |
+| Firebase 서버 함수 | `functions/index.js` | Firebase Blaze 요금제 (카드) | `SERVER_URL` 을 비우면 이쪽 |
+
+**이 설정은 앱을 운영하는 사람(총괄) 한 명만 합니다.** 다른 매장 사장님·점장님·직원은 앱 링크로 들어와
+구글 로그인(사장님) 또는 이름+6자리(직원)만 하면 되고, Cloudflare·Firebase 계정이 필요 없습니다.
+
+### 처음 한 번 (내 컴퓨터에서)
+
+1. **Firebase 콘솔** (무료 요금제 그대로)
+   - Firestore Database가 없으면 만들기 (위치: 서울 asia-northeast3). 이미 쓰던 데이터·규칙이 있으면 올리기 전에 확인
+   - Authentication → 로그인 방법에서 **Google**, **이메일/비밀번호** 켜기
+   - Authentication → 설정 → 승인된 도메인에 `choinjogi.github.io` 추가
+   - 프로젝트 설정 → 내 앱 → 웹 앱 추가 → `apiKey`, `appId` 를 `multi/config.js` 에 넣기
+2. **Cloudflare 서버가 Firebase에 기록할 열쇠** (Google Cloud 콘솔, 결제 필요 없음)
+   - console.cloud.google.com → 프로젝트 `sansung-sheets` → IAM 및 관리자 → 서비스 계정 → **서비스 계정 만들기**
+     (이름 `mate-server`, 역할 **Cloud Datastore 사용자** 하나만)
+   - 만든 계정 → 키 → 키 추가 → **JSON** → 파일이 내려받아짐. **비밀번호처럼 다루기** (카톡·메일로 보내지 말 것)
+3. **올리기**
+```bash
+cd firebase
+npm install
+npx firebase login
+npx firebase use sansung-sheets   # 프로젝트 ID가 다르면 그 ID
+npm run deploy                    # 권한 규칙 + 색인 (무료 요금제 가능)
+npx wrangler login                # Cloudflare 가입·로그인 (브라우저가 열림)
+npx wrangler secret put SERVICE_ACCOUNT < 내려받은-열쇠.json   # 열쇠를 Cloudflare 비밀값으로
+npm run deploy:server             # Cloudflare에 올림 → https://mate-server.<이름>.workers.dev 주소가 나옴
+```
+   - 열쇠를 넣었으면 **내려받은 JSON 파일은 지웁니다.**
+   - 나온 주소를 `multi/config.js` 의 `SERVER_URL` 에 넣습니다.
+   - 주소 확인 페이지: `https://mate-server.<이름>.workers.dev/myIp`
+4. 대표님이 새 앱에서 구글로 한 번 로그인 → Firebase 콘솔 Authentication 목록에서 uid 복사 →
+   Firestore에 `orgs/org1` 문서 만들기: `{ name: "산성 그룹", adminUids: ["<대표님 uid>"] }`
+
+### 나중에 Firebase 서버 함수로 바꿀 때 (카드 생긴 뒤)
+
+1. Firebase 요금제를 **Blaze**로 (카드 등록), Google Cloud 콘솔 → 결제 → 예산 및 알림에서 1,000원 / 5,000원 알림
+2. `(cd functions && npm install) && npm run deploy:functions` (punch, registerWifi, myIp, 서울 지역)
+3. `multi/config.js` 의 `SERVER_URL` 을 `''` 로 비우기 → 앱이 Firebase 서버 함수를 씀
+4. 매장 와이파이·출퇴근 기록은 Firestore에 그대로 있으니 옮길 것 없음. Cloudflare 서버는 지워도 됨
+
+### 매장 와이파이 확인 (네이버 "내 아이피"로도 됨)
 
 | 시험 | 나와야 하는 결과 |
 |---|---|
@@ -94,11 +129,3 @@ Blaze 전환 + `npx firebase deploy --only functions` 만 하면 됩니다. 올�
 | 같은 폰을 와이파이 끄고 모바일 데이터로 열기 | **다른 주소** |
 | 아이폰 설정 → Wi-Fi → 매장 와이파이 ⓘ → "IP 주소 추적 제한" 켜고 / 끄고 열기 | 끈 쪽이 매장 주소 (켠 쪽이 다르면 직원 안내 필요) |
 | 다음 날 다시 매장 와이파이로 열기 | 어제와 같은 주소 (자주 바뀌면 알려 주세요) |
-
-이게 맞으면 출퇴근 와이파이 판정이 그대로 동작합니다.
-
-그다음 Firebase 콘솔에서 할 일:
-1. Authentication → 로그인 방법에서 **Google**과 **이메일/비밀번호**를 켭니다.
-   Authentication → 설정 → 승인된 도메인에 `choinjogi.github.io` 를 넣습니다.
-   프로젝트 설정 → 내 앱 → 웹 앱 추가 → 나오는 `apiKey`, `appId` 를 `multi/config.js` 에 넣습니다.
-2. Firestore에 `orgs/org1` 문서를 직접 만듭니다: `{ name: "산성 그룹", adminUids: ["<대표님 uid>"] }`. uid는 대표님이 구글로 한 번 로그인한 뒤 Authentication 목록에서 복사합니다.

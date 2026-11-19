@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
 import * as F from './vendor/firebase.js';
-import { FIREBASE, USE_EMULATOR } from './config.js';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -129,12 +129,24 @@ export function getGeo(ms = 8000) {
   });
 }
 const testIp = () => (USE_EMULATOR && window.__mateTestIp) || undefined; // 연습용 서버 시험에서만
+// 출퇴근 서버 부르기: Cloudflare(SERVER_URL) 또는 Firebase 서버 함수. 연습용 서버에서는 Cloudflare 판이 기본
+const serverUrl = () => (USE_EMULATOR ? (localStorage.getItem('mate_use_functions') === '1' ? '' : 'http://127.0.0.1:8787') : SERVER_URL);
+async function server(name, args) {
+  const url = serverUrl();
+  if (!url) return (await F.httpsCallable(fns, name)(args)).data;
+  let r;
+  try {
+    r = await fetch(`${url}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await auth.currentUser.getIdToken()) }, body: JSON.stringify(args) });
+  } catch (e) { throw Object.assign(new Error('인터넷 연결을 확인해 주세요'), { code: 'functions/unavailable' }); }
+  const j = await r.json().catch(() => ({}));
+  if (!j.ok) throw Object.assign(new Error(j.message || '서버 오류가 났어요'), { code: 'functions/' + (j.code || 'internal') });
+  return j.data;
+}
 export async function punch(storeId, kind) {
   const geo = await getGeo();
-  const r = await F.httpsCallable(fns, 'punch')({ storeId, kind, geo, _testIp: testIp() });
-  return { ...r.data, geo: !!geo };
+  return { ...(await server('punch', { storeId, kind, geo, _testIp: testIp() })), geo: !!geo };
 }
-export const registerWifi = (storeId, reset) => F.httpsCallable(fns, 'registerWifi')({ storeId, reset: !!reset, _testIp: testIp() }).then(r => r.data);
+export const registerWifi = (storeId, reset) => server('registerWifi', { storeId, reset: !!reset, _testIp: testIp() });
 export const getSetting = (storeId, k) => F.getDoc(ref(`stores/${storeId}/settings/${k}`)).then(data);
 export const savePlace = (storeId, place) => F.setDoc(ref(`stores/${storeId}/settings/place`), place);
 
