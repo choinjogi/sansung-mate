@@ -9,7 +9,7 @@
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   function render(html) { $app.innerHTML = html; $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 14</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 15</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => render('<div class="splash"><p>불러오는 중…</p></div>');
 
   // ---------- 탭 ----------
@@ -246,6 +246,11 @@
         <div><div class="small">주휴수당</div><div class="big" style="font-size:22px">${S.noJuhu ? '해당 없음' : won(S.juhu)}</div></div></div>
         <table class="kv"><tr><th>주차</th><th>시간</th><th>주휴</th></tr>${S.weeks.map(w => `<tr><td>${esc(w.wk)}</td><td>${w.h.toFixed(1)}h</td><td>${S.noJuhu ? '-' : w.pay ? won(w.pay) : '<span class="small">' + (w.h < 15 ? '15시간 미만' : '0원') + '</span>'}</td></tr>`).join('')}</table>
         <p class="small">주휴는 한 주 15시간 이상 일하면 생겨요(1~7일·8~14일처럼 7일씩 끊어서 계산). 최종 금액은 월말결제 기준이에요.</p></div>`;
+      if (r.hours && S.pay) sumCard += `<div class="card"><div class="row between"><b>내 급여</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto} 결산 기준</span></div>
+        <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">현재까지 받을 돈</div><div class="big" style="font-size:22px">${won(S.pay.now)}</div></div>
+        ${S.pay.est != null ? `<div><div class="small">이번 달 예상 (대략)</div><div class="big" style="font-size:22px">약 ${won(S.pay.est)}</div></div>` : ''}</div>
+        <table class="kv"><tr><td>그중 주휴수당</td><td>${S.noJuhu ? '해당 없음' : won(S.juhu)}</td></tr></table>
+        <p class="small">현재까지 받을 돈 = 주휴수당 포함. 예상은 지금까지 하루 평균 × ${S.pay.days}일로 어림한 값이라 실제와 달라요. 최종 금액은 월말결제(사장님 확인) 기준이에요.</p></div>`;
       const ev = r.list.filter(x => x.tags.length).map(x => ({ d: x.day, t: x.tags })).concat(Object.values(off).map(o => ({ d: o.day, t: o.tags }))).sort((a, b) => a.d - b.d);
       sumCard += `<div class="card"><b>근무 특이사항</b>${ev.length ? `<table class="kv ev">${ev.map(e => `<tr data-d="${e.d}"><td>${r.mon}/${e.d} (${W(e.d)})</td><td><div class="tags" style="margin:0">${pills(e.t)}</div></td></tr>`).join('')}</table>` : '<p class="small" style="margin-top:6px">이번 달은 특이사항이 없어요.</p>'}</div>`;
     }
