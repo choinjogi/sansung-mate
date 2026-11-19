@@ -24,7 +24,7 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
   members/{uid}               { name, role: staff|manager, status: pending|active|left, startTime, type }
   wages/{uid}                 { history: [{ from: 'YYYY-MM', wage }] }  사장님·본인만
   private/{uid}               { bank, account, email, req }  직원은 req(변경 요청)만 씀, 사장님이 승인
-  punches/{id}                { uid, date, kind: in|out, at, via: nfc|app|manual, by, editedBy, editedAt, note }
+  punches/{id}                { uid, date, kind: in|out, at, via: app|manual, by, editedBy, editedAt, note }
   schedules/{주 시작일}        주간 스케줄 + leaveOpensAt / leaveClosesAt
   leaves/{주_uid}             휴무신청 { uid, week, off[], am[], at }  열린 동안만 본인이 냄
   sales/{YYYY-MM-DD}          매출  매니저 이상
@@ -40,7 +40,7 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
 - **직영 매장**: 총괄이 [새 매장 만들기] → `stores` 생성 (`direct: true`)
 - **다른 사장님 매장**: 총괄이 초대 코드 생성 → 사장님이 구글로 로그인해서 매장을 만들면, 같은 묶음으로 초대가 "사용됨"이 됩니다. 초대 없이는 매장을 못 만듭니다.
 - **직원 가입**: 사장님이 `joinCodes` 생성 → 초대 링크와 QR (`?join=코드`) → 직원이 이름 + 6자리로 가입하면 `status: pending` → 사장님이 승인하면 `active`
-- **NFC**: 스티커 주소 `…/?s={storeId}&nfc=1`. 매장마다 스티커만 새로 붙입니다.
+- **출퇴근**: 앱 버튼 + 위치 확인 (NFC·QR·태블릿은 쓰지 않음. 아이폰 NFC 인식률이 10% 정도라서).
 - **직원 로그인**: Firebase 이메일/비밀번호 계정을 씁니다. 이메일은 앱이 `{storeId}.{이름 UTF-8 16진수}@staff.mate.invalid` 로 만들고, 비밀번호는 6자리입니다. 같은 이름이 다른 매장에 있어도 겹치지 않습니다.
 - **출퇴근**: 직원은 서버 시각으로만 찍습니다 (`at == request.time`). 지난 시각으로 찍거나 고치거나 지울 수 없습니다. 매니저 이상이 고치면 `editedBy` / `editedAt` 가 남습니다.
 - **월 합계**: 사장님이 정산표를 만들 때 앱이 `stats` 를 같이 씁니다 (서버 함수가 없어도 됨 = 무료 요금제).
@@ -51,7 +51,7 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
 - `multi/app.js` 화면, `multi/fb.js` 서버 호출, `multi/config.js` Firebase 설정값, `multi/defaults.js` 새 매장 기본 규칙
 - `multi/vendor/firebase.js` = Firebase + QR 생성기를 묶은 파일 (`npm run build:vendor` 로 다시 만듦)
 - 화면: 처음 화면 / 사장님 구글 로그인 / 총괄 홈(직영 매장 만들기, 사장님 초대 링크) / 초대받은 매장 만들기 /
-  매장 화면(직원 초대 링크·QR, 가입 승인·거절, 매니저 지정, 매장 규칙, NFC 주소) / 규칙 바꾸기(이번 달·다음 달부터) /
+  매장 화면(직원 초대 링크·QR, 가입 승인·거절, 매니저 지정, 매장 규칙) / 규칙 바꾸기(이번 달·다음 달부터) /
   다른 사장님 매장 합계 / 직원 가입·로그인·승인 대기
 
 ## 시험 / 올리기

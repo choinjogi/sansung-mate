@@ -59,7 +59,7 @@ function wireLinks() {
   document.querySelectorAll('[data-share]').forEach(b => { b.onclick = () => share(b.dataset.title, b.dataset.title, b.dataset.share); });
 }
 
-// ---------- 주소로 들어온 정보 (초대 링크·NFC) ----------
+// ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
 if (params.get('owner')) ls.set('mate_owner', params.get('owner').toUpperCase());
@@ -95,7 +95,7 @@ function landing(mode) {
     <div class="t2">MATE</div><p class="t1">매장 근무 앱</p>
     ${mode === 'invite' ? '<div class="card hero" style="width:100%"><b>매장 만들기 초대를 받으셨어요</b><p class="small">구글 계정으로 로그인하면 매장을 만들 수 있어요.</p></div>' : ''}
     <div style="width:100%;margin-top:18px"><button id="g">사장님 · 구글로 로그인</button>
-    <p class="small" style="margin-top:14px">직원은 사장님이 보낸 <b>초대 링크</b>로 들어와 주세요.<br>이미 가입했다면 그 링크나 매장 NFC 스티커로 열면 로그인 화면이 나와요.</p></div></div>`);
+    <p class="small" style="margin-top:14px">직원은 사장님이 보낸 <b>초대 링크</b>로 들어와 주세요.<br>이미 가입했다면 그 링크로 열면 로그인 화면이 나와요.</p></div></div>`);
   $('g').onclick = e => busy(e.target, () => api.googleLogin());
 }
 
@@ -302,8 +302,7 @@ async function storeScreen(id) {
       <tr><td>급여일</td><td>${r.pay.payday ? '매달 ' + r.pay.payday + '일' : '-'}</td></tr>
       <tr><td>휴무신청</td><td>${DOW[r.leave.opensDow]} ${esc(r.leave.opensTime)} ~ ${DOW[r.leave.closesDow]} ${esc(r.leave.closesTime)}</td></tr></table>
       <p class="small">${r.id}부터 적용${rules.next ? ` · <b>${rules.next.id}부터 바뀐 규칙 예약됨</b>` : ''}</p>` : '<p class="small">규칙이 없어요.</p>'}
-      <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>
-    ${linkCard({ title: 'NFC 스티커 주소', desc: '매장 NFC 스티커에 이 주소를 써 넣으면, 직원이 찍을 때 이 매장으로 열려요.', url: `${BASE}?s=${s.id}&nfc=1`, qr: false })}`);
+      <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>`);
   wireTop(ownerHome); wireLinks();
   document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.ok, { status: 'active' }); toast('승인했어요'); storeScreen(id); }); });
   document.querySelectorAll('[data-no]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(id, b.dataset.no); storeScreen(id); }); }; });
