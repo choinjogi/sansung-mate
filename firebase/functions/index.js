@@ -2,7 +2,7 @@
 // punch: 출퇴근 찍기. 요청이 매장 와이파이(등록한 회선 주소)에서 왔는지 서버가 확인하고 기록한다.
 //        직원은 출퇴근 기록을 직접 쓸 수 없고(권한 규칙), 반드시 이 함수를 거친다.
 // registerWifi: 사장님이 매장 와이파이에 붙은 채로 누르면 지금 회선 주소를 매장 와이파이로 등록.
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { clientIp, sameNet, kst, prevDate, distM, judge } from './lib.js';
@@ -78,4 +78,15 @@ export const registerWifi = onCall(opts, async req => {
   const ips = old.some(x => sameNet(x, ip)) ? old : [...old, ip].slice(-3); // 최근 3개까지 (와이파이가 둘이거나 주소가 바뀐 경우)
   await ref.set({ ips, updatedAt: FieldValue.serverTimestamp() });
   return { count: ips.length, added: ips !== old, ip };
+});
+
+// 와이파이 확인용 페이지: 폰 브라우저로 열면 서버가 본 회선 주소를 보여 준다 (로그인 필요 없음, 본인 주소만 보임)
+// 매장 와이파이로 연 폰들은 같은 주소, 모바일 데이터로 연 폰은 다른 주소가 나와야 정상
+export const myIp = onRequest({ region: REGION, maxInstances: 2 }, (req, res) => {
+  const ip = clientIp(req), xff = String(req.headers['x-forwarded-for'] || '');
+  const e = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>회선 주소 확인</title><body style="font-family:sans-serif;padding:24px;line-height:1.6">
+<p>서버가 본 이 폰의 회선 주소</p><h1 style="font-size:30px;word-break:break-all">${e(ip || '알 수 없음')}</h1>
+<p style="color:#888;font-size:13px">x-forwarded-for: ${e(xff || '(없음)')}</p></body>`);
 });

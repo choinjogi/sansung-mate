@@ -83,6 +83,20 @@ npx firebase use sansung-sheets   # 프로젝트 ID가 다르면 그 ID
 npm run deploy                    # 권한 규칙 + 색인 + 서버 함수(punch, registerWifi, 서울 지역)
 ```
 
+### 와이파이 확인 먼저 (로그인·매장 설정 없이 됨)
+
+Blaze 전환 + `npx firebase deploy --only functions` 만 하면 됩니다. 올리면 나오는 `myIp` 주소
+(`https://asia-northeast3-<프로젝트ID>.cloudfunctions.net/myIp`)를 매장에서 폰 브라우저로 엽니다.
+
+| 시험 | 나와야 하는 결과 |
+|---|---|
+| 아이폰 A, 안드로이드 B 둘 다 매장 와이파이로 열기 | **같은 주소** |
+| 같은 폰을 와이파이 끄고 모바일 데이터로 열기 | **다른 주소** |
+| 아이폰 설정 → Wi-Fi → 매장 와이파이 ⓘ → "IP 주소 추적 제한" 켜고 / 끄고 열기 | 끈 쪽이 매장 주소 (켠 쪽이 다르면 직원 안내 필요) |
+| 다음 날 다시 매장 와이파이로 열기 | 어제와 같은 주소 (자주 바뀌면 알려 주세요) |
+
+이게 맞으면 출퇴근 와이파이 판정이 그대로 동작합니다.
+
 그다음 Firebase 콘솔에서 할 일:
 1. Authentication → 로그인 방법에서 **Google**과 **이메일/비밀번호**를 켭니다.
    Authentication → 설정 → 승인된 도메인에 `choinjogi.github.io` 를 넣습니다.
