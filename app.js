@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 25</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 26</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -368,7 +368,8 @@
     render(`<div>${header()}<h2>오늘 ${esc(d.label)} 출근 현황</h2>
       ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
-      <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item"><div><b>${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.in ? ' · 출근 ' + esc(r.in) : ''}${r.out ? ' · 퇴근 ' + esc(r.out) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
+      <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item" style="align-items:center"><div style="flex:1"><div><b>${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.expect ? ' · 예정 ' + esc(r.expect) : ''}</span></div>
+        <div style="margin-top:3px;font-size:15px;color:var(--text)">${r.group === '정' && !r.in ? '' : `출근 <b style="color:${r.late ? 'var(--warn)' : 'var(--text)'}">${esc(r.in || '--:--')}</b>${r.late ? ' <span class="small" style="color:var(--warn)">(' + r.late + '분 늦음)</span>' : ''} → `}퇴근 <b>${esc(r.out || '--:--')}</b></div></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
       <div class="card"><b>⏰ 일찍 부르기</b><p class="small">오늘 정시보다 일찍 나오라고 한 알바를 미리 적어 두면 그 시각부터 계산돼요. (늦게 오면 찍은 시각부터)</p>
         <label>누구</label><select id="en"><option value="">불러오는 중…</option></select>
         <label>몇 시</label><input type="time" id="et" value="17:00" step="300">
@@ -643,7 +644,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 25;
+  const APP_VER = 26;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
