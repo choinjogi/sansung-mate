@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 21</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 22</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -135,11 +135,15 @@
     loading(); ME = await API.me(ME.name);
     const t = ME.today, work = t.code === 'O' || t.code === '오전' || t.code === '오전+오후';
     const ck = t.clock ? (t.clock.out ? `<span class="pill ok">퇴근 ${esc(t.clock.out)}</span>` : t.clock.in ? `<span class="pill ok">출근 ${esc(t.clock.in)} 찍음</span>` : '') : '';
+    const tm = s => { const m = String(s || '').match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+    const lateM = ME.group === '알' && t.clock && t.clock.in && t.start && tm(t.clock.in) > tm(t.start) ? tm(t.clock.in) - tm(t.start) : 0;
+    const pendCard = ME.pend ? '<div class="card"><span class="pill warn">가입 확인 대기</span><p class="small" style="margin-top:6px">사장님·매니저님이 가입을 확인하면 내 급여와 내 정보 입력이 열려요.</p></div>' : '';
     render(`<div>${header()}
       <div class="card hero"><div class="row between"><span class="small">오늘 ${esc(t.label)}</span>${work ? '<span class="pill on">근무</span>' : '<span class="pill off">쉬는 날</span>'}</div>
         <div class="big" style="margin-top:6px">${work ? (t.code !== 'O' ? '12:00 출근 (주말 오전)' : t.start ? t.start + ' 출근' + (t.early ? ' <span class="pill warn">일찍 부름</span>' : '') : '오늘 근무') : ME.covered === false ? '스케줄 확정 전' : '오늘은 쉬는 날'}</div>
-        ${ck ? '<div style="margin-top:6px">' + ck + '</div>' : ''}
+        ${ck ? '<div style="margin-top:6px">' + ck + (lateM ? ' <span class="pill warn">지각 ' + lateM + '분</span>' : '') + '</div>' : ''}
         ${work && ME.group === '알' ? '<p class="small">출근·퇴근은 매장 스티커에 폰을 대 주세요.</p>' : work ? '<p class="small">퇴근할 때 매장 스티커에 폰을 대 주세요.</p>' : bear('eat') + '<p class="small" style="text-align:center">맛있는 거 먹고 푹 쉬세요!</p>'}</div>
+      ${pendCard}
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
       <h2>공지</h2>${ME.notice.map(n => `<div class="card"><div class="small">${esc(n.d)}</div><p style="color:var(--text)">${esc(n.t)}</p></div>`).join('')}
@@ -180,6 +184,7 @@
   // ---------- 내 정보: 계좌·이메일·주민번호 (넣기만, 다시 보여 주지 않음) ----------
   const BANKS = ['국민', '신한', '우리', '하나', '농협', '기업', '카카오뱅크', '토스뱅크', '케이뱅크', '새마을금고', '우체국', '부산', '경남', '대구', '수협', '신협', 'SC제일'];
   VIEWS.info = async function () {
+    if (ME.pend) return render(`<div>${header()}<h2>내 정보</h2><div class="card"><span class="pill warn">가입 확인 대기</span><p style="color:var(--text);margin-top:8px">사장님·매니저님이 앱 가입을 확인한 뒤에 계좌·주민번호를 넣을 수 있어요.</p><p class="small">매장에서 "앱 가입 승인해 주세요"라고 말해 주세요.</p></div></div>`);
     loading(); const d = await API.myInfo();
     const st = (v, t) => v ? `<span style="color:var(--text)">${esc(t || v)}</span>` : '<span style="color:var(--warn)">아직 없음</span>';
     render(`<div>${header()}<h2>내 정보</h2>
@@ -267,7 +272,7 @@
     const pills = tags => tags.map(t => `<span class="pill ${LV.indexOf(t) >= 0 ? 'lv' : /대타|추가/.test(t) && !/쉼/.test(t) ? 'ok' : 'warn'}">${esc(t)}</span>`).join(' ');
     const detail = d => { const x = by[d], o = off[d], h = `<b>${r.mon}/${d} (${W(d)})</b>`; return x
       ? `<div class="row between">${h}</div>${x.tags.length ? '<div class="tags">' + pills(x.tags) + '</div>' : ''}
-         ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}</p>`}`
+         ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}${x.tap ? ' · 스티커 찍은 시각 ' + esc(x.tap) : ''}</p>`}`
       : o ? `<div class="row between">${h}</div><div class="tags">${pills(o.tags)}</div><p class="small">${LV.indexOf(o.tags[0]) >= 0 ? '스케줄에 ' + esc(o.tags[0]) + '(으)로 적힌 날이에요.' : '스케줄에는 근무였는데 출퇴근 기록이 없어요. 사장님이 쉬라고 한 날이나 대타를 구한 날도 여기 나와요.'}</p>`
       : plan[d] ? `<div class="row between">${h}<span class="pill ok">출근 예정</span></div>
          <p style="color:var(--text)">${plan[d] === '오전' ? '주말 오전 12:00 ~ 15:00' : ME.today.start ? ME.today.start + ' 출근' : '근무'} 예정이에요.</p>`
@@ -290,13 +295,14 @@
         <div><div class="small">주휴수당</div><div class="big" style="font-size:22px">${S.noJuhu ? '해당 없음' : won(S.juhu)}</div></div></div>
         <table class="kv"><tr><th>주차</th><th>시간</th><th>주휴</th></tr>${S.weeks.map(w => `<tr><td>${esc(w.wk)}</td><td>${w.h.toFixed(1)}h</td><td>${S.noJuhu ? '-' : w.pay ? won(w.pay) : '<span class="small">' + (w.h < 15 ? '15시간 미만' : '0원') + '</span>'}</td></tr>`).join('')}</table>
         <p class="small">주휴는 한 주 15시간 이상 일하면 생겨요(1~7일·8~14일처럼 7일씩 끊어서 계산). 최종 금액은 월말결제 기준이에요.</p></div>`;
+      if (r.hours && S.payLocked) sumCard += `<div class="card"><b>내 급여</b><p class="small" style="margin-top:6px">사장님·매니저님이 앱 가입을 확인하면 보여요.</p></div>`;
       if (r.hours && S.pay) sumCard += `<div class="card"><div class="row between"><b>내 급여</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto} 결산 기준</span></div>
         <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">현재까지 받을 돈</div><div class="big" style="font-size:22px">${won(S.pay.now)}</div></div>
 </div>
         <table class="kv"><tr><td>그중 주휴수당</td><td>${S.noJuhu ? '해당 없음' : won(S.juhu)}</td></tr></table>
         <p class="small">현재까지 받을 돈 = 주휴수당 포함. 최종 금액은 월말결제(사장님 확인) 기준이에요.</p></div>`;
       const ev = r.list.filter(x => x.tags.length).map(x => ({ d: x.day, t: x.tags })).concat(Object.values(off).map(o => ({ d: o.day, t: o.tags }))).sort((a, b) => a.d - b.d);
-      sumCard += `<div class="card"><b>근무 특이사항</b>${ev.length ? `<table class="kv ev">${ev.map(e => `<tr data-d="${e.d}"><td>${r.mon}/${e.d} (${W(e.d)})</td><td><div class="tags" style="margin:0">${pills(e.t)}</div></td></tr>`).join('')}</table>` : '<p class="small" style="margin-top:6px">이번 달은 특이사항이 없어요.</p>'}</div>`;
+      sumCard += `<div class="card"><div class="row between"><b>근무 특이사항</b>${r.hours && S.late != null ? `<span class="pill ${S.late ? 'warn' : 'ok'}">지각 ${S.late}번${S.late ? ' · ' + S.lateMin + '분' : ''}</span>` : ''}</div>${ev.length ? `<table class="kv ev">${ev.map(e => `<tr data-d="${e.d}"><td>${r.mon}/${e.d} (${W(e.d)})</td><td><div class="tags" style="margin:0">${pills(e.t)}</div></td></tr>`).join('')}</table>` : '<p class="small" style="margin-top:6px">이번 달은 특이사항이 없어요.</p>'}</div>`;
     }
 
     render(`<div>${header()}<h2>${esc(r.month)} 내 출퇴근</h2>
@@ -353,14 +359,14 @@
     const can = p => p.kind !== '새 폰' || ME.role === '사장님', nExc = list.filter(p => p.kind === '조기 출근').length;
     render(`<div>${header()}<h2>승인 대기 ${list.length}건</h2>
       ${nExc > 1 ? `<button id="all" style="margin-bottom:10px">조기 출근 ${nExc}건 전부 승인</button>` : ''}
-      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p>${esc(p.when)} · ${esc(p.detail)}</p>
+      ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p${p.warn ? ' class="chg" style="color:var(--bad)"' : ''}>${esc(p.when)} · ${esc(p.detail)}</p>
         ${can(p) ? `<div class="row" style="gap:8px;margin-top:8px"><button class="sm" data-id="${esc(p.id)}" data-ok="1">승인</button><button class="sm ghost" data-id="${esc(p.id)}" data-ok="">거절</button></div>` : '<p class="small">새 폰 승인은 사장님만 해요.</p>'}</div>`).join('')
         : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}
       <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터. 새 가입 = 직원이 앱에 직접 가입한 것 — 본인이 아니면 거절(가입 지움).</p>${STEP2}</div>`);
     $app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => busy(b, async () => {
       const ok = !!b.dataset.ok, j = /^acc/.test(b.dataset.id);
       const inf = /^inf/.test(b.dataset.id);
-      if (!confirm(j ? (ok ? '본인이 가입한 게 맞나요? 승인할까요?' : '본인이 아니면 가입을 지워요(그 폰 로그인도 풀림). 지울까요?') : inf ? (ok ? '직원명부에 이 정보를 넣을까요?\n(계좌가 바뀌는 거면 본인에게 한 번 확인해 주세요)' : '이 정보 변경을 거절할까요?') : ok ? '승인할까요?' : '거절할까요?')) return;
+      if (!confirm(j ? (ok ? '본인이 가입한 게 맞나요? 승인할까요?' : '본인이 아니면 가입을 지워요(그 폰 로그인도 풀림). 지울까요?') : inf ? (ok ? (b.closest('.card').querySelector('p.chg') ? '⚠️ 급여 계좌가 바뀌어요.\n본인에게 직접(얼굴 보고·전화로) 확인했나요? 승인할까요?' : '직원명부에 이 정보를 넣을까요?') : '이 정보 변경을 거절할까요?') : ok ? '승인할까요?' : '거절할까요?')) return;
       const r = await API.decide(b.dataset.id, ok); r.warn ? alert(r.msg) : toast(r.msg); VIEWS.aok();
     }));
     const all = document.getElementById('all');
@@ -577,9 +583,29 @@
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
     }).catch(() => {});
-    let done = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !done) { done = true; location.reload(); } });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
+  // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
+  const APP_VER = 22;
+  function newVer() {
+    if (document.getElementById('nv')) return;
+    const d = document.createElement('div'); d.id = 'nv';
+    d.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:999;background:var(--wine);color:#fff;border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:15px';
+    d.innerHTML = '<span>✨ 새 버전이 있어요</span><button class="sm" style="background:#fff;color:var(--wine);width:auto;margin:0">새로고침</button>';
+    d.querySelector('button').onclick = async () => {
+      try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+      try { const rg = await navigator.serviceWorker.getRegistration(); if (rg) await rg.update(); } catch (e) {}
+      location.reload();
+    };
+    document.body.appendChild(d);
+  }
+  function checkVer() {
+    if (location.protocol === 'file:') return;
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && Number(j.v) > APP_VER) newVer(); }).catch(() => {});
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVer(); });
+  setInterval(() => { if (document.visibilityState === 'visible') checkVer(); }, 30 * 60000);
+  setTimeout(checkVer, 3000);
   splash();
   setTimeout(start, 900);
 })();
