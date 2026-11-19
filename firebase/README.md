@@ -1,4 +1,4 @@
-# 산성 MATE — 여러 매장용 Firebase 뼈대 (1단계)
+# 산성 MATE — 여러 매장용 Firebase
 
 지금 앱(구글 Apps Script + 시트)은 그대로 둡니다. 이 폴더는 새 서버의 **데이터 구조와 권한 규칙**만 담고 있습니다.
 
@@ -20,7 +20,7 @@ orgs/{orgId}                  총괄. adminUids. 콘솔에서 한 번만 만듦 
 ownerInvites/{code}           총괄 → 다른 사장님 "매장 만들기 초대". 한 번 쓰면 끝
 joinCodes/{code}              직원 초대 코드 → { storeId, storeName }. 코드로만 조회, 목록 불가
 stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, createdAt }
-  rules/{YYYY-MM}             매장 규칙. 문서 이름 = 적용 시작 달 (기본값: defaults.js)
+  rules/{YYYY-MM}             매장 규칙. 문서 이름 = 적용 시작 달 (기본값: ../multi/defaults.js)
   members/{uid}               { name, role: staff|manager, status: pending|active|left, startTime, type }
   wages/{uid}                 { history: [{ from: 'YYYY-MM', wage }] }  사장님·본인만
   private/{uid}               { bank, account, email, req }  직원은 req(변경 요청)만 씀, 사장님이 승인
@@ -45,12 +45,22 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
 - **출퇴근**: 직원은 서버 시각으로만 찍습니다 (`at == request.time`). 지난 시각으로 찍거나 고치거나 지울 수 없습니다. 매니저 이상이 고치면 `editedBy` / `editedAt` 가 남습니다.
 - **월 합계**: 사장님이 정산표를 만들 때 앱이 `stats` 를 같이 씁니다 (서버 함수가 없어도 됨 = 무료 요금제).
 
+## 화면 (2단계) — `multi/`
+
+새 앱은 `multi/` 폴더(주소 `…/sansung-mate/multi/`)에 있고, 지금 산성 앱과 따로 돌아갑니다.
+- `multi/app.js` 화면, `multi/fb.js` 서버 호출, `multi/config.js` Firebase 설정값, `multi/defaults.js` 새 매장 기본 규칙
+- `multi/vendor/firebase.js` = Firebase + QR 생성기를 묶은 파일 (`npm run build:vendor` 로 다시 만듦)
+- 화면: 처음 화면 / 사장님 구글 로그인 / 총괄 홈(직영 매장 만들기, 사장님 초대 링크) / 초대받은 매장 만들기 /
+  매장 화면(직원 초대 링크·QR, 가입 승인·거절, 매니저 지정, 매장 규칙, NFC 주소) / 규칙 바꾸기(이번 달·다음 달부터) /
+  다른 사장님 매장 합계 / 직원 가입·로그인·승인 대기
+
 ## 시험 / 올리기
 
 ```bash
 cd firebase
 npm install
 npm test        # 에뮬레이터 위에서 권한 시험 (실제 데이터와 무관)
+npm run e2e     # 실제 브라우저로 대표님·다른 사장님·직원 흐름 시험 (playwright 필요: npm i -g playwright && npx playwright install chromium)
 ```
 
 실제 프로젝트에 올리기 (처음 한 번, 내 컴퓨터에서):
@@ -64,4 +74,6 @@ npm run deploy                    # 규칙과 색인만 올라감
 
 그다음 Firebase 콘솔에서 할 일:
 1. Authentication → 로그인 방법에서 **Google**과 **이메일/비밀번호**를 켭니다.
+   Authentication → 설정 → 승인된 도메인에 `choinjogi.github.io` 를 넣습니다.
+   프로젝트 설정 → 내 앱 → 웹 앱 추가 → 나오는 `apiKey`, `appId` 를 `multi/config.js` 에 넣습니다.
 2. Firestore에 `orgs/org1` 문서를 직접 만듭니다: `{ name: "산성 그룹", adminUids: ["<대표님 uid>"] }`. uid는 대표님이 구글로 한 번 로그인한 뒤 Authentication 목록에서 복사합니다.

@@ -15,6 +15,8 @@ service cloud.firestore {
     }
     function storeData(s) { return doc(/databases/$(database)/documents/stores/$(s)); }
     function owner(s) { return signedIn() && uid() in storeData(s).ownerUids; }
+    // 같은 묶음 안에서 매장을 막 만든 경우까지 포함 (매장 + 규칙 + 초대 코드를 한 번에 저장)
+    function ownerAfter(s) { return signedIn() && uid() in getAfter(/databases/$(database)/documents/stores/$(s)).data.ownerUids; }
     function mePath(s) { return /databases/$(database)/documents/stores/$(s)/members/$(uid()); }
     function active(s) { return signedIn() && exists(mePath(s)) && get(mePath(s)).data.status == 'active'; }
     function manager(s) { return owner(s) || (active(s) && get(mePath(s)).data.role == 'manager'); }
@@ -27,7 +29,7 @@ service cloud.firestore {
     // ---------- 총괄 ----------
     // 처음 한 번만 콘솔에서 만든다 (앱에서는 못 만듦 = 아무나 총괄이 될 수 없음)
     match /orgs/{orgId} {
-      allow read: if orgAdmin(orgId);
+      allow read: if signedIn() && uid() in resource.data.adminUids;
       allow write: if false;
     }
 
@@ -50,10 +52,12 @@ service cloud.firestore {
 
     // ---------- 매장 ----------
     match /stores/{s} {
-      allow read: if signedIn() && (uid() in resource.data.ownerUids || active(s) || orgAdmin(resource.data.orgId));
+      allow get: if signedIn() && (uid() in resource.data.ownerUids || active(s) || orgAdmin(resource.data.orgId));
+      // 목록: 내 매장(ownerUids array-contains) 또는 총괄의 전체 매장(orgId ==)
+      allow list: if signedIn() && (uid() in resource.data.ownerUids || orgAdmin(resource.data.orgId));
       // 직영: 총괄이 직접 만듦. 그 외: 총괄 초대 코드가 있어야 만듦.
       allow create: if google()
-        && d().keys().hasOnly(['orgId', 'name', 'ownerUids', 'direct', 'inviteCode', 'createdAt'])
+        && d().keys().hasOnly(['orgId', 'name', 'ownerUids', 'direct', 'inviteCode', 'joinCode', 'createdAt'])
         && d().name is string && d().name.size() > 0 && d().name.size() <= 40
         && d().ownerUids == [uid()] && d().createdAt == request.time
         && ((d().direct == true && orgAdmin(d().orgId))
@@ -62,13 +66,13 @@ service cloud.firestore {
             && doc(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).orgId == d().orgId
             && getAfter(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).data.usedBy == uid()
             && getAfter(/databases/$(database)/documents/ownerInvites/$(d().inviteCode)).data.storeId == s));
-      allow update: if owner(s) && changedOnly(['name']);
+      allow update: if owner(s) && changedOnly(['name', 'joinCode']);
       allow delete: if false;
 
       // 매장 규칙: 문서 이름 = 적용 시작 달(YYYY-MM). 급여는 그 달 이전 중 가장 최근 규칙으로 계산.
       match /rules/{from} {
         allow read: if inStore(s);
-        allow write: if owner(s) && isMonth(from) && d().from == from;
+        allow write: if ownerAfter(s) && isMonth(from) && d().from == from;
       }
 
       // 직원 명단 (이름·역할·상태만. 시급과 계좌는 여기 없음)
@@ -167,7 +171,7 @@ service cloud.firestore {
     match /joinCodes/{code} {
       allow get: if true;
       allow list: if false;
-      allow create: if owner(d().storeId) && d().keys().hasOnly(['storeId', 'storeName']);
+      allow create: if ownerAfter(d().storeId) && d().keys().hasOnly(['storeId', 'storeName']);
       allow delete: if owner(resource.data.storeId);
       allow update: if false;
     }

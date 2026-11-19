@@ -202,3 +202,23 @@ test('매장 규칙은 사장님만 바꾸고, 직원은 읽을 수 있다', asy
   await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/rules/2027-01'), { from: '2027-01' }));
   await assertSucceeds(getDoc(doc(as('alba', P), 'stores/sansung/rules/2026-12')));
 });
+
+// ---------- 2단계 화면에서 쓰는 조회·묶음 저장 ----------
+test('사장님은 내 매장 목록을, 총괄은 그룹 전체 매장 목록을 불러온다', async () => {
+  await assertSucceeds(getDocs(query(collection(as('kim', G), 'stores'), where('ownerUids', 'array-contains', 'kim'))));
+  await assertSucceeds(getDocs(query(collection(as('boss', G), 'stores'), where('orgId', '==', 'org1'))));
+  await assertFails(getDocs(query(collection(as('kim', G), 'stores'), where('orgId', '==', 'org1'))));
+  await assertSucceeds(getDocs(query(collection(as('boss', G), 'orgs'), where('adminUids', 'array-contains', 'boss'))));
+  await assertFails(getDocs(collection(as('kim', G), 'orgs')));
+});
+test('매장 + 규칙 + 직원 초대 코드를 한 번에 만든다', async () => {
+  const db = as('lee', G), b = writeBatch(db);
+  b.set(doc(db, 'stores/lee1'), { orgId: 'org1', name: '이사장 매장', ownerUids: ['lee'], direct: false, inviteCode: 'inv1', createdAt: serverTimestamp() });
+  b.update(doc(db, 'ownerInvites/inv1'), { usedBy: 'lee', storeId: 'lee1' });
+  b.set(doc(db, 'stores/lee1/rules/2026-11'), { from: '2026-11', open: {} });
+  b.set(doc(db, 'joinCodes/LEEJOIN1'), { storeId: 'lee1', storeName: '이사장 매장' });
+  await assertSucceeds(b.commit());
+});
+test('남의 매장 초대 코드는 못 만든다', async () => {
+  await assertFails(setDoc(doc(as('kim', G), 'joinCodes/FAKE'), { storeId: 'sansung', storeName: '산성' }));
+});

@@ -20,7 +20,9 @@
 단계
 1. ✅ Firebase 뼈대 — `firebase/` (규칙, 구조, 시험 28개, `firebase/README.md` 참고). `cd firebase && npm install && npm test`
    - ⏳ 실제 프로젝트(`sansung-sheets`)에 아직 안 올림: 사용자가 자기 컴퓨터에서 `npx firebase login` → `npm run deploy`, 콘솔에서 Google·이메일 로그인 켜기, `orgs/org1` 만들기
-2. ⬜ 매장 만들기 + 초대 가입 화면 (직원 로그인용 가짜 이메일 형식이 실제 Firebase에서 받아지는지 확인할 것)
+2. ✅ 매장 만들기 + 초대 가입 화면 — `multi/` (새 앱, 지금 앱과 따로). `cd firebase && npm run e2e` 로 브라우저 시험
+   - ⏳ 실제 Firebase에 올린 뒤 확인: 직원 가짜 이메일(`…@staff.mate.invalid`) 가입이 되는지, 구글 로그인 창(승인된 도메인)
+   - `multi/config.js` 에 apiKey·appId 넣어야 실제로 동작
 3. ⬜ 기능 옮기기: 출퇴근(NFC) → 스케줄·휴무신청 → 급여·정산표 → 알림
    - 알림은 무료 요금제 Firebase만으로는 예약 발송 불가 → Apps Script 알림 전용 유지 vs Blaze 요금제 중 선택 필요
 4. ⬜ 산성 병행 검증  5. ⬜ 두 번째 매장 투입  6. ⬜ 나머지 매장
