@@ -10,7 +10,8 @@ export class Fail extends Error {
 const need = (cond, code, msg) => { if (!cond) throw new Fail(code, msg); };
 const okStore = id => typeof id === 'string' && /^[a-z0-9]{3,30}$/.test(id);
 
-export async function punchCore(db, { uid, storeId, kind, geo, ip, now = new Date() }) {
+// alone = 퇴근 때 사장님·매니저 확인 없이 혼자 찍음 → ⚠(확인 필요)로 남김
+export async function punchCore(db, { uid, storeId, kind, geo, alone, ip, now = new Date() }) {
   need(uid, 'unauthenticated', '다시 로그인해 주세요');
   need(okStore(storeId), 'invalid-argument', '매장 정보가 없어요');
   need(kind === 'in' || kind === 'out', 'invalid-argument', '출근/퇴근을 골라 주세요');
@@ -25,7 +26,9 @@ export async function punchCore(db, { uid, storeId, kind, geo, ip, now = new Dat
     if (place && typeof place.lat === 'number') dist = distM(place, geo);
   }
   const radius = (place && place.radius) || 100;
-  const { flag, why } = judge(kind, wifi, dist, radius);
+  const solo = kind === 'out' && alone === true;
+  let { flag, why } = judge(kind, wifi, dist, radius);
+  if (solo && !flag) { flag = true; why = 'alone'; }
 
   // 근무 날짜: 한국 시각 기준. 퇴근은 자정을 넘겨도 전날 출근에 붙임
   const t = kst(now), id = (d, k) => `${S}/punches/${d}_${uid}_${k}`;
@@ -37,13 +40,13 @@ export async function punchCore(db, { uid, storeId, kind, geo, ip, now = new Dat
   }
   try {
     await db.create(id(date, kind), {
-      uid, name: mem.name, date, kind, at: NOW, via: 'app', by: uid, wifi, dist, acc, flag, why, ip: ip || null, reviewed: false,
+      uid, name: mem.name, date, kind, at: NOW, via: 'app', by: uid, wifi, dist, acc, flag, why, ip: ip || null, reviewed: false, alone: solo,
     });
   } catch (e) {
     if (e.code === 'already-exists') throw new Fail('already-exists', kind === 'in' ? '오늘 출근은 이미 찍었어요' : '오늘 퇴근은 이미 찍었어요. 잘못 찍었으면 매니저에게 말해 주세요');
     throw e;
   }
-  return { date, kind, wifi, dist, flag, why, time: `${String(t.hour).padStart(2, '0')}:${String(t.min).padStart(2, '0')}` };
+  return { date, kind, wifi, dist, flag, why, alone: solo, time: `${String(t.hour).padStart(2, '0')}:${String(t.min).padStart(2, '0')}` };
 }
 
 export async function registerWifiCore(db, { uid, storeId, reset, ip }) {

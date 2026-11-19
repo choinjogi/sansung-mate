@@ -21,7 +21,7 @@ const db = {
 // 연습용 서버에서만: 시험에서 "매장 와이파이 / 다른 회선"을 흉내 내려고 주소를 바꿔 넣을 수 있음
 const ipOf = req => (EMU && req.data && req.data._testIp) || clientIp(req.rawRequest);
 // 보내는 쪽이 정할 수 있는 칸은 이것뿐 (uid·시각·주소는 서버가 정함)
-const pick = d => { d = d || {}; return { storeId: d.storeId, kind: d.kind, geo: d.geo, reset: d.reset }; };
+const pick = d => { d = d || {}; return { storeId: d.storeId, kind: d.kind, geo: d.geo, alone: d.alone, reset: d.reset }; };
 const wrap = fn => async req => {
   try { return await fn(req); } catch (e) { if (e instanceof Fail) throw new HttpsError(e.code, e.message); throw e; }
 };

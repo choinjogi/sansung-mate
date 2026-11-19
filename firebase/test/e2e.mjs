@@ -195,12 +195,15 @@ try {
   await shot(park, '출근경고');
   await park.context().setGeolocation({ latitude: 37.6, longitude: 126.978, accuracy: 20 }); // 약 3.7km 떨어진 집
   await park.locator('#pOut').click();
+  await park.getByText('사장님이나 매니저').waitFor();
+  await park.locator('#oYes').click();
   await park.getByText('⚠ 매장에서 3.7km').waitFor();
   await park.getByText('오늘 근무 끝').waitFor();
 
   // 7-4) 김알바: 와이파이 끊고(다른 회선) 매장 안에서 퇴근 → 반경 안이라 ✓
   await net(alba, '9.9.9.9');
   await alba.locator('#pOut').click();
+  await alba.locator('#oYes').click();
   await alba.getByText('✓ 매장 0m').waitFor();
 
   // 7-5) 사장님: 확인 필요 2건 → 1건 확인, 오늘 현황에서 박알바 출근 시각 고치기

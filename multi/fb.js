@@ -153,9 +153,9 @@ async function server(name, args) {
   if (!j.ok) throw Object.assign(new Error(j.message || '서버 오류가 났어요'), { code: 'functions/' + (j.code || 'internal') });
   return j.data;
 }
-export async function punch(storeId, kind) {
+export async function punch(storeId, kind, alone) {
   const geo = await getGeo();
-  return { ...(await server('punch', { storeId, kind, geo, _testIp: testIp() })), geo: !!geo };
+  return { ...(await server('punch', { storeId, kind, geo, alone: !!alone, _testIp: testIp() })), geo: !!geo };
 }
 export const registerWifi = (storeId, reset) => server('registerWifi', { storeId, reset: !!reset, _testIp: testIp() });
 export const getSetting = (storeId, k) => F.getDoc(ref(`stores/${storeId}/settings/${k}`)).then(data);

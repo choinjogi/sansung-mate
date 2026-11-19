@@ -1,6 +1,6 @@
 // Cloudflare 서버 판 (무료, 카드 필요 없음). 출퇴근 기록·매장 와이파이 등록·주소 확인 페이지.
 // 처리 내용은 ../functions/core.js 를 Firebase 판과 같이 쓴다. 이 파일은 Cloudflare에 연결하는 부분만.
-//   POST /punch         { storeId, kind, geo }   (Authorization: Bearer <Firebase 로그인 토큰>)
+//   POST /punch         { storeId, kind, geo, alone }   (Authorization: Bearer <Firebase 로그인 토큰>)
 //   POST /registerWifi  { storeId, reset }
 //   GET  /myIp          주소 확인 페이지
 // 회선 주소는 Cloudflare가 붙여 주는 CF-Connecting-IP (보내는 쪽이 위조할 수 없음)
@@ -27,9 +27,9 @@ export default {
       try { body = await request.json(); } catch (e) { throw new Fail('invalid-argument', '요청 모양이 틀렸어요'); }
       const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
       const uid = await verifyIdToken(token, { projectId: env.PROJECT_ID, emulator: emu });
-      // 연습용 서버에서만 시험용 주소를 받음. 보내는 쪽이 정할 수 있는 칸은 storeId·kind·geo·reset 뿐
+      // 연습용 서버에서만 시험용 주소를 받음. 보내는 쪽이 정할 수 있는 칸은 storeId·kind·geo·alone·reset 뿐
       const ip = (emu && body._testIp) || realIp;
-      const data = await fn(firestore(env), { storeId: body.storeId, kind: body.kind, geo: body.geo, reset: body.reset, uid, ip });
+      const data = await fn(firestore(env), { storeId: body.storeId, kind: body.kind, geo: body.geo, alone: body.alone, reset: body.reset, uid, ip });
       return out(200, { ok: true, data });
     } catch (e) {
       if (e instanceof Fail) return out(CODES[e.code] || 400, { ok: false, code: e.code, message: e.message });

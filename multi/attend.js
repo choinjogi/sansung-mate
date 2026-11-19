@@ -18,7 +18,7 @@ export function how(p) {
   if (!p) return '';
   if (p.via === 'manual') return '<span class="small">직접 넣음</span>';
   const edited = p.editedBy ? ' · 고침' : '';
-  if (p.flag) return `<span class="pill warn">⚠ ${p.why === 'far' && p.dist != null ? '매장에서 ' + km(p.dist) : '매장 와이파이 아님'}</span>${p.reviewed ? ' <span class="small">확인함</span>' : ''}${edited}`;
+  if (p.flag) return `<span class="pill warn">⚠ ${p.why === 'alone' ? '확인 없이 혼자 퇴근' : p.why === 'far' && p.dist != null ? '매장에서 ' + km(p.dist) : '매장 와이파이 아님'}${p.alone && p.why !== 'alone' ? ' · 혼자 퇴근' : ''}</span>${p.reviewed ? ' <span class="small">확인함</span>' : ''}${edited}`;
   return `<span class="pill ok">✓ ${p.wifi ? '매장 와이파이' : '매장 ' + km(p.dist)}</span>${edited ? '<span class="small">' + edited + '</span>' : ''}`;
 }
 function box(label, p, late, attrs = '') {
@@ -61,7 +61,8 @@ export async function staffHome(storeId, me, store, again) {
         : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : '<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>'}
       <p class="small" style="margin-top:8px">매장 와이파이에 연결된 상태로 찍어 주세요. 일찍 찍어도 계산은 정시부터예요.</p>
     </div>
-    ${res && res.flag ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">⚠ 매장 와이파이로 찍히지 않았어요</b>
+    ${res && res.why === 'alone' ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">⚠ 확인 없이 혼자 퇴근했어요</b><p>기록은 됐고, 사장님이 확인해요.</p></div>` : ''}
+    ${res && res.flag && res.why !== 'alone' ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">⚠ 매장 와이파이로 찍히지 않았어요</b>
       <p>기록은 됐고, 사장님이 확인해요.</p>
       <p class="small">· 폰이 매장 와이파이에 연결돼 있는지 확인해 주세요 (모바일 데이터 말고)<br>
       · 아이폰: 설정 → Wi-Fi → 매장 와이파이 옆 ⓘ → <b>IP 주소 추적 제한</b> 끄기<br>
@@ -76,14 +77,33 @@ export async function staffHome(storeId, me, store, again) {
       return `<tr><td>${dayLabel(d)}</td><td style="text-align:center">${cell(i)}${li ? ` <span class="small" style="color:var(--warn)">+${li}분</span>` : ''}</td><td>${cell(o)}</td></tr>`;
     }).join('')}</table>` : '<p class="small">이번 달 기록이 아직 없어요.</p>'}</div>`);
   wireTop();
-  const go = kind => e => {
-    if (kind === 'out' && !confirm('퇴근할까요?')) return;
-    busy(e.target, async () => {
-      LAST = await api.punch(storeId, kind);
-      toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
-      await again();
-    });
+  const doPunch = (kind, alone) => e => busy(e.target, async () => {
+    LAST = await api.punch(storeId, kind, alone);
+    toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
+    await again();
+  });
+  // 퇴근: 알바가 폰을 들고 사장님·매니저에게 가서 눌러 달라고 함 (번호 없이 버튼만). 아무도 없으면 혼자 퇴근 → ⚠
+  const outScreen = () => {
+    show(`${top(store.name)}
+      <div class="card hero" style="text-align:center;margin-top:16px">
+        <div style="font-size:44px;line-height:1.2">🙋</div>
+        <h1 style="margin:8px 0 4px">${esc(me.name)}님 퇴근</h1>
+        <p style="margin:0 0 4px">이 폰을 들고 <b>사장님이나 매니저</b>에게 가서<br>“퇴근할게요!” 하고 눌러 달라고 하세요.</p>
+        <button id="oYes" class="big-btn" style="margin-top:16px">퇴근 (사장님·매니저가 눌러요)</button>
+        <button class="ghost sm" id="oAlone" style="width:100%;margin-top:12px">확인해 줄 사람이 없어요 · 혼자 퇴근</button>
+        <button class="ghost sm" id="oBack" style="width:100%;margin-top:8px">취소</button>
+      </div>`);
+    wireTop();
+    $('oYes').onclick = doPunch('out', false);
+    $('oAlone').onclick = e => {
+      $('oAlone').outerHTML = `<div class="card" style="border-color:var(--warn);margin-top:12px;text-align:left"><b style="color:var(--warn)">혼자 퇴근하면 ⚠가 붙어요</b>
+        <p class="small">사장님이 나중에 확인해요. 사장님·매니저가 매장에 있으면 꼭 눌러 달라고 하세요.</p>
+        <button id="oAlone2" class="sm" style="width:100%;margin-top:8px">그래도 혼자 퇴근</button></div>`;
+      $('oAlone2').onclick = doPunch('out', true);
+    };
+    $('oBack').onclick = () => again();
   };
+  const go = kind => (kind === 'out' ? () => outScreen() : doPunch('in', false));
   if ($('pIn')) $('pIn').onclick = go('in');
   if ($('pOut')) $('pOut').onclick = go('out');
   if ($('pOut0')) $('pOut0').onclick = go('out');
@@ -167,7 +187,7 @@ export async function reviewScreen(store, back) {
   const fl = (await api.flaggedSince(store.id, from)).sort((a, b) => (a.date + a.kind < b.date + b.kind ? 1 : -1));
   const todo = fl.filter(p => !p.reviewed);
   const month = {}; fl.filter(p => p.date >= mStart).forEach(p => { month[p.name] = (month[p.name] || 0) + 1; });
-  const why = p => (p.why === 'far' && p.dist != null ? `매장에서 ${km(p.dist)}` : p.kind === 'out' && p.dist == null ? '매장 와이파이 아님 · 위치 없음' : '매장 와이파이 아님');
+  const why = p => (p.why === 'alone' ? '확인 없이 혼자 퇴근' : (p.alone ? '혼자 퇴근 · ' : '') + (p.why === 'far' && p.dist != null ? `매장에서 ${km(p.dist)}` : p.kind === 'out' && p.dist == null ? '매장 와이파이 아님 · 위치 없음' : '매장 와이파이 아님'));
   show(`${top('확인 필요', true)}
     <p class="small">매장 와이파이가 아닌 곳에서 찍은 기록이에요. 맞으면 [확인], 틀리면 [시각 고치기].</p>
     ${todo.length ? todo.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">⚠ ${esc(why(p))}</span></div>
