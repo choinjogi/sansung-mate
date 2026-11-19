@@ -10,13 +10,13 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 18</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 20</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
   const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
   const ADMIN_TABS = [['atoday', '👀', '오늘'], ['aok', '✅', '승인'], ['asales', '💰', '매출'], ['adash', '📊', '대시보드'], ['amore', '☰', '더보기']];
-  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore' };  // 더보기 안의 화면
+  const SUB = { afix: 'amore', sched: 'amore', aleave: 'amore', aacc: 'amore', rec: 'amore', info: 'amore' };  // 더보기 안의 화면
   function tabs() { return ME.role ? ADMIN_TABS : STAFF_TABS; }
   function drawNav() {
     $nav.hidden = false;
@@ -143,8 +143,10 @@
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
       <h2>공지</h2>${ME.notice.map(n => `<div class="card"><div class="small">${esc(n.d)}</div><p style="color:var(--text)">${esc(n.t)}</p></div>`).join('')}
+      <a href="#" id="goinfo" class="card row between" style="color:inherit;text-decoration:none;display:flex"><div><b>👤 내 정보</b><div class="small">급여 받을 계좌 · 이메일 · 주민번호</div></div><span class="small">›</span></a>
       ${backup()}
     </div>`);
+    const gi = document.getElementById('goinfo'); if (gi) gi.onclick = e => { e.preventDefault(); go('info'); };
   };
 
   // ---------- 근무표 (모두) ----------
@@ -175,6 +177,38 @@
 
   // ---------- 휴무신청 ----------
   // 앱에서 내면 서버가 진짜 휴무신청 폼으로 제출한다 (폼으로 낸 것과 똑같음). 앱이 안 되면 폼 링크로
+  // ---------- 내 정보: 계좌·이메일·주민번호 (넣기만, 다시 보여 주지 않음) ----------
+  const BANKS = ['국민', '신한', '우리', '하나', '농협', '기업', '카카오뱅크', '토스뱅크', '케이뱅크', '새마을금고', '우체국', '부산', '경남', '대구', '수협', '신협', 'SC제일'];
+  VIEWS.info = async function () {
+    loading(); const d = await API.myInfo();
+    const st = (v, t) => v ? `<span style="color:var(--text)">${esc(t || v)}</span>` : '<span style="color:var(--warn)">아직 없음</span>';
+    render(`<div>${header()}<h2>내 정보</h2>
+      <div class="card"><b>지금 사장님 쪽에 있는 정보</b>
+        <table class="kv"><tr><td>은행</td><td>${st(d.bank)}</td></tr><tr><td>계좌</td><td>${st(d.acct)}</td></tr><tr><td>이메일</td><td>${st(d.email)}</td></tr><tr><td>주민번호</td><td>${st(d.rrn, '입력됨')}</td></tr></table>
+        <p class="small">보안을 위해 계좌는 끝 4자리만, 주민번호는 입력 여부만 보여요.</p></div>
+      ${d.pending ? `<div class="card"><span class="pill warn">확인 대기</span> <span class="small">${esc(d.pending.at)}에 보냄 · 사장님·매니저님이 확인하면 반영돼요</span></div>` : ''}
+      <div class="card"><b>${d.bank || d.acct ? '바꾸기' : '넣기'}</b><p class="small">바꿀 칸만 넣으세요. 비워 둔 칸은 그대로예요.</p>
+        <label>은행</label><select id="ib"><option value="">${d.bank ? '그대로' : '고르기'}</option>${BANKS.map(b => `<option>${b}</option>`).join('')}<option value="_">직접 쓰기</option></select>
+        <input id="ib2" placeholder="은행 이름" hidden>
+        <label>계좌번호</label><input id="ia" inputmode="numeric" autocomplete="off" placeholder="숫자만 (- 없어도 돼요)">
+        <label>이메일</label><input id="ie" type="email" autocomplete="email" placeholder="예: name@gmail.com">
+        <label>주민등록번호</label><input id="ir" type="password" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="13자리">
+        <p class="small" id="im" style="margin-top:10px;color:var(--bad)"></p>
+        <button id="is" style="margin-top:6px">보내기</button></div>
+      <p class="small">수집 목적: 급여 지급, 4대보험·세금 신고. 항목: 은행·계좌번호·이메일·주민등록번호. 근무가 끝난 뒤에도 법에서 정한 기간 동안만 보관해요. 넣은 정보는 사장님 결산 파일에만 저장되고, 이 앱 화면에는 다시 나오지 않아요.</p></div>`);
+    const $ = id => document.getElementById(id), $m = $('im');
+    $('ib').onchange = () => { $('ib2').hidden = $('ib').value !== '_'; };
+    $('is').onclick = e => busy(e.target, async () => {
+      const bank = $('ib').value === '_' ? $('ib2').value.trim() : $('ib').value, acct = $('ia').value.trim(), email = $('ie').value.trim(), rrn = $('ir').value.trim();
+      if (!bank && !acct && !email && !rrn) return $m.textContent = '바꿀 칸을 하나 이상 넣어 주세요';
+      if (!!bank !== !!acct) return $m.textContent = '은행과 계좌번호는 같이 넣어 주세요';
+      if (rrn && rrn.replace(/\D/g, '').length !== 13) return $m.textContent = '주민번호는 13자리예요';
+      const r = await API.saveInfo({ bank, acct, email, rrn });
+      if (!r.saved) return $m.textContent = r.msg;
+      toast(r.msg); VIEWS.info();
+    });
+  };
+
   VIEWS.leave = async function () {
     loading(); const f = await API.leaveForm(ME.name);
     const s = f.saved, off = (s && s.off) || [], am = (s && s.am) || [], L = ME.links || {};
@@ -325,7 +359,8 @@
       <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터. 새 가입 = 직원이 앱에 직접 가입한 것 — 본인이 아니면 거절(가입 지움).</p>${STEP2}</div>`);
     $app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => busy(b, async () => {
       const ok = !!b.dataset.ok, j = /^acc/.test(b.dataset.id);
-      if (!confirm(j ? (ok ? '본인이 가입한 게 맞나요? 승인할까요?' : '본인이 아니면 가입을 지워요(그 폰 로그인도 풀림). 지울까요?') : ok ? '승인할까요?' : '거절할까요?')) return;
+      const inf = /^inf/.test(b.dataset.id);
+      if (!confirm(j ? (ok ? '본인이 가입한 게 맞나요? 승인할까요?' : '본인이 아니면 가입을 지워요(그 폰 로그인도 풀림). 지울까요?') : inf ? (ok ? '직원명부에 이 정보를 넣을까요?\n(계좌가 바뀌는 거면 본인에게 한 번 확인해 주세요)' : '이 정보 변경을 거절할까요?') : ok ? '승인할까요?' : '거절할까요?')) return;
       const r = await API.decide(b.dataset.id, ok); r.warn ? alert(r.msg) : toast(r.msg); VIEWS.aok();
     }));
     const all = document.getElementById('all');
@@ -362,8 +397,10 @@
         <label>매출 (원)</label><input id="sa" inputmode="numeric" autocomplete="off" placeholder="예: 1,850,000">
         <button id="ss" style="margin-top:14px">저장</button>
         <p class="small" style="margin-top:8px">결산 "일별매출"에 바로 들어가요. 이미 값이 있는 날은 바꿀지 한 번 더 물어봐요.</p></div>
-      <div class="card list">${s.list.length ? s.list.map(x => `<div class="item"><span>${esc(x.label)}</span><b>${won(x.amount)}</b></div>`).join('') : '<p class="small">이번 달 매출 기록이 아직 없어요.</p>'}</div>
-      <p class="small">결산 "일별매출" 최근 7일이에요. 앱이 안 되면 하던 대로 시트에 넣어 주세요.</p></div>`);
+      <div class="card"><div class="row" style="gap:22px"><div><div class="small">이번 달 합계</div><div class="big" style="font-size:22px">${won(s.monthTotal)}</div></div>
+        <div><div class="small">하루 평균${s.days ? ' (' + s.days + '일)' : ''}</div><div class="big" style="font-size:22px">${won(s.avg || 0)}</div></div></div></div>
+      <div class="card list">${s.list.length ? s.list.map(x => `<div class="item"><span${x.dow === '토' ? ' style="color:#9cc3ff"' : x.dow === '일' ? ' style="color:var(--bad)"' : ''}>${esc(x.label)}</span>${x.missing ? '<span class="small" style="color:var(--warn)">입력 안 됨</span>' : '<b>' + won(x.amount) + '</b>'}</div>`).join('') : '<p class="small">이번 달 매출 기록이 아직 없어요.</p>'}</div>
+      <p class="small">결산 "일별매출" 이번 달 1일부터 오늘까지예요. 하루 평균은 입력된 날만으로 계산해요. 앱이 안 되면 하던 대로 시트에 넣어 주세요.</p></div>`);
     const sa = document.getElementById('sa');
     sa.oninput = () => { const n = sa.value.replace(/[^\d]/g, ''); sa.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
     const btn = document.getElementById('ss');
@@ -489,6 +526,7 @@
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
+        <a class="item" href="#" data-go="info" style="color:inherit;text-decoration:none"><span>👤 내 정보 (계좌·이메일·주민번호)</span><span class="small">›</span></a>
       </div>${backup()}</div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
   };

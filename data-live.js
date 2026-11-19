@@ -58,6 +58,8 @@
     schedule: () => view('schedule'),
     records: () => view('records'),
     leaveForm: () => call('leaveForm'),
+    myInfo: () => call('myInfo'),
+    saveInfo: o => write('saveInfo', o),
     adminToday: () => view('adminToday'),
     pending: () => view('pending').then(r => r.list),
     leaveAll: () => view('leaveAll'),
