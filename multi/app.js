@@ -3,6 +3,7 @@ import * as api from './fb.js';
 import { STORE_RULES_DEFAULT } from './defaults.js';
 import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks } from './ui.js';
 import * as attend from './attend.js';
+import * as sched from './sched.js';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -180,7 +181,9 @@ function rulesFields(r) {
     <label class="row" style="gap:8px;margin-top:14px"><input type="checkbox" id="jh" style="width:auto" ${r.pay.juhu.on ? 'checked' : ''}> 주휴수당 줌 (한 주 ${r.pay.juhu.minWeekHours}시간 이상)</label>
     <label>휴무신청 열림</label><div class="row">${dowSel('lo', r.leave.opensDow)}<input id="lot" type="time" step="1800" value="${esc(r.leave.opensTime)}"></div>
     <label>휴무신청 마감</label><div class="row">${dowSel('lc', r.leave.closesDow)}<input id="lct" type="time" step="1800" value="${esc(r.leave.closesTime)}"></div>
-    <p class="small">야간·휴일 수당, 시간 올림/내림은 매장 규칙 화면에서 더 바꿀 수 있게 이어서 만들 예정이에요.</p>`;
+    <label>요일별 필요한 알바 수 (저녁)</label>
+    <div class="chk7 needs">${DOW_ORDER.map(d => `<label class="needc"><span class="small">${DOW[d]}</span><input type="number" min="0" max="50" inputmode="numeric" name="need" data-d="${d}" value="${((r.staffing || STORE_RULES_DEFAULT.staffing).need)[d]}"></label>`).join('')}</div>
+    <p class="small">야간·휴일 수당, 시간 올림/내림은 급여 단계에서 더 바꿀 수 있게 이어서 만들 예정이에요.</p>`;
 }
 function readRules(base) {
   const r = clone(base);
@@ -192,6 +195,8 @@ function readRules(base) {
   r.pay.juhu.on = $('jh').checked;
   r.leave.opensDow = +$('lo').value; r.leave.opensTime = $('lot').value || '00:00';
   r.leave.closesDow = +$('lc').value; r.leave.closesTime = $('lct').value || '22:00';
+  r.staffing = r.staffing || clone(STORE_RULES_DEFAULT.staffing);
+  document.querySelectorAll('input[name=need]').forEach(i => { r.staffing.need[+i.dataset.d] = Math.max(0, Math.round(+i.value || 0)); });
   if (!r.open.days.length) throw new Error('영업 요일을 하루 이상 골라 주세요');
   if (!r.pay.baseWage) throw new Error('기본 시급을 넣어 주세요');
   return r;
@@ -231,10 +236,14 @@ async function storeScreen(id) {
       url: `${BASE}?join=${s.joinCode}`, qr: true, extra: '<button class="sm ghost" id="regen">새 링크로 바꾸기</button>' })}
     <h2>직원 ${act.length}명</h2>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
-      <div class="item"><span><b>${esc(m.name)}</b> ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}</span>
-        <button class="sm ghost" data-role="${m.id}" data-to="${m.role === 'manager' ? 'staff' : 'manager'}">${m.role === 'manager' ? '직원으로' : '매니저로'}</button></div>`).join('')}</div>`
+      <div class="item" style="display:block"><div class="row between"><span><b>${esc(m.name)}</b> <span class="pill">${m.type === '정' ? '정직원' : '알바'}</span>
+        ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}</span>
+        <button class="sm ghost" data-mset="${m.id}">설정</button></div><div id="ms_${m.id}"></div></div>`).join('')}</div>`
       : '<p class="small">아직 승인된 직원이 없어요.</p>'}
-      <p class="small">매니저는 스케줄·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요.</p></div>
+      <p class="small">매니저는 근무표·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요. 휴무신청은 알바만 내요.</p></div>
+    <h2>근무표</h2>
+    <div class="row" style="gap:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
+    <button class="ghost" id="goSched" style="margin-top:8px">확정된 근무표 보기</button>
     <h2>매장 규칙</h2>
     <div class="card">${r ? `<table class="kv">
       <tr><td>영업 요일</td><td>${DOW_ORDER.filter(d => r.open.days.includes(d)).map(d => DOW[d]).join(' ')}</td></tr>
@@ -250,7 +259,24 @@ async function storeScreen(id) {
   attend.wireOwnerSection(s, () => storeScreen(id));
   document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.ok, { status: 'active' }); toast('승인했어요'); storeScreen(id); }); });
   document.querySelectorAll('[data-no]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(id, b.dataset.no); storeScreen(id); }); }; });
-  document.querySelectorAll('[data-role]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.role, { role: b.dataset.to }); storeScreen(id); }); });
+  document.querySelectorAll('[data-mset]').forEach(b => {
+    b.onclick = () => {
+      const m = act.find(x => x.id === b.dataset.mset), host = $('ms_' + m.id);
+      if (host.innerHTML) { host.innerHTML = ''; return; }
+      host.innerHTML = `<div class="card" style="margin:8px 0 0">
+        <label>구분</label><select id="mt"><option value="알" ${m.type !== '정' ? 'selected' : ''}>알바 (휴무신청 냄)</option><option value="정" ${m.type === '정' ? 'selected' : ''}>정직원</option></select>
+        <label>역할</label><select id="mr"><option value="staff" ${m.role !== 'manager' ? 'selected' : ''}>직원</option><option value="manager" ${m.role === 'manager' ? 'selected' : ''}>매니저</option></select>
+        <label>개인 정시 출근 <span class="small">(비우면 매장 정시 ${esc(r ? r.open.startTime : '18:00')})</span></label><input type="time" id="mst" step="300" value="${esc(m.startTime || '')}">
+        <button id="msv" style="margin-top:12px">저장</button></div>`;
+      $('msv').onclick = e => busy(e.target, async () => {
+        await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null });
+        toast('저장했어요'); storeScreen(id);
+      });
+    };
+  });
+  $('goEdit').onclick = () => sched.scheduleEditor(s, () => storeScreen(id));
+  $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => storeScreen(id));
+  $('goSched').onclick = () => sched.scheduleView(s, null, () => storeScreen(id));
   $('regen').onclick = e => { if (confirm('지금 링크는 더 이상 안 돼요. 새 링크로 바꿀까요?')) busy(e.target, async () => { await api.newJoinCode(s); storeScreen(id); }); };
   $('editRules').onclick = () => rulesScreen(s, (rules.next || r || { ...STORE_RULES_DEFAULT }));
 }

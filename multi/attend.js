@@ -2,6 +2,7 @@
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
 import * as api from './fb.js';
 import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js';
+import * as sched from './sched.js';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -30,14 +31,15 @@ function box(label, p, late, attrs = '') {
 let LAST = null; // 방금 찍은 결과 (⚠ 안내를 보여 주려고)
 export async function staffHome(storeId, me, store, again) {
   const t = api.kst(), uid = api.auth.currentUser.uid;
-  const [rules, tin, tout] = await Promise.all([api.rulesOf(storeId), api.punchDoc(storeId, t.date, uid, 'in'), api.punchDoc(storeId, t.date, uid, 'out')]);
+  const [rules, tin, tout, sch] = await Promise.all([api.rulesOf(storeId), api.punchDoc(storeId, t.date, uid, 'in'), api.punchDoc(storeId, t.date, uid, 'out'), api.getSchedule(storeId, api.mondayOf(t.date))]);
   let date = t.date, pin = tin, pout = tout;
   if (!tin && !tout && t.hour < 12) { // 자정 넘겨 일하는 중이면 어제 근무를 보여 줌
     const y = api.addDays(t.date, -1);
     const [yin, yout] = await Promise.all([api.punchDoc(storeId, y, uid, 'in'), api.punchDoc(storeId, y, uid, 'out')]);
     if (yin && !yout) { date = y; pin = yin; pout = null; }
   }
-  const r = rules.current, start = startOf(me, r), late = lateMin(pin && api.hmOf(pin.at), start, r ? r.open.lateGraceMin : 0);
+  const r = rules.current, plan = sched.todayPlan(date === t.date ? sch : await api.getSchedule(storeId, api.mondayOf(date)), r, { ...me, id: uid }, date);
+  const start = plan.start, late = lateMin(pin && api.hmOf(pin.at), start, r ? r.open.lateGraceMin : 0);
   const mStart = t.date.slice(0, 8) + '01';
   const [mine, flagged] = await Promise.all([
     api.myPunches(storeId, mStart, t.date),
@@ -53,7 +55,7 @@ export async function staffHome(storeId, me, store, again) {
   show(`${top(store.name)}
     <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1>${me.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}</div>
     <div class="card hero">
-      <div class="row between"><b>${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">정시 ${esc(start)}</span></div>
+      <div class="row between"><b>${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">${plan.published ? esc(sched.codeText(plan.code)) + ' · ' : ''}${plan.early ? '일찍 부름 ' : '정시 '}${esc(start)}</span></div>
       <div class="tgrid">${box('출근', pin, late)}${box('퇴근', pout, 0)}</div>
       ${next === 'in' ? `<button id="pIn" class="big-btn">출근</button><button class="ghost sm" id="pOut0" style="width:100%;margin-top:8px">출근을 못 찍었어요 · 퇴근 찍기</button>`
         : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : '<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>'}
@@ -64,7 +66,9 @@ export async function staffHome(storeId, me, store, again) {
       <p class="small">· 폰이 매장 와이파이에 연결돼 있는지 확인해 주세요 (모바일 데이터 말고)<br>
       · 아이폰: 설정 → Wi-Fi → 매장 와이파이 옆 ⓘ → <b>IP 주소 추적 제한</b> 끄기<br>
       ${res.geo ? '' : '· 위치 허용도 켜 주세요 (퇴근 확인에 써요)'}</p></div>` : ''}
-    ${me.role === 'manager' ? `<div class="row" style="gap:8px"><button class="ghost" id="goToday">오늘 출근 현황</button><button class="ghost" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>` : ''}
+    <div class="row" style="gap:8px"><button class="ghost" id="goSched">근무표</button><button class="ghost" id="goLeave">휴무신청</button></div>
+    ${me.role === 'manager' ? `<h2>매니저</h2><div class="row" style="gap:8px"><button class="ghost" id="goToday">오늘 출근 현황</button><button class="ghost" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>` : ''}
     <h2>이번 달 기록</h2>
     <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${days.map(d => {
       const x = byDay[d], i = x.in, o = x.out, li = lateMin(i && api.hmOf(i.at), start, r ? r.open.lateGraceMin : 0);
@@ -85,36 +89,55 @@ export async function staffHome(storeId, me, store, again) {
   if ($('pOut0')) $('pOut0').onclick = go('out');
   if ($('goToday')) $('goToday').onclick = () => todayScreen(store, again);
   if ($('goReview')) $('goReview').onclick = () => reviewScreen(store, again);
+  $('goSched').onclick = () => sched.scheduleView(store, uid, again);
+  $('goLeave').onclick = () => sched.leaveForm(store, me, again);
+  if ($('goEdit')) $('goEdit').onclick = () => sched.scheduleEditor(store, again);
+  if ($('goLvAdm')) $('goLvAdm').onclick = () => sched.leaveAdmin(store, again);
 }
 
 // ---------- 오늘 출근 현황 (매니저·사장님) ----------
 export async function todayScreen(store, back, date) {
   const t = api.kst(); date = date || t.date;
-  const [ms, ps, rules] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, date, date), api.rulesOf(store.id)]);
-  const r = rules.current, grace = r ? r.open.lateGraceMin : 0;
+  const [ms, ps, rules, sch] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, date, date), api.rulesOf(store.id), api.getSchedule(store.id, api.mondayOf(date))]);
+  const r = rules.current, grace = r ? r.open.lateGraceMin : 0, isToday = date === t.date;
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
   const P = {}; ps.forEach(p => { (P[p.uid] = P[p.uid] || {})[p.kind] = p; });
+  const hasSched = !!(sch && sch.published);
+  // 근무표가 확정됐으면 그날 근무인 사람 + 찍은 사람만, 아니면 전원
   const rows = act.map(m => {
-    const x = P[m.id] || {}, start = startOf(m, r), late = lateMin(x.in && api.hmOf(x.in.at), start, grace);
-    const state = x.out ? '퇴근' : x.in ? (late ? '지각' : '출근') : '기록 없음';
-    return { m, x, start, late, state };
-  });
+    const x = P[m.id] || {}, plan = sched.todayPlan(sch, r, m, date), start = plan.start, late = lateMin(x.in && api.hmOf(x.in.at), start, grace);
+    const sched_ = ['O', '오전', 'O+오전'].includes(plan.code);
+    const state = x.out ? '퇴근' : x.in ? (late ? '지각' : '출근') : hasSched && sched_ ? (isToday && t.hm < start ? '출근 전' : '미출근') : '기록 없음';
+    return { m, x, start, late, state, show: !hasSched || sched_ || x.in || x.out, early: plan.early };
+  }).filter(x => x.show);
   const cnt = f => rows.filter(f).length;
   show(`${top('출근 현황', true)}
     <div class="row between"><h2 style="margin:12px 0">${date === t.date ? '오늘' : ''} ${dayLabel(date)}</h2>
       <span class="row" style="gap:6px"><button class="sm ghost" id="prev">‹ 전날</button>${date < t.date ? '<button class="sm ghost" id="nextd">다음 ›</button>' : ''}</span></div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(x => x.x.in || x.x.out)}</span><span class="pill warn">지각 ${cnt(x => x.late)}</span>
-      <span class="pill warn">⚠ ${ps.filter(p => p.flag && !p.reviewed).length}</span><span class="pill">기록 없음 ${cnt(x => !x.x.in && !x.x.out)}</span></div>
-    <div class="card list">${rows.length ? rows.map(({ m, x, start, late, state }) => `<div class="item" style="display:block;padding:12px 0">
-      <div class="row between"><div><b style="font-size:17px">${esc(m.name)}</b> <span class="small">정시 ${esc(start)}</span></div>
-        <span class="pill ${state === '지각' ? 'warn' : state === '기록 없음' ? '' : 'ok'}">${state === '지각' ? '지각 ' + late + '분' : state}</span></div>
+      <span class="pill warn">⚠ ${ps.filter(p => p.flag && !p.reviewed).length}</span>${hasSched ? `<span class="pill bad">미출근 ${cnt(x => x.state === '미출근')}</span><span class="pill">출근 전 ${cnt(x => x.state === '출근 전')}</span>` : `<span class="pill">기록 없음 ${cnt(x => !x.x.in && !x.x.out)}</span>`}</div>
+    ${hasSched ? '' : '<div class="card"><p class="small">이 주 근무표가 확정 전이라 출근 예정을 몰라요. 직원 전원을 보여요.</p></div>'}
+    <div class="card list">${rows.length ? rows.map(({ m, x, start, late, state, early }) => `<div class="item" style="display:block;padding:12px 0">
+      <div class="row between"><div><b style="font-size:17px">${esc(m.name)}</b> <span class="small">${early ? '일찍 부름' : '정시'} ${esc(start)}</span></div>
+        <span class="pill ${state === '지각' ? 'warn' : state === '미출근' ? 'bad' : ['기록 없음', '출근 전'].includes(state) ? '' : 'ok'}">${state === '지각' ? '지각 ' + late + '분' : state}</span></div>
       <div class="tgrid">${box('출근', x.in, late, `data-ed="${m.id}" data-k="in"`)}${box('퇴근', x.out, 0, `data-ed="${m.id}" data-k="out"`)}</div>
       <div id="ed_${m.id}"></div></div>`).join('') : '<p class="small">승인된 직원이 없어요.</p>'}</div>
-    <p class="small">시각 칸을 누르면 고치거나 빠진 기록을 넣을 수 있어요. 고친 사람은 기록에 남아요.</p>`);
+    <p class="small">시각 칸을 누르면 고치거나 빠진 기록을 넣을 수 있어요. 고친 사람은 기록에 남아요.</p>
+    <div class="card"><b>⏰ 일찍 부르기</b><p class="small">정시보다 일찍 나오라고 한 사람을 적어 두면 그 시각부터 계산하고 지각도 그 시각 기준이에요. (늦게 오면 찍은 시각부터)</p>
+      <label>누구</label><select id="en"><option value="">이름 고르기</option>${act.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+      <label>몇 시</label><input type="time" id="et" value="17:00" step="300">
+      <button id="eb" style="margin-top:14px">${esc(dayLabel(date))} 일찍 부르기 등록</button></div>`);
   wireTop(back);
   $('prev').onclick = () => todayScreen(store, back, api.addDays(date, -1));
   if ($('nextd')) $('nextd').onclick = () => todayScreen(store, back, api.addDays(date, 1));
   const again = () => todayScreen(store, back, date);
+  $('eb').onclick = e => busy(e.target, async () => {
+    const id = $('en').value, hm = $('et').value;
+    if (!id || !hm) throw new Error('이름과 시각을 골라 주세요');
+    const m = act.find(x => x.id === id);
+    if (!confirm(`${m.name} ${dayLabel(date)} ${hm} 출근으로 등록할까요?`)) return;
+    await api.setEarly(store.id, date, id, hm); toast('등록했어요'); await again();
+  });
   document.querySelectorAll('[data-ed]').forEach(el => {
     el.onclick = () => {
       const row = rows.find(x => x.m.id === el.dataset.ed), k = el.dataset.k, p = row.x[k];

@@ -13,6 +13,13 @@ const P = { firebase: { sign_in_provider: 'password' } };     // 이름+6자리(
 // kim: 다른 사장님. '두번째' 매장 (총괄 초대로 만듦)
 // alba: 산성 직원, mgr: 산성 매니저, newbie: 산성 승인 대기, other: 두번째 매장 직원
 const as = (uid, tok) => env.authenticatedContext(uid, tok).firestore();
+// 지금 휴무신청을 받는 주(월요일)와 마감된 주를 지금 시각으로 계산 (금 0시 ~ 토 22시, 한국 시각)
+const KSTMS = 9 * 3600e3;
+function mondayKst(ms) { const d = new Date(ms + KSTMS); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d; }
+function iso(d) { return d.toISOString().slice(0, 10); }
+// 지금이 [월요일 - 4320분, 월요일 - 1560분) 안에 들도록 opens/closes 를 넉넉히 잡은 별도 매장 설정도 씀
+const OPEN_WEEK = iso(new Date(mondayKst(Date.now()).getTime() + 7 * 86400e3)); // 다음 주 월요일
+const CLOSED_WEEK = iso(new Date(mondayKst(Date.now()).getTime() - 7 * 86400e3)); // 지난주 월요일
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -44,8 +51,9 @@ beforeEach(async () => {
     await setDoc(doc(db, 'joinCodes/JOINSS'), { storeId: 'sansung', storeName: '산성' });
     await setDoc(doc(db, 'ownerInvites/inv1'), { orgId: 'org1', createdBy: 'boss', createdAt: now, usedBy: null, storeId: null });
     const ms = Date.now();
-    await setDoc(doc(db, 'stores/sansung/schedules/2026-11-23'), { leaveOpensAt: Timestamp.fromMillis(ms - 3600e3), leaveClosesAt: Timestamp.fromMillis(ms + 3600e3) });
-    await setDoc(doc(db, 'stores/sansung/schedules/2026-11-16'), { leaveOpensAt: Timestamp.fromMillis(ms - 9 * 86400e3), leaveClosesAt: Timestamp.fromMillis(ms - 3 * 86400e3) });
+    await setDoc(doc(db, 'stores/sansung/schedules/2026-11-23'), { cells: {}, published: false });
+    // 시험용 휴무신청 시간: OPEN_WEEK 은 지금 받는 중, CLOSED_WEEK 은 마감됨 (금 0시 열림, 토 22시 마감 = 4320분 전 / 1560분 전)
+    await setDoc(doc(db, 'stores/sansung/settings/leave'), { opensBeforeMin: 4320, closesBeforeMin: 1560 });
   });
 });
 
@@ -205,14 +213,54 @@ test('매장 위치는 사장님만 정한다', async () => {
 });
 
 // ---------- 휴무신청 ----------
+// 시험이 언제 돌든 OPEN_WEEK 가 열려 있도록 시험 매장의 신청 시간을 "다음 주 월요일 기준 8일 전 ~ 1분 뒤"로 넓힘
+async function wideWindow() {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'stores/sansung/settings/leave'), { opensBeforeMin: 8 * 1440, closesBeforeMin: -1 }));
+}
+const LV = (uid, week, extra = {}) => ({ uid, name: 'x', week, off: [], am: [], at: serverTimestamp(), ...extra });
 test('휴무신청은 열린 동안만, 자기 것만 낸다', async () => {
+  await wideWindow();
   const db = as('alba', P);
-  await assertSucceeds(setDoc(doc(db, 'stores/sansung/leaves/2026-11-23_alba'), { uid: 'alba', week: '2026-11-23', off: ['2026-11-25'], am: [], at: serverTimestamp() }));
-  await assertFails(setDoc(doc(db, 'stores/sansung/leaves/2026-11-16_alba'), { uid: 'alba', week: '2026-11-16', off: [], am: [], at: serverTimestamp() }));
-  await assertFails(setDoc(doc(db, 'stores/sansung/leaves/2026-11-23_mgr'), { uid: 'mgr', week: '2026-11-23', off: [], am: [], at: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(db, `stores/sansung/leaves/${OPEN_WEEK}_alba`), LV('alba', OPEN_WEEK, { off: [OPEN_WEEK] })));
+  await assertSucceeds(setDoc(doc(db, `stores/sansung/leaves/${OPEN_WEEK}_alba`), LV('alba', OPEN_WEEK, { am: ['토'] }))); // 다시 내기
+  await assertFails(setDoc(doc(db, `stores/sansung/leaves/${CLOSED_WEEK}_alba`), LV('alba', CLOSED_WEEK)));
+  await assertSucceeds(getDoc(doc(as('mgr', P), `stores/sansung/leaves/${OPEN_WEEK}_none`)));
+  await assertSucceeds(getDoc(doc(db, `stores/sansung/leaves/2030-01-07_alba`))); // 아직 안 낸 내 신청
+  await assertSucceeds(getDoc(doc(db, `stores/sansung/leaves/${OPEN_WEEK}_alba`)));
+  await assertFails(setDoc(doc(db, `stores/sansung/leaves/${OPEN_WEEK}_mgr`), LV('mgr', OPEN_WEEK)));
+  await assertFails(setDoc(doc(as('newbie', P), `stores/sansung/leaves/${OPEN_WEEK}_newbie`), LV('newbie', OPEN_WEEK)));
+});
+test('신청 시간 계산: 금 0시 열림 · 토 22시 마감 (한국 시각)', async () => {
+  // 실제 산성 설정(4320분 전 ~ 1560분 전)으로, 지금 시각에 맞는 결과가 나오는지 확인
+  const mon = mondayKst(Date.now()).getTime() + 7 * 86400e3 - KSTMS; // 다음 주 월요일 0시 KST (UTC ms)
+  const open = Date.now() >= mon - 4320 * 60e3 && Date.now() < mon - 1560 * 60e3;
+  const r = setDoc(doc(as('alba', P), `stores/sansung/leaves/${OPEN_WEEK}_alba`), LV('alba', OPEN_WEEK));
+  await (open ? assertSucceeds(r) : assertFails(r));
+});
+test('신청 시간 경계: 열리기 2분 전엔 거절, 열린 지 2분 뒤엔 통과, 마감 2분 뒤엔 거절', async () => {
+  const mon = mondayKst(Date.now()).getTime() + 7 * 86400e3 - KSTMS; // 다음 주 월요일 0시 KST
+  const left = Math.floor((mon - Date.now()) / 60e3); // 지금부터 월요일 0시까지 남은 분
+  const set = (o, c) => env.withSecurityRulesDisabled(x => setDoc(doc(x.firestore(), 'stores/sansung/settings/leave'), { opensBeforeMin: o, closesBeforeMin: c }));
+  const send = () => setDoc(doc(as('alba', P), `stores/sansung/leaves/${OPEN_WEEK}_alba`), LV('alba', OPEN_WEEK));
+  await set(left - 2, left - 100); await assertFails(send());     // 2분 뒤에 열림
+  await set(left + 2, left - 100); await assertSucceeds(send());  // 2분 전에 열림
+  await set(left + 100, left + 2); await assertFails(send());     // 2분 전에 마감
+});
+test('신청 시간 설정은 사장님만, 말이 되는 값만', async () => {
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/settings/leave'), { opensBeforeMin: 4320, closesBeforeMin: 1560 }));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/settings/leave'), { opensBeforeMin: 100, closesBeforeMin: 200 }));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/settings/leave'), { opensBeforeMin: 4320, closesBeforeMin: 1560 }));
+  await assertSucceeds(getDoc(doc(as('alba', P), 'stores/sansung/settings/leave')));
+  await assertFails(getDoc(doc(as('alba', P), 'stores/sansung/settings/wifi')));
 });
 test('마감 뒤에는 매니저가 대신 고칠 수 있다', async () => {
-  await assertSucceeds(setDoc(doc(as('mgr', P), 'stores/sansung/leaves/2026-11-16_alba'), { uid: 'alba', week: '2026-11-16', off: ['2026-11-18'], am: [] }));
+  await assertSucceeds(setDoc(doc(as('mgr', P), `stores/sansung/leaves/${CLOSED_WEEK}_alba`), { uid: 'alba', week: CLOSED_WEEK, off: [CLOSED_WEEK], am: [] }));
+});
+test('근무표는 매니저 이상이 짜고, 직원은 본다', async () => {
+  await assertSucceeds(setDoc(doc(as('mgr', P), 'stores/sansung/schedules/2026-11-30'), { cells: { alba: ['O', '', '', '', '', '', ''] }, published: true }));
+  await assertFails(setDoc(doc(as('alba', P), 'stores/sansung/schedules/2026-11-30'), { cells: {}, published: true }));
+  await assertSucceeds(getDoc(doc(as('alba', P), 'stores/sansung/schedules/2026-11-23')));
+  await assertFails(getDoc(doc(as('kim', G), 'stores/sansung/schedules/2026-11-23')));
 });
 
 // ---------- 매출·정산·규칙 ----------

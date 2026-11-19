@@ -84,6 +84,7 @@ export async function createStore({ orgId, name, direct, inviteCode, rules }) {
   if (!direct) b.update(ref('ownerInvites/' + inviteCode), { usedBy: uid, storeId: id });
   b.set(ref(`stores/${id}/rules/${month()}`), { from: month(), ...rules });
   b.set(ref('joinCodes/' + joinCode), { storeId: id, storeName: name });
+  b.set(ref(`stores/${id}/settings/leave`), leaveMins(rules.leave));
   await b.commit();
   return id;
 }
@@ -102,7 +103,17 @@ export async function newJoinCode(store) {
 }
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
-export const saveRules = (storeId, from, rules) => F.setDoc(ref(`stores/${storeId}/rules/${from}`), { from, ...rules });
+export async function saveRules(storeId, from, rules) {
+  const b = F.writeBatch(db);
+  b.set(ref(`stores/${storeId}/rules/${from}`), { from, ...rules });
+  b.set(ref(`stores/${storeId}/settings/leave`), leaveMins(rules.leave)); // 휴무신청 시간은 저장하면 바로 바뀜
+  await b.commit();
+}
+// 휴무신청 시간 → "그 주 월요일 0시 기준 몇 분 전" (권한 규칙이 이 값으로 마감을 지킴)
+export function leaveMins(l) {
+  const before = (dow, hm) => { const days = (1 - dow + 7) % 7 || 7; const [h, m] = hm.split(':').map(Number); return days * 1440 - (h * 60 + m); };
+  return { opensBeforeMin: before(l.opensDow, l.opensTime), closesBeforeMin: before(l.closesDow, l.closesTime) };
+}
 
 // ---------- 출퇴근 ----------
 // 한국 시각 기준 오늘 날짜·시각 문자열
@@ -158,5 +169,27 @@ export const reviewPunch = (storeId, id) => F.updateDoc(ref(`stores/${storeId}/p
 export const editPunch = (storeId, id, at) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { at, editedBy: auth.currentUser.uid, editedAt: F.serverTimestamp() });
 export const addPunch = (storeId, { uid, name, date, kind, at }) =>
   F.setDoc(ref(`stores/${storeId}/punches/${date}_${uid}_${kind}`), { uid, name, date, kind, at, via: 'manual', by: auth.currentUser.uid });
+
+// ---------- 근무표·휴무신청 ----------
+// 주 = 그 주 월요일 날짜. 칸: 'O' 근무(저녁) · '오전' 주말 오전 · 'O+오전' 둘 다 · 'X' 휴무/불가 · '' 미배정
+export const mondayOf = date => { const t = new Date(date + 'T12:00:00Z'); return addDays(date, -((t.getUTCDay() + 6) % 7)); };
+export const weekDates = week => [0, 1, 2, 3, 4, 5, 6].map(i => addDays(week, i));
+export const dowOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
+export const getSchedule = (storeId, week) => F.getDoc(ref(`stores/${storeId}/schedules/${week}`)).then(data);
+export const saveSchedule = (storeId, week, cells, published) =>
+  F.setDoc(ref(`stores/${storeId}/schedules/${week}`), { week, cells, published: !!published, updatedBy: auth.currentUser.uid, updatedAt: F.serverTimestamp() }, { merge: true });
+export const setEarly = (storeId, date, uid, hm) =>
+  F.setDoc(ref(`stores/${storeId}/schedules/${mondayOf(date)}`), { week: mondayOf(date), early: { [date]: { [uid]: hm } } }, { merge: true });
+export const leaveSetting = storeId => F.getDoc(ref(`stores/${storeId}/settings/leave`)).then(data);
+// 신청 받는 시간 (그 주 월요일 0시 KST 기준)
+export function leaveWindow(week, s) {
+  const mon = new Date(`${week}T00:00:00+09:00`).getTime();
+  return { opens: new Date(mon - s.opensBeforeMin * 60e3), closes: new Date(mon - s.closesBeforeMin * 60e3) };
+}
+export const myLeave = (storeId, week) => F.getDoc(ref(`stores/${storeId}/leaves/${week}_${auth.currentUser.uid}`)).then(data);
+export const submitLeave = (storeId, week, name, off, am) =>
+  F.setDoc(ref(`stores/${storeId}/leaves/${week}_${auth.currentUser.uid}`), { uid: auth.currentUser.uid, name, week, off, am, at: F.serverTimestamp() });
+export const leavesOf = (storeId, week) => list(F.query(col(`stores/${storeId}/leaves`), F.where('week', '==', week)));
+export const fmtWhen = d => { const k = kst(d); return `${+k.date.slice(5, 7)}/${+k.date.slice(8)}(${'일월화수목금토'[dowOf(k.date)]}) ${k.hm}`; };
 
 export { F };

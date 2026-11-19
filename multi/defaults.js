@@ -21,4 +21,8 @@ export const STORE_RULES_DEFAULT = {
     weekendMorningAsk: true,           // 주말 오전 가능 여부도 받음
     maxOffPerDay: null,                // 한 날 최대 휴무 인원 (null = 제한 없음)
   },
+  staffing: {
+    need: [4, 4, 4, 4, 4, 5, 5],       // 요일별(일~토) 필요한 알바 수 (저녁). 매장마다 바꿈
+    amStart: '12:00', amEnd: '15:00',  // 주말 오전 근무 시간
+  },
 };

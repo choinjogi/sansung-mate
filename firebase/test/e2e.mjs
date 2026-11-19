@@ -139,7 +139,9 @@ try {
   await shot(boss, '승인요청');
   await boss.getByText('승인', { exact: true }).click();
   await boss.getByText('직원 1명').waitFor();
-  await boss.getByText('매니저로').click();
+  await boss.locator('[data-mset]').first().click();
+  await boss.selectOption('#mr', 'manager');
+  await boss.locator('#msv').click();
   await boss.locator('.pill.on', { hasText: '매니저' }).waitFor();
 
   // 6) 직원: 승인 확인
@@ -222,6 +224,60 @@ try {
   await boss.locator('#back').click();
   await boss.getByText('규칙 바꾸기').waitFor();
 
+  // 7-6) 근무표·휴무신청: (시험이 언제 돌든) 다음 주 휴무신청을 받는 중으로 설정 바꾸기
+  const sid = (await (await fetch('http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/stores', { headers: { Authorization: 'Bearer owner' } })).json()).documents.find(d => d.fields.name.stringValue === '산성').name.split('/').pop();
+  const lr = await fetch(`http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/stores/${sid}/settings/leave`, {
+    method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { opensBeforeMin: { integerValue: '11520' }, closesBeforeMin: { integerValue: '-1' } } }) });
+  assert.ok(lr.ok, '휴무신청 시간 설정 실패');
+  // 박알바: 휴무신청 (다음 주 월·화 못 나옴, 토 오전 가능)
+  await park.locator('#goLeave').click();
+  await park.getByText('신청 받는 중').waitFor();
+  await park.locator('label:has(input[name=off])').nth(0).click();
+  await park.locator('label:has(input[name=off])').nth(1).click();
+  await park.locator('label:has(input[name=am][value="토"])').click();
+  await park.locator('#send').click();
+  await park.getByText('내가 낸 신청').waitFor();
+  assert.match(await text(park), /토/);
+  await shot(park, '휴무신청');
+  // 사장님: 휴무신청 현황 → 근무표 짜기 (반영 → 자동 채우기 → 확정)
+  await boss.getByText('휴무신청 현황').click();
+  await boss.getByText('1명 신청').waitFor();
+  assert.match(await text(boss), /인원 부족한 날/);  // 알바 2명뿐이라 필요 인원보다 적음
+  await shot(boss, '휴무신청현황');
+  await boss.getByText('이 주 근무표 짜기').click();
+  await boss.getByText('초안 (직원에게 안 보임)').waitFor();
+  await boss.locator('#fLeave').click();
+  await boss.getByText('2칸을 ✕로 바꿨어요').waitFor();
+  await boss.locator('#fAuto').click();
+  await boss.getByText('칸을 채웠어요').waitFor();
+  const xCount = await boss.locator('td.sc.x').count();
+  assert.equal(xCount, 2, '휴무 반영 칸 수');
+  await boss.locator('td[data-c]').first().click(); // 칸 눌러 바꾸기
+  await boss.getByText('저장 안 함').waitFor();
+  await boss.locator('#pub').click();
+  await boss.getByText('확정됨 (직원에게 보임)').waitFor();
+  await shot(boss, '근무표짜기');
+  // 김알바(매니저): 다음 주 근무표 보기
+  await alba.reload();
+  await alba.locator('#goSched').click();
+  await alba.getByText('근무표').first().waitFor();
+  await alba.locator('#wNext').click();
+  await alba.locator('.sched td.sc.x').first().waitFor();
+  assert.match(await text(alba), /박알바/);
+  await shot(alba, '근무표보기');
+  // 사장님: 오늘 일찍 부르기
+  await boss.locator('#back').click(); // 휴무신청 현황
+  await boss.getByText('이 주 근무표 짜기').waitFor();
+  await boss.locator('#back').click(); // 매장
+  await boss.getByText('오늘 출근 현황').click();
+  await boss.selectOption('#en', { label: '박알바' });
+  await boss.fill('#et', '17:00');
+  await boss.locator('#eb').click();
+  await boss.getByText('일찍 부름 17:00').waitFor();
+  await boss.locator('#back').click();
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 8) 대표님: 규칙 다음 달부터 바꾸기, 초대 링크 새로 → 옛 링크 무효
   await boss.getByText('규칙 바꾸기').click();
   await boss.fill('#wg', '10500');
@@ -246,7 +302,7 @@ try {
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
 
-  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
+  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;

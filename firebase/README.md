@@ -21,7 +21,7 @@ ownerInvites/{code}           총괄 → 다른 사장님 "매장 만들기 초�
 joinCodes/{code}              직원 초대 코드 → { storeId, storeName }. 코드로만 조회, 목록 불가
 stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, createdAt }
   rules/{YYYY-MM}             매장 규칙. 문서 이름 = 적용 시작 달 (기본값: ../multi/defaults.js)
-  members/{uid}               { name, role: staff|manager, status: pending|active|left, startTime, type }
+  members/{uid}               { name, role: staff|manager, status: pending|active|left, type: 정|알, startTime(개인 정시) }
   wages/{uid}                 { history: [{ from: 'YYYY-MM', wage }] }  사장님·본인만
   private/{uid}               { bank, account, email, req }  직원은 req(변경 요청)만 씀, 사장님이 승인
   punches/{날짜_uid_in|out}    { uid, name, date, kind, at, via: app|manual, by, wifi, dist, acc, flag, why, ip,
@@ -29,8 +29,11 @@ stores/{storeId}              { orgId, name, ownerUids, direct, inviteCode, crea
                               직원은 직접 못 씀 → 서버 함수 punch 가 기록. 매니저 이상은 넣기·고치기·확인 표시
   settings/wifi               { ips }  매장 와이파이 회선 주소 (서버 함수 registerWifi 만 씀, 사장님만 봄)
   settings/place              { lat, lng, radius }  매장 위치·반경 (사장님)
-  schedules/{주 시작일}        주간 스케줄 + leaveOpensAt / leaveClosesAt
-  leaves/{주_uid}             휴무신청 { uid, week, off[], am[], at }  열린 동안만 본인이 냄
+  schedules/{그 주 월요일}     { week, cells: { uid: [월~일 7칸] }, published, early: { 날짜: { uid: 'HH:MM' } } }
+                              칸: 'O' 근무 · '오전' 주말 오전 · 'O+오전' · 'X' 휴무 · '' 미배정. published=true 여야 직원에게 보임
+  leaves/{주_uid}             휴무신청 { uid, name, week, off[날짜], am['토'|'일'], at }  알바 본인이 신청 시간 안에만 냄
+  settings/leave              { opensBeforeMin, closesBeforeMin }  그 주 월요일 0시(한국) 기준 몇 분 전에 열고 닫는지.
+                              권한 규칙이 이 값으로 마감을 직접 계산 (서버·예약 작업 없이 지켜짐). 매장 규칙 저장 때 같이 씀
   sales/{YYYY-MM-DD}          매출  매니저 이상
   payroll/{YYYY-MM}           월 정산표  사장님만
   stats/{YYYY-MM}             월 합계 { sales, laborCost, laborRatio, hours, headcount, byWeekday }
