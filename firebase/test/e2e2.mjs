@@ -18,7 +18,7 @@ const server = http.createServer(async (req, res) => {
   try { const b = await readFile(file); res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream' }); res.end(b); }
   catch { res.writeHead(404); res.end(); }
 }).listen(5173);
-const APP = 'http://localhost:5173/multi/', APP2 = 'http://localhost:5173/multi2/';
+const APP = 'http://localhost:5173/multi/old.html', APP2 = 'http://localhost:5173/multi/';  // 2판 = /multi/ 자리
 
 // 출퇴근 서버: 기본은 Cloudflare 판(worker)을 이 컴퓨터에서 띄움. E2E_SERVER=functions 이면 Firebase 서버 함수 판
 const USE_FUNCTIONS = process.env.E2E_SERVER === 'functions';
@@ -210,7 +210,7 @@ try {
   await more('pay'); await boss2.getByText('지급 합계').waitFor(); assert.match(await text(boss2), /김알바/); await backMore();
   await more('month'); await boss2.getByText('전체 근무 시간').waitFor(); await backMore();
   await more('staff'); await boss2.getByText('여러 명 한 번에').waitFor(); await backMore();
-  await more('store'); await boss2.locator('#regen').waitFor(); assert.match(await boss2.locator('.url').first().innerText(), /multi2\/\?join=/);
+  await more('store'); await boss2.locator('#regen').waitFor(); assert.match(await boss2.locator('.url').first().innerText(), /multi\/\?join=/);
   await boss2.getByText('규칙 바꾸기').click(); await boss2.locator('#fNext').waitFor(); await boss2.locator('#back').click(); await boss2.getByText('매장 설정').first().waitFor(); await backMore();
   await more('stores'); await boss2.getByText('지금').first().waitFor(); assert.match(await text(boss2), /새 직영 매장 만들기/); await backMore();
   await shot(boss2, 'm2-더보기');

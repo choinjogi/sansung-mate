@@ -11,7 +11,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="../icons/emblem.png" alt=""><div>${esc(API.storeName() || 'MATE')}<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 30</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 ${APP_VER}</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -739,12 +739,14 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     const kind = () => { $('fsw').hidden = $('fk').value !== 'sub'; };
     $('fk').onchange = kind;
     const look = async () => {
+      if (!$('fn')) return;   // 새 앱: 화면을 벗어났으면 그만
       const n = $('fn').value, d = $('fd').value, p = list.find(x => x.name === n);
       $('fin').hidden = p ? !p.alba : false;
       if (!n || !d) return;
       $('fs').textContent = '불러오는 중…';
       try {
         const r = await API.lookup(n, d);
+        if (!$('fs')) return;
         if (r.found) { $('fi').value = r.inTag || ''; $('fo').value = (r.out || '').replace(/^2([4-9]):/, (m, h) => '0' + (h - 4) + ':'); $('fk').value = r.kind || 'normal'; $('fb').value = r.sub || ''; $('fs').textContent = '지금 기록: 출근 ' + (r.inTag || '-') + ' · 계산 ' + (r.start || '-') + ' · 퇴근 ' + (r.out || '-'); }
         else { $('fi').value = ''; $('fo').value = ''; $('fk').value = 'normal'; $('fb').value = ''; $('fs').textContent = '이날은 기록이 없어요. 새로 넣어요.'; }
         kind();
@@ -791,7 +793,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 32;
+  const APP_VER = 27;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

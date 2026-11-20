@@ -18,7 +18,7 @@ const server = http.createServer(async (req, res) => {
   try { const b = await readFile(file); res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream' }); res.end(b); }
   catch { res.writeHead(404); res.end(); }
 }).listen(5173);
-const APP = 'http://localhost:5173/multi/';
+const APP = 'http://localhost:5173/multi/old.html'; // 예전 화면 (11/21부터 /multi/ = 산성 화면)
 
 // 출퇴근 서버: 기본은 Cloudflare 판(worker)을 이 컴퓨터에서 띄움. E2E_SERVER=functions 이면 Firebase 서버 함수 판
 const USE_FUNCTIONS = process.env.E2E_SERVER === 'functions';
@@ -364,7 +364,7 @@ try {
   assert.match(await text(boss), /근무 시간\s+0시간/);
   // 안내서 페이지
   const g = await (await phone()).newPage(); watch(g, '안내서');
-  await g.goto(APP + 'guide.html');
+  await g.goto('http://localhost:5173/multi/guide.html');
   await g.getByText('사장님 안내서').waitFor();
   await shot(g, '안내서');
 

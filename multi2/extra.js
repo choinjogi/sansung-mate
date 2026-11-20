@@ -1,15 +1,15 @@
 // 산성 앱에 없던 화면 (산성은 시트에서 하던 일) — 산성 화면 ☰ 더보기에 산성 모양 항목으로 붙임
 // 화면 자체는 새 앱(multi)에서 만들고 시험한 것을 그대로 연다.
-import * as api from '../multi/fb.js?v=22';
-import * as sched from '../multi/sched.js?v=22';
-import * as pay from '../multi/pay.js?v=22';
-import * as records from '../multi/records.js?v=22';
-import * as staff from '../multi/staff.js?v=22';
-import * as info from '../multi/info.js?v=22';
-import * as attend from '../multi/attend.js?v=22';
-import * as rules from '../multi/rules.js?v=22';
-import { STORE_RULES_DEFAULT } from '../multi/defaults.js?v=22';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, toast, show, top, wireTop, busy, linkCard, wireLinks } from '../multi/ui.js?v=22';
+import * as api from '../multi/fb.js?v=27';
+import * as sched from '../multi/sched.js?v=27';
+import * as pay from '../multi/pay.js?v=27';
+import * as records from '../multi/records.js?v=27';
+import * as staff from '../multi/staff.js?v=27';
+import * as info from '../multi/info.js?v=27';
+import * as attend from '../multi/attend.js?v=27';
+import * as rules from '../multi/rules.js?v=27';
+import { STORE_RULES_DEFAULT } from '../multi/defaults.js?v=27';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, toast, show, top, wireTop, busy, linkCard, wireLinks } from '../multi/ui.js?v=27';
 
 const item = (id, t) => `<a class="item" href="#" data-x="${id}" style="color:inherit;text-decoration:none"><span>${t}</span><span class="small">›</span></a>`;
 const ROOT = location.origin + location.pathname;   // 이 앱 주소 (직원 초대 링크용)

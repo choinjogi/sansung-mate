@@ -1,17 +1,17 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=22';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=22';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=22';
-import * as attend from './attend.js?v=22';
-import * as sched from './sched.js?v=22';
-import * as records from './records.js?v=22';
-import * as pay from './pay.js?v=22';
-import * as sales from './sales.js?v=22';
-import * as dash from './dash.js?v=22';
-import * as staff from './staff.js?v=22';
-import * as info from './info.js?v=22';
-import * as rules from './rules.js?v=22';
-import * as notify from './notify.js?v=22';
+import * as api from './fb.js?v=27';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=27';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=27';
+import * as attend from './attend.js?v=27';
+import * as sched from './sched.js?v=27';
+import * as records from './records.js?v=27';
+import * as pay from './pay.js?v=27';
+import * as sales from './sales.js?v=27';
+import * as dash from './dash.js?v=27';
+import * as staff from './staff.js?v=27';
+import * as info from './info.js?v=27';
+import * as rules from './rules.js?v=27';
+import * as notify from './notify.js?v=27';
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); // 폰 알림 받기용
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
