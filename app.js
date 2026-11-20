@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 29</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 30</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -154,6 +154,93 @@
     });
   }
 
+  // ---------- 출퇴근 버튼 (11/20, NFC 스티커 대신) ----------
+  // 기록은 NFC 출퇴근과 같은 곳(스티커로 찍어도 같은 기록). 와이파이 주소는 Cloudflare 서버가 서명해 줌 → 2초 안에 못 받아도 기록은 함
+  const CLOCK_ALL = true;
+  const SIG_URL = 'https://mate-server.choinjogi.workers.dev/ipSig';
+  function getW() {
+    return new Promise(res => {
+      const t = setTimeout(() => res(''), 2000);
+      fetch(SIG_URL, { cache: 'no-store' }).then(r => r.json()).then(j => { clearTimeout(t); res(j && j.ok ? JSON.stringify({ ip: j.ip, t: j.t, sig: j.sig }) : ''); }).catch(() => { clearTimeout(t); res(''); });
+    });
+  }
+  async function loadClock() {
+    const box = document.getElementById('clock'); if (!box || !API.clockStatus) return;
+    if (!CLOCK_ALL && ME.role !== '사장님') return;  // 처음엔 사장님만 시험 → 확인되면 CLOCK_ALL = true
+    let s; try { s = await API.clockStatus(); } catch (e) { box.innerHTML = ''; return; }
+    if (!document.getElementById('clock')) return;
+    if (s.wait) { box.innerHTML = '<div class="card"><b>⏱️ 출퇴근</b><p class="small">가입 확인이 끝나면 여기서 출퇴근을 찍을 수 있어요.</p></div>'; return; }
+    const st = s.st || {}, both = st.mode !== '퇴근만';
+    const line = st.out ? `<span class="pill ok">퇴근 ${esc(st.out)}</span>` : st.inTag ? `<span class="pill ok">출근 찍음</span>` : '<span class="small">아직 안 찍었어요</span>';
+    const btn = st.out ? '<button class="ghost sm" id="cAgain" style="margin-top:10px">퇴근 시간 다시 찍기</button>'
+      : both && !st.inTag ? '<button id="cIn" style="margin-top:10px">출근</button><button class="ghost sm" id="cOut" style="margin-top:8px">출근 안 찍고 퇴근</button>'
+      : '<button id="cOut" style="margin-top:10px">퇴근</button>';
+    box.innerHTML = `<div class="card"><div class="row between"><b>⏱️ 오늘 출퇴근</b>${line}</div>${btn}<p class="small" style="margin-top:8px">매장 와이파이에 연결하고 눌러 주세요.</p></div>`;
+    const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = f; };
+    on('cIn', e => busy(e.target, () => doClock('출근', false)));
+    on('cOut', () => outScreen('퇴근'));
+    on('cAgain', () => outScreen('퇴근다시'));
+  }
+  const back = () => go(TAB);
+  // 퇴근: 알바는 폰을 들고 사장님·매니저에게 가서 눌러 달라고 함. 없으면 혼자 퇴근(⚠)
+  function outScreen(kind) {
+    if (ME.group !== '알' || ME.role) return clockRun(kind, false);
+    render(`<div>${header()}<div class="card" style="margin-top:16px;text-align:center"><div style="font-size:44px">🙋</div>
+      <b style="font-size:19px">${esc(ME.disp)}님 퇴근</b>
+      <p style="margin-top:8px">이 폰을 들고 <b>사장님이나 매니저</b>에게 가서<br>“퇴근할게요!” 하고 눌러 달라고 하세요.</p>
+      <button id="oYes" style="margin-top:14px">퇴근 (사장님·매니저가 눌러요)</button>
+      <div id="oSolo"><button class="ghost" id="oAlone" style="margin-top:10px">확인해 줄 사람이 없어요 · 혼자 퇴근</button></div>
+      <button class="ghost sm" id="oBack" style="margin-top:10px">취소</button></div></div>`);
+    document.getElementById('oYes').onclick = () => clockRun(kind, false);
+    document.getElementById('oBack').onclick = back;
+    document.getElementById('oAlone').onclick = () => {
+      document.getElementById('oSolo').innerHTML = `<div class="card" style="border-color:var(--warn);margin-top:10px;text-align:left"><b style="color:var(--warn)">⚠ 확인 없이 혼자 퇴근</b>
+        <p class="small">사장님께 "확인 필요"로 표시돼요. 퇴근 시각은 지금으로 기록돼요.</p><button id="oAlone2" style="margin-top:8px">그래도 혼자 퇴근</button></div>`;
+      document.getElementById('oAlone2').onclick = () => clockRun(kind, true);
+    };
+  }
+  function clockRun(kind, alone) {
+    render(`<div>${header()}<div class="card" style="margin-top:16px;text-align:center"><p>기록 중… 퇴근은 5초쯤 걸려요.</p></div></div>`);
+    doClock(kind, alone).catch(e => clockDone({ mode: 'msg', kind: 'warn', title: '기록하지 못했어요', text: e.message + '\n다시 눌러 주세요. 계속 안 되면 스티커나 퇴근 폼으로.' }));
+  }
+  async function doClock(kind, alone) {
+    const w = await getW();
+    clockDone(await API.clock(kind, w, alone));
+  }
+  function clockDone(r) {
+    r = r || {};
+    if (r.askEarly) return askEarly(r);
+    const warn = [];
+    if (r.alone) warn.push('⚠ 확인 없이 혼자 퇴근했어요');
+    if (r.wifi === false) warn.push('⚠ 매장 와이파이가 아니에요 (기록은 됐어요)');
+    let h = `<div>${header()}<div class="card" style="margin-top:16px"><b style="font-size:19px;color:var(${r.kind === 'warn' ? '--warn' : '--text'})">${esc(r.title || '완료')}</b>
+      <p style="white-space:pre-line;margin-top:6px">${esc(r.text || '')}</p>${warn.map(t => `<p class="small" style="color:var(--warn)">${esc(t)}</p>`).join('')}`;
+    if (r.shiftButtons) {
+      h += '<h2>오늘 근무가 스케줄과 달랐나요?</h2>' + [['normal', '스케줄대로'], ['sub', '대타였어요'], ['extra', '추가 출근 (사장님·매니저 요청)']]
+        .map(o => `<button class="ghost" data-sh="${o[0]}" style="margin-top:8px">${o[1]}</button>`).join('');
+    }
+    h += '<button class="ghost sm" id="cHome" style="margin-top:14px">닫기</button></div></div>';
+    render(h);
+    document.getElementById('cHome').onclick = back;
+    document.querySelectorAll('[data-sh]').forEach(b => b.onclick = () => b.dataset.sh === 'sub' ? askSub() : busy(b, async () => clockDone(await API.clockShift(b.dataset.sh, ''))));
+  }
+  function askSub() {
+    render(`<div>${header()}<div class="card" style="margin-top:16px"><b>누구 대신 나왔나요?</b><p class="small">원래 근무자 이름을 풀네임으로 적어 주세요.</p>
+      <input id="subN" placeholder="예: 홍길동"><button id="subOk" style="margin-top:8px">저장</button><button class="ghost sm" id="subNo" style="margin-top:8px">취소</button></div></div>`);
+    document.getElementById('subNo').onclick = back;
+    document.getElementById('subOk').onclick = e => { const s = document.getElementById('subN').value.trim(); if (s) busy(e.target, async () => clockDone(await API.clockShift('sub', s))); };
+  }
+  // 정시보다 일찍 찍은 날 퇴근 때: 평소대로 / 매장 요청으로 일찍(예외 출근 시각 → 승인 대기)
+  function askEarly(r) {
+    render(`<div>${header()}<div class="card" style="margin-top:16px"><b style="font-size:19px">${esc(r.title)}</b>
+      <p style="margin-top:6px">오늘은 출근을 ${esc(r.askEarly.inTag)}에 찍었어요. (정시 ${esc(r.askEarly.base)})</p>
+      <h2>오늘 출근, 어떤 경우인가요?</h2><button class="ghost" id="eSelf">평소대로 출근했어요 (${esc(r.askEarly.base)}부터)</button>
+      <h2>매장 요청으로 일찍 나왔어요 (예외 출근)</h2><p class="small">사장님·매니저님이 일찍 불렀으면, 실제 출근한 시각을 넣어 주세요.</p>
+      <input id="eT" type="time" value="${esc(r.askEarly.inTag)}"><button id="eCalled" style="margin-top:8px">이 시각으로 예외 출근 보내기</button></div></div>`);
+    document.getElementById('eSelf').onclick = e => busy(e.target, async () => clockDone(await API.clockEarly('self', '')));
+    document.getElementById('eCalled').onclick = e => { const t = document.getElementById('eT').value; if (t) busy(e.target, async () => clockDone(await API.clockEarly('called', t))); };
+  }
+
   // ---------- 직원: 홈 ----------
   // 비상용: 앱이나 NFC가 안 될 때는 예전처럼 구글폼으로 (주소는 서버가 줌)
   const backup = () => { const L = ME.links || {}; if (!L.leave && !L.clock) return '';
@@ -171,7 +258,8 @@
       <div class="card hero"><div class="row between"><span class="small">오늘 ${esc(t.label)}</span>${work ? '<span class="pill on">근무</span>' : '<span class="pill off">쉬는 날</span>'}</div>
         <div class="big" style="margin-top:6px">${work ? (t.code !== 'O' ? '12:00 출근 (주말 오전)' : t.start ? t.start + ' 출근' + (t.early ? ' <span class="pill warn">일찍 부름</span>' : '') : '오늘 근무') : ME.covered === false ? '스케줄 확정 전' : '오늘은 쉬는 날'}</div>
         ${ck ? '<div style="margin-top:6px">' + ck + (lateM ? ' <span class="pill warn">지각 ' + lateM + '분</span>' : '') + '</div>' : ''}
-        ${work && ME.group === '알' ? '<p class="small">출근·퇴근은 매장 스티커에 폰을 대 주세요.</p>' : work ? '<p class="small">퇴근할 때 매장 스티커에 폰을 대 주세요.</p>' : bear('eat') + '<p class="small" style="text-align:center">맛있는 거 먹고 푹 쉬세요!</p>'}</div>
+        ${work ? '' : bear('eat') + '<p class="small" style="text-align:center">맛있는 거 먹고 푹 쉬세요!</p>'}</div>
+      <div id="clock"></div>
       ${pendCard}
       <h2>이번 주 내 근무 <span class="small">· ${ME.workDays}일</span></h2>
       <div class="week">${ME.week.map(d => `<div class="day ${d.code === 'O' || d.code === '오전' ? 'work' : d.code === 'X' ? 'offd' : ''} ${d.today ? 'today' : ''}"><b>${esc(d.label.split(' ')[1])}</b><span>${d.code === 'O' ? '근무' : d.code === '오전' ? '오전' : d.code === 'X' ? '✕' : '–'}</span></div>`).join('')}</div>
@@ -181,7 +269,7 @@
       ${backup()}
     </div>`);
     const gi = document.getElementById('goinfo'); if (gi) gi.onclick = e => { e.preventDefault(); go('info'); };
-    pushCard();
+    pushCard(); loadClock();
   };
 
   // ---------- 근무표 (모두) ----------
@@ -365,7 +453,7 @@
     } catch (e) {}
     const pill = s => s === '출근' || s === '퇴근' ? 'ok' : s === '미출근' ? 'bad' : /지각|스케줄 없음/.test(s) ? 'warn' : '';
     const cnt = re => d.rows.filter(r => re.test(r.state)).length;
-    render(`<div>${header()}<h2>오늘 ${esc(d.label)} 출근 현황</h2>
+    render(`<div>${header()}<div id="clock"></div><h2>오늘 ${esc(d.label)} 출근 현황</h2>
       ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
       <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item" style="display:block;padding:12px 0">
@@ -380,6 +468,7 @@
         <button id="eb" style="margin-top:14px">등록</button></div>
       ${lvCard}${STEP2}</div>`);
     const g = document.getElementById('golv'); if (g) g.onclick = e => { e.preventDefault(); go('aleave'); };
+    loadClock();
     people().then(l => { const en = document.getElementById('en'); if (en) en.innerHTML = '<option value="">이름 고르기</option>' + opts(l.filter(p => p.alba)); }).catch(() => {});
     document.getElementById('eb').onclick = e => busy(e.target, async () => {
       const n = document.getElementById('en').value, t = document.getElementById('et').value;
@@ -652,7 +741,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 29;
+  const APP_VER = 30;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

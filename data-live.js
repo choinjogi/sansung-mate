@@ -82,6 +82,11 @@
     wages: () => call('wages', {}), setWage: (name, wage, when) => write('setWage', { name, wage, when }), cancelWage: name => write('cancelWage', { name }),
     pushMine: () => call('pushMine', {}), pushSub: s => call('pushSub', s), pushOff: s => call('pushOff', s), pushTest: () => call('pushTest', {}),
     removeStaff: (name, date) => write('removeStaff', { name, date }),
+    // 앱 출퇴근 (11/20) — 기록은 NFC와 같은 곳에. w = 서명된 와이파이 주소
+    clockStatus: () => call('clockStatus', {}),
+    clock: (kind, w, alone) => write('clock', { kind, w, alone: !!alone }).then(j => j.r),
+    clockEarly: (kind, time) => write('clockEarly', { kind, time }).then(j => j.r),
+    clockShift: (kind, sub) => write('clockShift', { kind, sub }).then(j => j.r),
     // 미리 받아 두기 (다른 탭을 누르면 바로 보이게)
     prefetch: fns => fns.forEach((fn, i) => setTimeout(() => { if (!FRESH[fn] && get()) fetchFresh(fn).catch(() => {}); }, 800 + i * 400)),
   };

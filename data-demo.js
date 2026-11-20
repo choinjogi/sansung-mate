@@ -158,5 +158,15 @@
       localStorage.setItem('mate_sales', JSON.stringify(saved));
       return { ok: true, msg: md(date) + ' 매출 ' + amount.toLocaleString('ko-KR') + '원 저장했어요 (시험)' };
     },
+    // 앱 출퇴근 (시험): 찍은 상태만 이 폰에 저장
+    clockStatus() { const c = JSON.parse(localStorage.getItem('mate_clock') || '{}'); return Promise.resolve({ st: { mode: '출퇴근', inTag: c.inTag || '', out: c.out || '' } }); },
+    clock(kind, w, alone) {
+      const c = JSON.parse(localStorage.getItem('mate_clock') || '{}'), t = new Date().toTimeString().slice(0, 5);
+      if (kind === '출근') { c.inTag = t; localStorage.setItem('mate_clock', JSON.stringify(c)); return Promise.resolve({ mode: 'done', kind: 'ok', title: '출근 완료', text: '오늘도 화이팅! (시험)', wifi: w ? null : null }); }
+      c.out = t; localStorage.setItem('mate_clock', JSON.stringify(c));
+      return Promise.resolve({ mode: 'done', kind: 'ok', title: '퇴근 ' + t, text: '수고하셨어요! (시험)', shiftButtons: true, alone: !!alone, wifi: false });
+    },
+    clockEarly: () => Promise.resolve({ mode: 'done', kind: 'ok', title: '저장 완료', text: '(시험)' }),
+    clockShift: (k, sub) => Promise.resolve({ mode: 'done', kind: 'ok', title: '저장 완료!', text: k + (sub ? ' · ' + sub : '') + ' (시험)' }),
   };
 })();
