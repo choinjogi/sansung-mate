@@ -1,9 +1,9 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js';
-import { STORE_RULES_DEFAULT } from './defaults.js';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js';
-import * as attend from './attend.js';
-import * as sched from './sched.js';
+import * as api from './fb.js?v=5';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=5';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js?v=5';
+import * as attend from './attend.js?v=5';
+import * as sched from './sched.js?v=5';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
