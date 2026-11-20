@@ -456,7 +456,14 @@
     const cnt = re => d.rows.filter(r => re.test(r.state)).length;
     // 11/20 와이파이 표시: ✓ 매장 와이파이 / ⚠ 와이파이 아님 / ⚠ 확인 못 함 (예전 기록·폼·직접 넣은 기록은 표시 없음)
     const wf = v => v === 'ok' ? '<div class="small" style="color:var(--ok)">✓ 매장 와이파이</div>' : v === 'no' ? '<div class="small" style="color:var(--warn)">⚠ 와이파이 아님</div>' : v === '?' ? '<div class="small" style="color:var(--warn)">⚠ 와이파이 확인 못 함</div>' : '';
-    render(`<div>${header()}<div id="clock"></div><h2>오늘 ${esc(d.label)} 출근 현황</h2>
+    // 11/21 오늘 매출·알바 인건비·비율
+    const mo = d.money, won = n => '₩' + Math.round(n).toLocaleString('ko-KR');
+    const moneyCard = mo ? `<div class="card"><b>💰 오늘 매출 · 알바 인건비</b><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;text-align:center">
+      <div><div class="small">매출</div><div style="font-size:18px;font-weight:800">${mo.sales != null ? won(mo.sales) : '<span class="small">아직 안 넣음</span>'}</div></div>
+      <div><div class="small">알바 인건비</div><div style="font-size:18px;font-weight:800">${won(mo.cost)}</div></div>
+      <div><div class="small">매출 대비</div><div style="font-size:18px;font-weight:800;color:${mo.ratio == null ? 'var(--dim)' : 'var(--text)'}">${mo.ratio != null ? mo.ratio + '%' : '–'}</div></div></div>
+      <p class="small" style="margin-top:6px">퇴근 ${mo.done}명${mo.working ? ` · 근무 중 ${mo.working}명은 지금까지` : ''} · 시급 × 근무 시간(주휴 빼고)${mo.sales == null ? ' · 매출은 💰 매출 탭에서 넣으면 %가 나와요' : ''}</p></div>` : '';
+    render(`<div>${header()}<div id="clock"></div>${moneyCard}<h2>오늘 ${esc(d.label)} 출근 현황</h2>
       ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
       <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item" style="display:block;padding:12px 0">
@@ -744,7 +751,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 31;
+  const APP_VER = 32;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
