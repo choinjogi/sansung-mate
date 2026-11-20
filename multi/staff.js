@@ -3,8 +3,8 @@
 //        승인하면 구분·정시·입사일이 자동으로 들어감 (시급은 사장님이 승인하거나 사장님 화면을 열 때 들어감)
 //  퇴사: 이름 + 퇴사일(마지막 근무일). 그날까지는 그대로 일하고(퇴근 찍기 됨), 다음 날부터 로그인·근무표·출퇴근에서 빠짐.
 //        정산은 퇴사일까지. 지난 출퇴근 기록은 그대로
-import * as api from './fb.js?v=16';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=16';
+import * as api from './fb.js?v=17';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=17';
 
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
 const since = d => (d ? md(d) + ' 입사' : '기존 직원');
@@ -24,7 +24,7 @@ export function parseBulk(text, { defStart = '18:00', owner = true, taken = new 
     let startTime = defStart;
     if (sRaw) { const m = sRaw.match(/^(\d{1,2}):?(\d{2})$/); if (m && +m[1] < 24 && +m[2] < 60) startTime = String(+m[1]).padStart(2, '0') + ':' + m[2]; else err.push('정시는 18:00처럼'); }
     let startDate = null;
-    if (dRaw) {
+    if (dRaw && !/^기존/.test(dRaw)) {
       const m = dRaw.match(/^(\d{2}|\d{4})[.\-/ ]\s*(\d{1,2})[.\-/ ]\s*(\d{1,2})\.?$/);
       if (m) startDate = `${m[1].length === 2 ? '20' + m[1] : m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
       if (!startDate || isNaN(Date.parse(startDate))) { startDate = null; err.push('입사일은 2026-03-01처럼'); }
@@ -52,11 +52,14 @@ export async function staffScreen(store, back, owner) {
       <div class="row" style="gap:10px">
         ${owner ? `<div style="flex:1"><label id="hwl">시급 (원)</label><input id="hw" type="number" inputmode="numeric" step="10" placeholder="${r && r.pay.baseWage ? r.pay.baseWage : ''}"></div>` : ''}
         <div style="flex:1"><label>정시 출근</label><input id="hs" type="time" step="300" value="${esc((r && r.open.startTime) || '18:00')}"></div></div>
-      <label>입사일 <span class="small">(지금 일하는 직원은 비워 두세요)</span></label><input id="hd" type="date" value="">
+      <label>어떤 직원인가요?</label>
+      <div class="row" style="gap:8px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="hk" value="old" checked style="width:auto">지금 일하는 직원</label>
+        <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="hk" value="new" style="width:auto">새로 들어오는 직원</label></div>
+      <div id="hdBox" style="display:none"><label>입사일 (첫 근무일)</label><input id="hd" type="date" value="${today}"></div>
       <button id="hadd" style="margin-top:14px">입사 등록</button>
       <p class="small" style="margin-top:8px">등록한 뒤 직원이 앱에서 같은 이름으로 가입 신청하면 ✅ 승인 탭에 "입사 등록됨"으로 떠요. 승인하면 위 내용이 자동으로 들어가요.${owner ? ' 시급을 비우면 매장 기본 시급이에요.' : ' 시급은 사장님이 정해요.'}</p></div>
     <div class="card"><b>📋 여러 명 한 번에</b>
-      <p class="small">한 줄에 한 명: <b>이름, 구분, ${owner ? '시급(월급), ' : ''}정시, 입사일</b> — 뒤의 칸은 비워도 돼요(정시 비우면 매장 정시, 입사일 비우면 기존 직원). 엑셀에서 칸째 복사해도 돼요.</p>
+      <p class="small">한 줄에 한 명: <b>이름, 구분, ${owner ? '시급(월급), ' : ''}정시, 입사일</b> — 뒤의 칸은 비워도 돼요(정시 비우면 매장 정시, 입사일 비우거나 "기존"이면 지금 일하는 직원). 엑셀에서 칸째 복사해도 돼요.</p>
       <textarea id="bk" rows="6" style="width:100%;margin-top:6px" placeholder="홍길동, 알바, 10500, 18:00\n김철수, 알바, , 17:00\n이영희, 정직원, 2500000, 11:00, 2025-03-01"></textarea>
       <button class="ghost" id="bkPrev" style="margin-top:8px">미리보기</button><div id="bkOut"></div></div>
     ${hires.length ? `<div class="card"><b>가입 기다리는 입사 등록 ${hires.length}명</b><div class="list">${hires.map(h => `
@@ -71,9 +74,12 @@ export async function staffScreen(store, back, owner) {
     ${gone.length ? `<div class="card"><b>퇴사한 직원 ${gone.length}명</b><div class="list">${gone.map(m => `<div class="item"><span>${esc(m.name)}${m.leaveDate ? ` <span class="small">${md(m.leaveDate)} 퇴사</span>` : ''}</span><button class="sm ghost" data-back="${m.id}" data-name="${esc(m.name)}">다시 일함</button></div>`).join('')}</div></div>` : ''}`);
   wireTop(back);
   const again = () => staffScreen(store, back, owner);
+  document.querySelectorAll('input[name=hk]').forEach(i => { i.onchange = () => { $('hdBox').style.display = i.value === 'new' && i.checked ? '' : 'none'; }; });
   if ($('ht') && $('hwl')) $('ht').onchange = () => { $('hwl').textContent = $('ht').value === '정' ? '월급 (원)' : '시급 (원)'; };
   $('hadd').onclick = e => busy(e.target, async () => {
-    const name = $('hn').value.trim(), type = $('ht').value, startTime = $('hs').value, startDate = $('hd').value;
+    const isNew = document.querySelector('input[name=hk]:checked').value === 'new';
+    const name = $('hn').value.trim(), type = $('ht').value, startTime = $('hs').value, startDate = isNew ? $('hd').value : '';
+    if (isNew && !startDate) throw new Error('입사일을 골라 주세요');
     const wage = owner && $('hw').value ? Math.round(+$('hw').value) : null;
     if (!name) throw new Error('이름을 넣어 주세요');
     if (type === '정' && owner && !wage) throw new Error('정직원은 월급을 넣어 주세요');

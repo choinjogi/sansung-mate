@@ -438,6 +438,8 @@ try {
   await park.reload();
   await park.getByText('박알바님').waitFor();
   // 12-3) 입사 등록: 최검색(10-1에서 가입 신청해 둔 사람) → 승인 탭에 "입사 등록됨" → 승인하면 정직원·정시 자동
+  await boss.locator('input[name=hk][value=new]').check();
+  await boss.locator('#hd').waitFor();
   await boss.fill('#hn', '최 검색');
   await boss.selectOption('#ht', '정');
   await boss.fill('#hw', '2500000');
@@ -458,7 +460,7 @@ try {
 
   // 12-5) 여러 명 한 번에 입사 등록: 붙여 넣기 → 미리보기(틀린 줄 빨강) → 맞는 줄만 등록, 입사일 비우면 기존 직원
   await boss.locator('#goStaff').click();
-  await boss.fill('#bk', '이름, 구분, 시급\n가나다, 알바, 10500, 17:30\n라마바\t정직원\t2600000\t11:00\t25.3.2\n사아자, 알바, , 9:00\n가나다, 알바\n차카타, 사장');
+  await boss.fill('#bk', '이름, 구분, 시급\n가나다, 알바, 10500, 17:30\n라마바\t정직원\t2600000\t11:00\t25.3.2\n사아자, 알바, , 9:00, 기존\n가나다, 알바\n차카타, 사장');
   await boss.locator('#bkPrev').click();
   await boss.getByText('목록에 두 번').waitFor();
   assert.match(await text(boss), /구분은 알바\/정직원/);
@@ -501,6 +503,7 @@ try {
   await alba.fill('#sa', '1234000');
   await alba.locator('#sv').click();
   await alba.getByText('1,234,000원').first().waitFor();
+  await alba.waitForFunction(() => { const i = document.querySelector('#sa'); return i && i.value === '' && !document.querySelector('#sv').disabled; });
   await alba.fill('#sa', '1300000');
   await alba.locator('#sv').click();
   await alba.getByText('1,300,000원').first().waitFor();
