@@ -1,11 +1,11 @@
 // 새 앱(여러 매장용) = 산성 앱 화면(app.js) 그대로 + 데이터만 Firebase.
 // 산성 앱의 data-live.js(구글 시트 서버)와 같은 window.API 43개를 여기서 Firebase·Cloudflare 서버로 대신 만든다.
 // 화면(app.js)은 산성 앱 것을 거의 그대로 쓰고, 매장 고르기·사장님 구글 로그인만 조금 붙였다.
-import * as api from '../multi/fb.js?v=21';
-import * as records from '../multi/records.js?v=21';
-import * as sched from '../multi/sched.js?v=21';
-import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=21';
-import { PUSH_KEY } from '../multi/config.js?v=21';
+import * as api from '../multi/fb.js?v=22';
+import * as records from '../multi/records.js?v=22';
+import * as sched from '../multi/sched.js?v=22';
+import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=22';
+import { PUSH_KEY } from '../multi/config.js?v=22';
 
 const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -245,9 +245,11 @@ window.API = {
 // 초대 링크(?join=코드)로 들어오면 그 매장으로
 const qs = new URLSearchParams(location.search);
 if (qs.get('join')) { const code = qs.get('join').toUpperCase(); ls.set('mate_join', code); api.joinInfo(code).then(j => { if (j) setStore(j.storeId, j.storeName); }).catch(() => {}); }
+if (qs.get('owner')) ls.set('mate_owner', qs.get('owner').toUpperCase());   // 대표님이 보낸 매장 만들기 초대
 if ([...qs.keys()].length) history.replaceState(null, '', location.pathname);
 
 // 사장님·매니저 화면 데이터 + 화면 스크립트는 로그인 상태를 안 뒤에 불러옴
-await import('./admin.js?v=2');
+await import('./admin.js?v=3');
+await import('./extra.js?v=2');
 await new Promise(res => { const off = api.onUser(() => { off(); res(); }); });
-const s = document.createElement('script'); s.src = 'app.js?v=2'; document.body.appendChild(s);
+const s = document.createElement('script'); s.src = 'app.js?v=3'; document.body.appendChild(s);

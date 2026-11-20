@@ -154,11 +154,31 @@ nav a.on i { filter: none; opacity: 1; }
 .empty p { color: var(--text); font-weight: 700; margin-top: 10px; }
 .fade { animation: fade .25s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* 새 앱: 산성에 없던 화면(근무표 짜기·매장 설정 등)이 쓰는 모양 (multi/index.html에서) */
+/* 여러 매장용 추가 */
+.qr { background: #fff; border-radius: 14px; padding: 10px; width: 210px; margin: 12px auto 4px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.url { font-size: 13px; color: var(--sub); word-break: break-all; background: rgba(0,0,0,.25); border-radius: 10px; padding: 9px 10px; margin-top: 8px; }
+.chk7 { grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.chk7 span { padding: 10px 0; }
+code { font-size: 13px; }
+/* 출퇴근 */
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; }
+.tbox.late { border-color: var(--warn); }
+.tval { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+.thow { min-height: 18px; font-size: 12px; }
+.thow .pill { font-size: 11.5px; padding: 2px 8px; }
+.needs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.needc { margin: 0; text-align: center; }
+.needc input { padding: 10px 2px; text-align: center; }
+.sched td[data-c] { cursor: pointer; }
+.big-btn { font-size: 22px; padding: 20px; margin-top: 14px; }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <nav id="nav" hidden><div class="in" id="navin"></div></nav>
-<script type="module" src="data-fb.js?v=2"></script>
+<script type="module" src="data-fb.js?v=3"></script>
 </body>
 </html>

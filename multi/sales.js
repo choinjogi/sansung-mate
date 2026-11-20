@@ -1,8 +1,8 @@
 // 매출 탭 (사장님·매니저): 이달 1일 ~ 오늘 날짜별 매출 넣기·고치기, 합계·하루 평균(입력된 날만)
 // 저장: stores/{매장}/sales/{YYYY-MM-DD} = { date, amount, by, at }. 정산표를 저장할 때 그 달 합계가 대표님 합계(stats)에 같이 들어감
-import * as api from './fb.js?v=21';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=21';
-import { addMonth, lastDay } from './paycalc.js?v=21';
+import * as api from './fb.js?v=22';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=22';
+import { addMonth, lastDay } from './paycalc.js?v=22';
 
 const man = n => Math.round(n).toLocaleString();
 const label = d => `${+d.slice(5, 7)}/${+d.slice(8)}(${DOW[api.dowOf(d)]})`;

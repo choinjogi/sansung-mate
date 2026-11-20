@@ -193,13 +193,54 @@ try {
   await boss2.locator('[data-go="aacc"]').click();
   await boss2.locator('[data-n="김알바"]').click();
   await boss2.getByText('김알바님 임시 비밀번호').waitFor();
+  const tmpPin = (await boss2.locator('.big').first().innerText()).trim();
+  assert.match(tmpPin, /^\d{6}$/);
   // 휴무신청 현황
   await tab(boss2, '더보기');
   await boss2.locator('[data-go="aleave"]').click();
   await boss2.getByText(/휴무신청 · /).waitFor();
   await shot(boss2, 'm2-휴무현황');
 
-  console.log('✔ 산성 화면(multi2) 직원·사장님 시험 통과');
+  // 7) 산성에 없던 화면 (더보기에 붙임)
+  const more = async x => { await tab(boss2, '더보기'); await boss2.locator(`[data-x="${x}"]`).click(); };
+  const backMore = async () => { await boss2.locator('#back').click(); await boss2.getByText('더보기').first().waitFor(); };
+  await more('edit'); await boss2.getByText('초안 (직원에게 안 보임)').waitFor(); await backMore();
+  await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
+  await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();
+  await more('pay'); await boss2.getByText('지급 합계').waitFor(); assert.match(await text(boss2), /김알바/); await backMore();
+  await more('month'); await boss2.getByText('전체 근무 시간').waitFor(); await backMore();
+  await more('staff'); await boss2.getByText('여러 명 한 번에').waitFor(); await backMore();
+  await more('store'); await boss2.locator('#regen').waitFor(); assert.match(await boss2.locator('.url').first().innerText(), /multi2\/\?join=/);
+  await boss2.getByText('규칙 바꾸기').click(); await boss2.locator('#fNext').waitFor(); await boss2.locator('#back').click(); await boss2.getByText('매장 설정').first().waitFor(); await backMore();
+  await more('stores'); await boss2.getByText('지금').first().waitFor(); assert.match(await text(boss2), /새 직영 매장 만들기/); await backMore();
+  await shot(boss2, 'm2-더보기');
+  // 김알바: 임시 비밀번호로 로그인 → 새 비밀번호 정하기 → 홈에 공지
+  await alba.reload();
+  await alba.getByText('산성 로그인').waitFor();
+  await alba.fill('#nm', '김알바'); await alba.fill('#pw', tmpPin);
+  await alba.locator('#go').click();
+  await alba.getByText('내 비밀번호 정하기').waitFor();
+  await alba.fill('#p1', '654321'); await alba.fill('#p2', '654321');
+  await alba.locator('#go').click();
+  await alba.getByText('산성 화면 공지 시험').waitFor();
+
+  // 8) 새 대표님(매장 없음): 산성 화면에서 구글 로그인 → 매장 목록 → 새 직영 매장 만들기 → 그 매장 오늘 탭
+  const boss3 = await (await phone()).newPage(); watch(boss3, '대표님3');
+  await boss3.goto(APP2);
+  await boss3.waitForFunction(() => window.API && window.API._api);
+  await boss3.evaluate(() => window.API._api.testGoogle('boss3@example.com', '새대표'));
+  const b3 = await boss3.evaluate(() => window.API._api.auth.currentUser.uid);
+  const r3 = await fetch('http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/orgs/org3', { method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { name: { stringValue: '새 그룹' }, adminUids: { arrayValue: { values: [{ stringValue: b3 }] } } } }) });
+  assert.ok(r3.ok);
+  await boss3.reload();
+  await boss3.getByText('새 직영 매장 만들기').click();
+  await boss3.fill('#sn', '해운대점'); await boss3.fill('#wg', '10030');
+  await boss3.locator('#save').click();
+  await boss3.getByText(/출근 현황/).first().waitFor();
+  assert.match(await boss3.locator('.brand').first().innerText(), /해운대점/);
+
+  console.log('✔ 산성 화면(multi2) 직원·사장님·새 화면 시험 통과');
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;

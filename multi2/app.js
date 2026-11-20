@@ -138,7 +138,11 @@
     if (API.hasToken && !API.hasToken()) return login();
     try { ME = await API.me(); } catch (e) {
       if (e.code === 'pickStore') return pickStore(e.stores);
-      if (e.code === 'noStore') { await API.logout(); return findStore('이 구글 계정에는 매장이 없어요. 대표님께 매장 만들기 초대를 받아 주세요'); }
+      if (e.code === 'noStore') {
+        const out = async () => { await API.logout(); findStore(); };
+        if (window.EXTRA && (await EXTRA.tryInvite(out) || await EXTRA.tryOrg(out))) return;   // 초대받은 사장님·대표님 = 새 매장 만들기
+        await API.logout(); return findStore('이 구글 계정에는 매장이 없어요. 대표님께 매장 만들기 초대를 받아 주세요');
+      }
       return login(API.hasToken && API.hasToken() ? e.message : '');
     }
     const t = store.get('mate_tab');
@@ -146,6 +150,7 @@
     if (API.prefetch) API.prefetch(ME.role ? ['adminToday', 'pending', 'dashboard', 'schedule'] : ['schedule', 'records']);
   }
   window.addEventListener('mate-logout', () => login('다시 로그인해 주세요'));
+  window.addEventListener('mate-out', () => { store.del('mate_tab'); login(); });   // 새 앱: 붙인 화면의 [로그아웃]
   // 뒤에서 새 값이 왔고 지금 그 화면을 보고 있으면 조용히 다시 그림 (입력 중이면 건드리지 않음)
   const VIEW_FN = { home: ['me'], sched: ['schedule'], rec: ['records'], atoday: ['adminToday', 'leaveAll'], aok: ['pending'], adash: ['dashboard'], aleave: ['leaveAll'], astaff: ['people'] };
   window.addEventListener('mate-fresh', e => {
@@ -768,9 +773,11 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
         <a class="item" href="#" data-go="rec" style="color:inherit;text-decoration:none"><span>⏱️ 내 출퇴근 기록</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="info" style="color:inherit;text-decoration:none"><span>👤 내 정보 (계좌·이메일)</span><span class="small">›</span></a>
       </div>
+      ${window.EXTRA ? EXTRA.html(ME) : ''}
       <div class="card row between" id="pushcard" style="display:flex"><div><b>🔔 폰 알림</b><div class="small" id="pushst">휴무신청 열림 · 마감 1시간 전 알림</div></div><button class="sm" id="pushbtn" style="width:auto;margin:0">알림 받기</button></div>
       ${backup()}</div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+    if (window.EXTRA) EXTRA.wire(ME, () => go('amore'));  // 새 앱: 산성에 없던 화면
     pushCard();
   };
 
