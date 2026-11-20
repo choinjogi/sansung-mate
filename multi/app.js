@@ -1,16 +1,16 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=15';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=15';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=15';
-import * as attend from './attend.js?v=15';
-import * as sched from './sched.js?v=15';
-import * as records from './records.js?v=15';
-import * as pay from './pay.js?v=15';
-import * as sales from './sales.js?v=15';
-import * as dash from './dash.js?v=15';
-import * as staff from './staff.js?v=15';
-import * as info from './info.js?v=15';
-import * as notify from './notify.js?v=15';
+import * as api from './fb.js?v=16';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=16';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=16';
+import * as attend from './attend.js?v=16';
+import * as sched from './sched.js?v=16';
+import * as records from './records.js?v=16';
+import * as pay from './pay.js?v=16';
+import * as sales from './sales.js?v=16';
+import * as dash from './dash.js?v=16';
+import * as staff from './staff.js?v=16';
+import * as info from './info.js?v=16';
+import * as notify from './notify.js?v=16';
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); // 폰 알림 받기용
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
@@ -217,7 +217,7 @@ async function approvalTab(ctx, again) {
   const hireOf = m => H[api.nameKey(m.name)] || null;
   const html = `<h2>가입 신청${pending.length ? ` <span class="small">· ${pending.length}명</span>` : ''}</h2>
     ${pending.length ? `<div class="card hero"><div class="list">${pending.map(m => `
-      <div class="item"><span><b>${esc(m.name)}</b><br>${hireOf(m) ? `<span class="small" style="color:var(--ok)">✓ 입사 등록됨 · ${hireOf(m).type === '정' ? '정직원' : '알바'} · ${esc(hireOf(m).startDate.slice(5).replace('-', '/'))} 입사</span>` : '<span class="small" style="color:var(--warn)">입사 등록 없음 — 본인 맞는지 꼭 확인</span>'}</span><span class="row" style="gap:6px">
+      <div class="item"><span><b>${esc(m.name)}</b><br>${hireOf(m) ? `<span class="small" style="color:var(--ok)">✓ 입사 등록됨 · ${hireOf(m).type === '정' ? '정직원' : '알바'} · ${hireOf(m).startDate ? esc(hireOf(m).startDate.slice(5).replace('-', '/')) + ' 입사' : '기존 직원'}</span>` : '<span class="small" style="color:var(--warn)">입사 등록 없음 — 본인 맞는지 꼭 확인</span>'}</span><span class="row" style="gap:6px">
         <button class="sm" data-jok="${m.id}">승인</button><button class="sm ghost" data-jno="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
       <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>`
       : '<div class="card"><p class="small">새 가입 신청이 없어요.</p></div>'}`;
@@ -458,6 +458,7 @@ async function ownerMore(id, again) {
         <label>구분</label><select id="mt"><option value="알" ${m.type !== '정' ? 'selected' : ''}>알바 (휴무신청 냄)</option><option value="정" ${m.type === '정' ? 'selected' : ''}>정직원</option></select>
         <label>역할</label><select id="mr"><option value="staff" ${m.role !== 'manager' ? 'selected' : ''}>직원</option><option value="manager" ${m.role === 'manager' ? 'selected' : ''}>매니저</option></select>
         <label>개인 정시 출근 <span class="small">(비우면 매장 정시 ${esc(r ? r.open.startTime : '18:00')})</span></label><input type="time" id="mst" step="300" value="${esc(m.startTime || '')}">
+        <label>입사일 <span class="small">(모르면 비워 두기 · 정직원이 달 중간에 들어왔을 때 월급 나누는 데만 써요)</span></label><input type="date" id="msd" value="${esc(m.startDate || '')}">
         <label id="mwl">${m.type === '정' ? '월급(원)' : '시급(원)'} <span class="small">${m.type === '정' ? '' : `(비우면 매장 기본 ${r && r.pay.baseWage ? r.pay.baseWage.toLocaleString() : '-'}원)`}</span></label>
         <input type="number" id="mw" min="0" step="10" inputmode="numeric" value="${(() => { const h = ((W[m.id] || {}).history || []).filter(x => x.from <= api.month()).pop(); return h ? h.wage : ''; })()}">
         <div class="row" style="gap:6px;margin-top:6px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="mwf" value="now" checked style="width:auto">이번 달부터</label>
@@ -467,7 +468,7 @@ async function ownerMore(id, again) {
         <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">비밀번호 임의 재설정</button></div>
         <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
-        await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null, noJuhu: $('mnj').checked });
+        await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null, noJuhu: $('mnj').checked, startDate: $('msd').value || null });
         const curW = (((W[m.id] || {}).history || []).filter(x => x.from <= api.month()).pop() || {}).wage || '';
         const nw = $('mw').value ? Math.round(+$('mw').value) : '', from = document.querySelector('input[name=mwf]:checked').value === 'next' ? api.month(new Date(), 1) : api.month();
         if (String(nw) !== String(curW) || from !== api.month()) await api.setWage(id, m.id, from, nw || null);

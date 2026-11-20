@@ -456,6 +456,20 @@ try {
   await walk.reload();
   await walk.locator('#nav a').first().waitFor();
 
+  // 12-5) 여러 명 한 번에 입사 등록: 붙여 넣기 → 미리보기(틀린 줄 빨강) → 맞는 줄만 등록, 입사일 비우면 기존 직원
+  await boss.locator('#goStaff').click();
+  await boss.fill('#bk', '이름, 구분, 시급\n가나다, 알바, 10500, 17:30\n라마바\t정직원\t2600000\t11:00\t25.3.2\n사아자, 알바, , 9:00\n가나다, 알바\n차카타, 사장');
+  await boss.locator('#bkPrev').click();
+  await boss.getByText('목록에 두 번').waitFor();
+  assert.match(await text(boss), /구분은 알바\/정직원/);
+  await shot(boss, '여러명입사');
+  await boss.locator('#bkGo').click();
+  await boss.getByText('가입 기다리는 입사 등록 3명').waitFor();
+  const hl = await text(boss);
+  assert.match(hl, /라마바 정직원 · 11:00 · 3\/2 입사/); assert.match(hl, /가나다 알바 · 17:30 · 기존 직원/); assert.match(hl, /사아자 알바 · 09:00 · 기존 직원/);
+  await boss.locator('#back').click();
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 12-4) 공지·내 정보: 사장님 공지 → 박알바 홈에 보임. 박알바 계좌 넣기 → 사장님 승인 탭 → 승인 → 박알바 화면에 끝 4자리만
   await tab(boss, '더보기');
   await boss.locator('#goNotice').click();

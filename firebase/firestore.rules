@@ -113,6 +113,7 @@ service cloud.firestore {
         allow update: if owner(s)
           && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type', 'noJuhu', 'startDate', 'leaveDate'])
           && (!('leaveDate' in d()) || d().leaveDate == null || isDate(d().leaveDate))
+          && (!('startDate' in d()) || d().startDate == null || isDate(d().startDate))
           && d().role in ['staff', 'manager'] && d().status in ['pending', 'active', 'left']
           && (!('type' in d()) || d().type in ['정', '알']);
         // 번호 다시 정하기(서버가 pinReset=true) 뒤 본인이 새 번호를 정하면 표시만 지움
@@ -133,7 +134,7 @@ service cloud.firestore {
         allow read, delete: if manager(s);
         allow create, update: if manager(s) && d().keys().hasOnly(['name', 'type', 'startTime', 'startDate', 'wage', 'by', 'at'])
           && d().name is string && d().name.size() > 0 && d().name.size() <= 20 && d().type in ['정', '알']
-          && isDate(d().startDate) && d().by == uid() && d().at == request.time
+          && (!('startDate' in d()) || d().startDate == null || isDate(d().startDate)) && d().by == uid() && d().at == request.time
           && (!('wage' in d()) || (owner(s) && d().wage is int && d().wage > 0));
       }
 
