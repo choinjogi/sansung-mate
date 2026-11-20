@@ -1,9 +1,10 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=6';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=6';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js?v=6';
-import * as attend from './attend.js?v=6';
-import * as sched from './sched.js?v=6';
+import * as api from './fb.js?v=7';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=7';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=7';
+import * as attend from './attend.js?v=7';
+import * as sched from './sched.js?v=7';
+import * as records from './records.js?v=7';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -22,6 +23,7 @@ if (!api.configured) {
 }
 
 async function route(user) {
+  setNav(null); CTX = null;
   if (!user) {
     if (ls.get('mate_join')) return joinScreen(ls.get('mate_join'));
     if (ls.get('mate_owner')) return landing('invite');
@@ -138,7 +140,108 @@ async function staffHome(storeId) {
   }
   const s = await api.getStore(storeId);
   ls.set('mate_store_name', s.name);
-  return attend.staffHome(storeId, m, s, () => staffHome(storeId));
+  return startTabs({ store: s, me: m, admin: m.role === 'manager', owner: false });
+}
+
+// ---------- 아래 탭 (산성 앱과 같은 구성) ----------
+// 직원: 홈 · 근무표 · 휴무신청 · 내 기록 / 사장님·매니저: 오늘 · 승인 · 더보기
+const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
+const ADMIN_TABS = [['today', '👀', '오늘'], ['ok', '✅', '승인'], ['more', '☰', '더보기']];
+let CTX = null;
+function startTabs(ctx, tab) {
+  CTX = ctx;
+  const tabs = ctx.admin ? ADMIN_TABS : STAFF_TABS, saved = ls.get('mate_tab');
+  return goTab(tab || (tabs.some(t => t[0] === saved) ? saved : tabs[0][0]));
+}
+async function goTab(k) {
+  const ctx = CTX, tabs = ctx.admin ? ADMIN_TABS : STAFF_TABS;
+  ls.set('mate_tab', k);
+  setNav(tabs, k, goTab);
+  const again = () => goTab(k), s = ctx.store, me = ctx.me;
+  try {
+    if (k === 'home') return await attend.staffHome(s, me, again);
+    if (k === 'sched') return await sched.scheduleView(s, me.id, null);
+    if (k === 'leave') return await sched.leaveForm(s, me, null);
+    if (k === 'rec') return await attend.myRecords(s, me, null);
+    if (k === 'today') return await todayTab(ctx, again);
+    if (k === 'ok') return await approvalTab(ctx, again);
+    if (k === 'more') return ctx.owner ? await ownerMore(s.id, again) : await managerMore(ctx, again);
+  } catch (e) {
+    console.error(e);
+    if (!api.auth.currentUser || CTX !== ctx) return; // 불러오는 중에 로그아웃·화면 바뀜 → 오류 안 띄움
+    show(`<div class="card"><b>오류</b><p>${esc(niceErr(e))}</p><button id="rt">다시 시도</button></div>`);
+    $('rt').onclick = again;
+  }
+}
+
+// 오늘 탭: (사장님) 처음 할 일 · 와이파이 경고 / (매니저) 내 출퇴근 카드 → 오늘 출근 현황
+async function todayTab(ctx, again) {
+  const s = ctx.store;
+  let pre;
+  if (ctx.owner) {
+    const wk = api.mondayOf(api.kst().date);
+    const [ms, att, schNow, schNext] = await Promise.all([api.members(s.id), attend.ownerSection(s), api.getSchedule(s.id, wk), api.getSchedule(s.id, api.addDays(wk, 7))]);
+    const act = ms.filter(m => m.status === 'active');
+    const steps = [
+      ['매장 와이파이 등록', '매장 안에서 폰을 매장 와이파이에 연결하고, ☰ 더보기 → 출퇴근 확인의 등록 버튼', att.wifiN > 0],
+      ['매장 위치 저장', '매장 안에서 ☰ 더보기 → 출퇴근 확인의 위치 버튼 (퇴근 확인용)', att.place],
+      ['직원 가입 · 승인', `직원에게 매장 이름 "${s.name}"을 알려 주고, 가입 신청이 오면 ✅ 승인 탭에서 승인`, act.length > 0],
+      ['정직원·매니저 정하기', '☰ 더보기 → 직원 옆 [설정]에서 정직원/알바, 매니저 고르기', act.some(m => m.role === 'manager' || m.type === '정')],
+      ['근무표 확정', '☰ 더보기 → 근무표 짜기에서 이번 주나 다음 주 근무표를 만들고 확정', !!((schNow && schNow.published) || (schNext && schNext.published))],
+    ];
+    const left = steps.filter(x => !x[2]).length;
+    pre = { html: (left ? `<div class="card" id="steps"><div class="row between"><b>처음 할 일</b><span class="pill">${steps.length - left}/${steps.length}</span></div>
+      <div class="list">${steps.map(([t, d, ok]) => `<div class="item" style="display:block"><b style="color:${ok ? 'var(--ok)' : 'var(--text)'}">${ok ? '✓' : '○'} ${t}</b>${ok ? '' : `<div class="small">${esc(d)}</div>`}</div>`).join('')}</div>
+      <p class="small"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p></div>` : '') + att.head, wire() {}, again };
+  } else {
+    const pc = await attend.punchCard(s, ctx.me, again);
+    pre = { html: `<div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(ctx.me.name)}님</h1><span class="pill on">매니저</span></div>${pc.html}`, wire: pc.wire, again };
+  }
+  return attend.todayScreen(s, null, null, pre);
+}
+
+// 승인 탭: 가입 신청 (사장님·매니저) + ⚠ 확인 필요
+async function approvalTab(ctx, again) {
+  const s = ctx.store;
+  const pending = (await api.members(s.id)).filter(m => m.status === 'pending');
+  const html = `<h2>가입 신청${pending.length ? ` <span class="small">· ${pending.length}명</span>` : ''}</h2>
+    ${pending.length ? `<div class="card hero"><div class="list">${pending.map(m => `
+      <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
+        <button class="sm" data-jok="${m.id}">승인</button><button class="sm ghost" data-jno="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
+      <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>`
+      : '<div class="card"><p class="small">새 가입 신청이 없어요.</p></div>'}`;
+  const wire = () => {
+    document.querySelectorAll('[data-jok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(s.id, b.dataset.jok, { status: 'active' }); toast('승인했어요'); await again(); }); });
+    document.querySelectorAll('[data-jno]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(s.id, b.dataset.jno); await again(); }); }; });
+  };
+  return attend.reviewScreen(s, null, { html, wire, again });
+}
+
+// 더보기 (매니저): 근무표·휴무신청 현황·기록, 내 것
+async function managerMore(ctx, again) {
+  const s = ctx.store, me = ctx.me;
+  show(`${top(s.name)}
+    <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1><span class="pill on">매니저</span></div>
+    <h2>근무표</h2>
+    <div class="card list">
+      <a href="#" class="item" id="goEdit">📅 근무표 짜기<span class="small">›</span></a>
+      <a href="#" class="item" id="goLvAdm">📝 휴무신청 현황<span class="small">›</span></a>
+      <a href="#" class="item" id="goSched">🗓️ 확정된 근무표 보기<span class="small">›</span></a></div>
+    <h2>기록</h2>
+    <div class="card list">
+      <a href="#" class="item" id="goMonth">📊 월 근무 기록<span class="small">›</span></a></div>
+    <h2>내 것</h2>
+    <div class="card list">
+      <a href="#" class="item" id="goMyRec">⏱️ 내 출퇴근 기록<span class="small">›</span></a>
+      ${sched.isAlba(me) ? '<a href="#" class="item" id="goMyLeave">📝 내 휴무신청<span class="small">›</span></a>' : ''}</div>`);
+  wireTop();
+  const on = (id, fn) => { if ($(id)) $(id).onclick = ev => { ev.preventDefault(); fn(); }; };
+  on('goEdit', () => sched.scheduleEditor(s, again));
+  on('goLvAdm', () => sched.leaveAdmin(s, again));
+  on('goSched', () => sched.scheduleView(s, me.id, again));
+  on('goMonth', () => records.monthScreen(s, again, null, false));
+  on('goMyRec', () => attend.myRecords(s, me, again));
+  on('goMyLeave', () => sched.leaveForm(s, me, again));
 }
 
 // 사장님이 번호를 다시 정해 준 뒤 임시 비밀번호로 로그인하면: 새 비밀번호 정하기
@@ -155,12 +258,17 @@ function newPinScreen(storeId, m) {
     if (pw !== $('np2').value) throw new Error('두 비밀번호가 달라요');
     if (pw === lastPw) throw new Error('임시 비밀번호와 다른, 앞으로 쓸 새 비밀번호를 넣어 주세요');
     await api.changePin(storeId, pw);
-    toast('새 비밀번호로 바꿨어요'); staffHome(storeId);
+    ls.del('mate_tab');
+    // 비밀번호를 바꾸면 로그인이 풀리기도 함 → 그때는 로그인 화면에서 새 비밀번호로
+    if (!api.auth.currentUser) return toast('새 비밀번호로 바꿨어요. 새 비밀번호로 다시 로그인해 주세요');
+    toast('새 비밀번호로 바꿨어요');
+    await staffHome(storeId).catch(err => { if (api.auth.currentUser) throw err; });
   });
 }
 
 // ---------- 사장님·총괄 홈 ----------
 async function ownerHome() {
+  setNav(null);
   const [orgs, mine] = await Promise.all([api.myOrgs(), api.myStores()]);
   const org = orgs[0] || null;
   const all = new Map(mine.map(s => [s.id, s]));
@@ -256,34 +364,23 @@ function storeForm(ctx) {
 }
 
 // ---------- 매장 화면 (그 매장 사장님) ----------
-async function storeScreen(id) {
+// 사장님: 매장 열기 → 아래 탭 (오늘 · 승인 · 더보기)
+async function storeScreen(id, tab) {
   const s = await api.getStore(id);
   api.ensureStoreName(s).catch(e => console.error('매장 이름 등록', e)); // 예전에 만든 매장도 이름 검색되게
-  const wk = api.mondayOf(api.kst().date);
-  const [ms, rules, attendHtml, schNow, schNext] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s),
-    api.getSchedule(id, wk), api.getSchedule(id, api.addDays(wk, 7))]);
-  const pending = ms.filter(m => m.status === 'pending');
+  return startTabs({ store: s, me: null, admin: true, owner: true }, tab);
+}
+
+// 더보기 (사장님): 직원 가입 링크·직원 목록·근무표·기록·매장 규칙·출퇴근 확인
+async function ownerMore(id, again) {
+  const s = await api.getStore(id);
+  CTX.store = s;
+  const [ms, rules, attendHtml] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s)]);
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
   const gone = ms.filter(m => m.status === 'left').sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
-  // 새 매장 처음 할 일 (다 하면 사라짐)
-  const steps = [
-    ['매장 와이파이 등록', '매장 안에서 폰을 매장 와이파이에 연결하고, 맨 아래 출퇴근 확인 칸의 등록 버튼', attendHtml.wifiN > 0],
-    ['매장 위치 저장', '매장 안에서 맨 아래 출퇴근 확인 칸의 위치 버튼 (퇴근 확인용)', attendHtml.place],
-    ['직원 초대 · 승인', '아래 직원 초대 링크를 단톡방에 올리고, 가입 신청이 오면 승인', act.length > 0],
-    ['정직원·매니저 정하기', '직원 옆 [설정]에서 정직원/알바, 매니저 고르기', act.some(m => m.role === 'manager' || m.type === '정')],
-    ['근무표 확정', '근무표 짜기에서 이번 주나 다음 주 근무표를 만들고 확정', !!((schNow && schNow.published) || (schNext && schNext.published))],
-  ];
-  const left = steps.filter(x => !x[2]).length;
-  const checklist = left ? `<div class="card" id="steps"><div class="row between"><b>처음 할 일</b><span class="pill">${steps.length - left}/${steps.length}</span></div>
-    <div class="list">${steps.map(([t, d, ok]) => `<div class="item" style="display:block"><b style="color:${ok ? 'var(--ok)' : 'var(--text)'}">${ok ? '✓' : '○'} ${t}</b>${ok ? '' : `<div class="small">${d}</div>`}</div>`).join('')}</div>
-    <p class="small"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p></div>` : '';
-  show(`${top(s.name, true)}${checklist}${attendHtml.head}
-    ${pending.length ? `<div class="card hero"><b>가입 신청 ${pending.length}명</b><div class="list">${pending.map(m => `
-      <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
-        <button class="sm" data-ok="${m.id}">승인</button><button class="sm ghost" data-no="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
-      <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>` : ''}
-    ${linkCard({ title: '직원 가입', desc: `직원은 앱 첫 화면 [직원 · 로그인 / 가입] → 매장 이름 <b>${esc(s.name)}</b> 검색 → 이름·비밀번호로 가입 신청하면 위에 승인 요청이 떠요. 이 링크나 QR로 들어오면 검색 없이 바로 돼요.`,
+  show(`${top(s.name)}
+    ${linkCard({ title: '직원 가입', desc: `직원은 앱 첫 화면 [직원 · 로그인 / 가입] → 매장 이름 <b>${esc(s.name)}</b> 검색 → 이름·비밀번호로 가입 신청하면 ✅ 승인 탭에 떠요. 이 링크나 QR로 들어오면 검색 없이 바로 돼요.`,
       url: `${BASE}?join=${s.joinCode}`, qr: true, extra: '<button class="sm ghost" id="regen">새 링크로 바꾸기</button>' })}
     <h2>직원 ${act.length}명</h2>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
@@ -298,6 +395,8 @@ async function storeScreen(id) {
     <h2>근무표</h2>
     <div class="row" style="gap:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
     <button class="ghost" id="goSched" style="margin-top:8px">확정된 근무표 보기</button>
+    <h2>기록</h2>
+    <button class="ghost" id="goMonth">월 근무 기록 · 엑셀</button>
     <h2>매장 규칙</h2>
     <div class="card">${r ? `<table class="kv">
       <tr><td>영업 요일</td><td>${DOW_ORDER.filter(d => r.open.days.includes(d)).map(d => DOW[d]).join(' ')}</td></tr>
@@ -308,11 +407,13 @@ async function storeScreen(id) {
       <tr><td>휴무신청</td><td>${DOW[r.leave.opensDow]} ${esc(r.leave.opensTime)} ~ ${DOW[r.leave.closesDow]} ${esc(r.leave.closesTime)}</td></tr></table>
       <p class="small">${r.id}부터 적용${rules.next ? ` · <b>${rules.next.id}부터 바뀐 규칙 예약됨</b>` : ''}</p>` : '<p class="small">규칙이 없어요.</p>'}
       <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>
-    ${attendHtml.settings}`);
-  wireTop(ownerHome); wireLinks();
-  attend.wireOwnerSection(s, () => storeScreen(id));
-  document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(id, b.dataset.ok, { status: 'active' }); toast('승인했어요'); storeScreen(id); }); });
-  document.querySelectorAll('[data-no]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(id, b.dataset.no); storeScreen(id); }); }; });
+    ${attendHtml.settings}
+    <h2>다른 매장</h2><button class="ghost" id="goStores">매장 목록 · 총괄 화면</button>
+    <p class="small" style="text-align:center"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p>`);
+  wireTop(); wireLinks();
+  attend.wireOwnerSection(s, again);
+  $('goStores').onclick = () => ownerHome();
+  $('goMonth').onclick = () => records.monthScreen(s, again, null, true);
   document.querySelectorAll('[data-mset]').forEach(b => {
     b.onclick = () => {
       const m = act.find(x => x.id === b.dataset.mset), host = $('ms_' + m.id);
@@ -326,7 +427,7 @@ async function storeScreen(id) {
         <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
         await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null });
-        toast('저장했어요'); storeScreen(id);
+        toast('저장했어요'); again();
       });
       $('mpin').onclick = e => {
         if (!confirm(m.name + '님이 비밀번호를 잊었나요? 임시 비밀번호를 만들면 지금 비밀번호는 더 이상 안 돼요.')) return;
@@ -340,15 +441,15 @@ async function storeScreen(id) {
       };
       $('mleft').onclick = e => {
         if (!confirm(m.name + '님을 퇴사 처리할까요? 로그인·출퇴근·근무표에서 빠지고, 지난 기록은 그대로 남아요.')) return;
-        busy(e.target, async () => { await api.setMember(id, m.id, { status: 'left', leftAt: api.F.serverTimestamp() }); toast('퇴사 처리했어요'); storeScreen(id); });
+        busy(e.target, async () => { await api.setMember(id, m.id, { status: 'left', leftAt: api.F.serverTimestamp() }); toast('퇴사 처리했어요'); again(); });
       };
     };
   });
-  document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active' }); toast('다시 직원이 됐어요'); storeScreen(id); }); }; });
-  $('goEdit').onclick = () => sched.scheduleEditor(s, () => storeScreen(id));
-  $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => storeScreen(id));
-  $('goSched').onclick = () => sched.scheduleView(s, null, () => storeScreen(id));
-  $('regen').onclick = e => { if (confirm('지금 링크는 더 이상 안 돼요. 새 링크로 바꿀까요?')) busy(e.target, async () => { await api.newJoinCode(s); storeScreen(id); }); };
+  document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active' }); toast('다시 직원이 됐어요'); again(); }); }; });
+  $('goEdit').onclick = () => sched.scheduleEditor(s, again);
+  $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => again());
+  $('goSched').onclick = () => sched.scheduleView(s, null, () => again());
+  $('regen').onclick = e => { if (confirm('지금 링크는 더 이상 안 돼요. 새 링크로 바꿀까요?')) busy(e.target, async () => { await api.newJoinCode(s); again(); }); };
   $('editRules').onclick = () => rulesScreen(s, (rules.next || r || { ...STORE_RULES_DEFAULT }));
 }
 
@@ -357,18 +458,19 @@ function rulesScreen(s, base) {
   show(`${top('매장 규칙 바꾸기', true)}<div class="card">${rulesFields(base)}
     <label>언제부터</label><div class="row"><button class="sm ghost" id="fNow">이번 달부터 (${now})</button><button class="sm" id="fNext">다음 달부터 (${next})</button></div>
     <p class="small">이번 달부터 = 이번 달 1일부터 다시 계산. 다음 달부터 = 지금 달 급여는 그대로.</p></div>`);
-  wireTop(() => storeScreen(s.id));
+  wireTop(() => storeScreen(s.id, 'more'));
   const save = from => async e => busy(e.target, async () => {
     const { id, from: _f, ...plain } = base;
     const r = readRules({ ...clone(STORE_RULES_DEFAULT), ...clone(plain) });
     await api.saveRules(s.id, from, r);
-    toast(from + '부터 적용돼요'); storeScreen(s.id);
+    toast(from + '부터 적용돼요'); storeScreen(s.id, 'more');
   });
   $('fNow').onclick = save(now); $('fNext').onclick = save(next);
 }
 
 // ---------- 총괄: 다른 사장님 매장 = 합계만 ----------
 async function statsScreen(s) {
+  setNav(null);
   const st = (await api.stats(s.id)).sort((a, b) => (a.id < b.id ? 1 : -1));
   const pct = v => (v == null ? '-' : Math.round(v * 1000) / 10 + '%');
   show(`${top(s.name, true)}<p class="small">다른 사장님 매장이라 월 합계와 요일별 숫자만 보여요.</p>

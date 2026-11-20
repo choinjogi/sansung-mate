@@ -14,7 +14,7 @@ const SHOTS = process.env.SHOTS;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer(async (req, res) => {
   const p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
-  const file = join(ROOT, p.endsWith('/') ? p + 'index.html' : p);
+  const file = join(ROOT, /[\\/]$/.test(p) ? p + 'index.html' : p); // 윈도우에서는 / 가 \ 로 바뀜
   try { const b = await readFile(file); res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream' }); res.end(b); }
   catch { res.writeHead(404); res.end(); }
 }).listen(5173);
@@ -43,10 +43,11 @@ let step = 0;
 async function shot(page, name) { if (SHOTS) await page.waitForTimeout(400), await page.screenshot({ path: `${SHOTS}/${String(++step).padStart(2, '0')}-${name}.png`, fullPage: true }); }
 function watch(page, who) {
   page.on('dialog', d => d.accept());
-  page.on('pageerror', e => { console.error(`[${who}] 화면 오류:`, e.message); process.exitCode = 1; });
+  page.on('pageerror', e => { console.error(`[${who}] 화면 오류:`, e.stack || e.message); process.exitCode = 1; });
   page.on('console', m => { if (m.type() === 'error') console.error(`[${who}] console:`, m.text()); });
 }
 const text = page => page.locator('#app').innerText();
+const tab = (page, name) => page.locator('#nav a', { hasText: name }).click(); // 아래 탭
 async function googleIn(page, email, name) {
   await page.waitForFunction(() => window.__mate);
   await page.evaluate(([e, n]) => window.__mate.testGoogle(e, n), [email, name]);
@@ -81,7 +82,9 @@ try {
   await boss.getByText('매장 이름을 넣어 주세요').waitFor();
   await fillRules(boss, '산성', 10030);
   await boss.getByText('매장 만들기', { exact: true }).click();
-  await boss.getByText('직원 가입').first().waitFor();
+  await boss.getByText('처음 할 일').waitFor();           // 오늘 탭
+  await tab(boss, '더보기');
+  await boss.getByText('규칙 바꾸기').waitFor();
   const joinUrl = (await boss.locator('.url').first().innerText()).trim();
   assert.match(joinUrl, /\?join=[A-Z0-9]{8}$/);
   assert.ok(await boss.locator('.qr svg').count(), 'QR이 없음');
@@ -89,7 +92,7 @@ try {
   await shot(boss, '산성매장');
 
   // 2) 대표님: 다른 사장님 초대 링크
-  await boss.locator('#back').click();
+  await boss.locator('#goStores').click();
   await boss.getByText('초대 링크 만들기').click();
   const ownerUrl = (await boss.locator('#ownerInvOut .url').first().innerText()).trim();
   assert.match(ownerUrl, /\?owner=[A-Z0-9]{10}$/);
@@ -103,7 +106,9 @@ try {
   await kim.getByText('초대받은 매장 만들기').click();
   await fillRules(kim, '두번째', 10500);
   await kim.getByText('매장 만들기', { exact: true }).click();
-  await kim.getByText('직원 가입').first().waitFor();
+  await kim.getByText('처음 할 일').waitFor();
+  await tab(kim, '더보기');
+  await kim.getByText('규칙 바꾸기').waitFor();
   assert.match(await text(kim), /10,500원/);
   // 같은 초대로 또 만들 수 없음
   await kim.goto(ownerUrl);
@@ -114,7 +119,7 @@ try {
   // 4) 직원: 산성 초대 링크 → 가입 신청 → 승인 대기
   const alba = await (await phone()).newPage(); watch(alba, '알바');
   await alba.goto(joinUrl);
-  await alba.getByText('초대받은 매장').waitFor();
+  await alba.locator('#pw2').waitFor();
   assert.match(await text(alba), /산성/);
   await alba.fill('#nm', '김알바'); await alba.fill('#pw', '123456'); await alba.fill('#pw2', '123457');
   await alba.getByText('가입 신청').click();
@@ -135,10 +140,13 @@ try {
   // 5) 대표님: 산성에서 승인 → 매니저로
   await boss.reload();
   await boss.locator('[data-store]', { hasText: '산성' }).click();
-  await boss.getByText('가입 신청 1명').waitFor();
+  await tab(boss, '승인');
+  await boss.locator('[data-jok]').waitFor();
   await shot(boss, '승인요청');
-  await boss.getByText('승인', { exact: true }).click();
-  await boss.getByText('직원 1명').waitFor();
+  await boss.locator('[data-jok]').click();
+  await boss.getByText('새 가입 신청이 없어요').waitFor();
+  await tab(boss, '더보기');
+  await boss.getByText('직원 1명', { exact: true }).waitFor();
   await boss.locator('[data-mset]').first().click();
   await boss.selectOption('#mr', 'manager');
   await boss.locator('#msv').click();
@@ -155,14 +163,16 @@ try {
   await alba.locator('#nm').waitFor();
   await alba.fill('#nm', '김알바'); await alba.fill('#pw', '000000');
   await alba.locator('#go').click();
-  await alba.getByText('이름이나 번호가 맞지 않아요').waitFor();
+  await alba.getByText('이름이나 비밀번호가 맞지 않아요').waitFor();
   await alba.fill('#pw', '123456');
   await alba.locator('#go').click();
   await alba.getByText('김알바님').waitFor();
 
   // 7-1) 출퇴근: 사장님이 매장 와이파이·위치 등록
   await net(boss, '211.36.1.9');
+  await tab(boss, '오늘');
   await boss.getByText('매장 와이파이 등록 전이에요').waitFor();
+  await tab(boss, '더보기');
   await boss.getByText('이 와이파이를 매장으로 등록').click();
   await boss.getByText('등록 1개').waitFor();
   await boss.getByText('지금 위치를 매장 위치로').click();
@@ -173,7 +183,7 @@ try {
   // 7-2) 김알바: 매장 와이파이에서 출근 → ✓
   await net(alba, '211.36.1.9');
   await alba.locator('#pIn').click();
-  await alba.getByText('✓ 매장 와이파이').waitFor();
+  await alba.getByText('✓ 매장 와이파이').first().waitFor();
   assert.doesNotMatch(await text(alba), /찍히지 않았어요/);
   await shot(alba, '출근완료');
 
@@ -185,9 +195,11 @@ try {
   await park.getByText('승인 기다리는 중').waitFor();
   await boss.reload();
   await boss.locator('[data-store]', { hasText: '산성' }).click();
-  await boss.getByText('가입 신청 1명').waitFor();
-  await boss.getByText('승인', { exact: true }).click();
-  await boss.getByText('직원 2명').waitFor();
+  await tab(boss, '승인');
+  await boss.locator('[data-jok]').click();
+  await boss.getByText('새 가입 신청이 없어요').waitFor();
+  await tab(boss, '더보기');
+  await boss.getByText('직원 2명', { exact: true }).waitFor();
   await park.getByText('승인됐는지 다시 보기').click();
   await net(park, '9.9.9.9');
   await park.locator('#pIn').click();
@@ -204,31 +216,29 @@ try {
   await net(alba, '9.9.9.9');
   await alba.locator('#pOut').click();
   await alba.locator('#oYes').click();
-  await alba.getByText('✓ 매장 0m').waitFor();
+  await alba.getByText('✓ 매장 0m').first().waitFor();
 
   // 7-5) 사장님: 확인 필요 2건 → 1건 확인, 오늘 현황에서 박알바 출근 시각 고치기
   await boss.reload();
   await boss.locator('[data-store]', { hasText: '산성' }).click();
-  await boss.getByText('확인 필요 2').click();
+  await tab(boss, '승인');
   await boss.getByText('이번 달 ⚠ 횟수').waitFor();
   assert.equal(await boss.locator('[data-ok]').count(), 2);
   assert.match(await text(boss), /박알바\s+2번/);
   await shot(boss, '확인필요');
   await boss.locator('[data-ok]').first().click();
   await boss.waitForFunction(() => document.querySelectorAll('[data-ok]').length === 1);
-  await boss.locator('#back').click();
-  await boss.getByText('오늘 출근 현황').click();
+  await tab(boss, '오늘');
   await boss.getByText('출근 현황').first().waitFor();
   await boss.locator('[data-ed][data-k="in"]').nth(1).click(); // 이름순: 김알바, 박알바
   await boss.fill('#edt', '18:05');
   await boss.locator('#eds').click();
   await boss.getByText('18:05').waitFor();
   await shot(boss, '오늘현황');
-  await boss.locator('#back').click();
-  await boss.getByText('규칙 바꾸기').waitFor();
-
-  // 7-5-1) 처음 할 일: 와이파이·위치·직원·매니저는 됐고 근무표만 남음
+  // 7-5-1) 처음 할 일(오늘 탭): 와이파이·위치·직원·매니저는 됐고 근무표만 남음
   assert.match(await text(boss), /처음 할 일\s+4\/5/);
+  await tab(boss, '더보기');
+  await boss.getByText('규칙 바꾸기').waitFor();
   // 7-5-2) 월 근무 기록: 두 명 다 1일, 엑셀 내려받기
   await boss.locator('#goMonth').click();
   await boss.getByText('전체 근무 시간').waitFor();
@@ -253,7 +263,7 @@ try {
     body: JSON.stringify({ fields: { opensBeforeMin: { integerValue: '11520' }, closesBeforeMin: { integerValue: '-1' } } }) });
   assert.ok(lr.ok, '휴무신청 시간 설정 실패');
   // 박알바: 휴무신청 (다음 주 월·화 못 나옴, 토 오전 가능)
-  await park.locator('#goLeave').click();
+  await tab(park, '휴무신청');
   await park.getByText('신청 받는 중').waitFor();
   await park.locator('label:has(input[name=off])').nth(0).click();
   await park.locator('label:has(input[name=off])').nth(1).click();
@@ -282,6 +292,7 @@ try {
   await shot(boss, '근무표짜기');
   // 김알바(매니저): 다음 주 근무표 보기
   await alba.reload();
+  await tab(alba, '더보기');
   await alba.locator('#goSched').click();
   await alba.getByText('근무표').first().waitFor();
   await alba.locator('#wNext').click();
@@ -291,13 +302,13 @@ try {
   // 사장님: 오늘 일찍 부르기
   await boss.locator('#back').click(); // 휴무신청 현황
   await boss.getByText('이 주 근무표 짜기').waitFor();
-  await boss.locator('#back').click(); // 매장
-  await boss.getByText('오늘 출근 현황').click();
+  await boss.locator('#back').click(); // 더보기
+  await tab(boss, '오늘');
   await boss.selectOption('#en', { label: '박알바' });
   await boss.fill('#et', '17:00');
   await boss.locator('#eb').click();
   await boss.getByText('일찍 부름 17:00').waitFor();
-  await boss.locator('#back').click();
+  await tab(boss, '더보기');
   await boss.getByText('규칙 바꾸기').waitFor();
 
   // 8) 대표님: 규칙 다음 달부터 바꾸기, 초대 링크 새로 → 옛 링크 무효
@@ -315,14 +326,16 @@ try {
   // 8-1) 김사장: 처음 할 일 0/5, 월 근무 기록에서 대표님께 합계 보내기
   await kim.reload();
   await kim.locator('[data-store]', { hasText: '두번째' }).click();
+  await tab(kim, '오늘');
   await kim.getByText('처음 할 일').waitFor();
   assert.match(await text(kim), /0\/5/);
+  await tab(kim, '더보기');
   await kim.locator('#goMonth').click();
   await kim.locator('#stat').click();
   await kim.getByText('대표님께 합계를 보냈어요').waitFor();
 
   // 9) 대표님: 김사장 매장은 합계만
-  await boss.locator('#back').click();
+  await boss.locator('#goStores').click();
   await boss.locator('[data-store]', { hasText: '두번째' }).click();
   await boss.getByText('월 합계와 요일별 숫자만').waitFor();
   await shot(boss, '합계만');
@@ -358,9 +371,10 @@ try {
   await park.reload();
   await park.getByText('로그아웃').click();
   await park.locator('#nm').waitFor();
-  await boss.locator('#back').click();
+  await boss.locator('#back').click();   // 합계 화면 → 매장 목록
   await boss.locator('[data-store]', { hasText: '산성' }).click();
-  await boss.getByText('직원 2명').waitFor();
+  await tab(boss, '더보기');
+  await boss.getByText('직원 2명', { exact: true }).waitFor();
   const parkRow = () => boss.locator('.item', { hasText: '박알바' }).first();
   await parkRow().locator('[data-mset]').click();
   await boss.locator('#mpin').click();
@@ -387,18 +401,28 @@ try {
   // 12) 사장님: 박알바 퇴사 처리 → 직원 목록·로그인에서 빠짐, 다시 일함으로 되돌리기
   await boss.reload();
   await boss.locator('[data-store]', { hasText: '산성' }).click();
-  await boss.getByText('직원 2명').waitFor();
+  await tab(boss, '더보기');
+  await boss.getByText('직원 2명', { exact: true }).waitFor();
   await parkRow().locator('[data-mset]').click();
   await boss.locator('#mleft').click();
   await boss.getByText('퇴사한 직원 1명').waitFor();
-  await boss.getByText('직원 1명').waitFor();
+  await boss.getByText('직원 1명', { exact: true }).waitFor();
   await park.reload();
   await park.getByText('퇴사 처리된 계정이에요').waitFor();
   await boss.getByText('퇴사한 직원 1명').click();
   await boss.locator('[data-back]').click();
-  await boss.getByText('직원 2명').waitFor();
+  await boss.getByText('직원 2명', { exact: true }).waitFor();
   await park.reload();
   await park.getByText('박알바님').waitFor();
+
+  // 13) 아래 탭: 직원 4개, 매니저·사장님 3개. 내 기록 탭
+  assert.equal(await park.locator('#nav a').count(), 4);
+  await tab(park, '내 기록');
+  await park.getByText('내 출퇴근').waitFor();
+  assert.equal(await boss.locator('#nav a').count(), 3);
+  await alba.reload();
+  await alba.getByText('김알바님').waitFor();
+  assert.equal(await alba.locator('#nav a').count(), 3);
 
   console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·비밀번호 임의 재설정·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {

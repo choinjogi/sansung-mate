@@ -1,6 +1,6 @@
 // 화면 공용 도구 (app.js, attend.js가 같이 씀)
-import { qrcode } from './vendor/firebase.js?v=6';
-import * as api from './fb.js?v=6';
+import { qrcode } from './vendor/firebase.js?v=7';
+import * as api from './fb.js?v=7';
 
 export const $ = id => document.getElementById(id);
 export const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,8 +21,16 @@ export function top(title, back) {
     ${api.auth.currentUser ? '<button class="sm ghost" id="out">로그아웃</button>' : ''}</div>`;
 }
 export function wireTop(back) {
-  if ($('out')) $('out').onclick = async () => { await api.logout(); };
-  if ($('back')) $('back').onclick = back;
+  if ($('out')) $('out').onclick = async () => { if (confirm('로그아웃할까요?')) { ls.del('mate_tab'); await api.logout(); } }; // 다시 로그인하면 첫 탭부터
+  if ($('back')) { if (back) $('back').onclick = back; else $('back').remove(); } // 탭 첫 화면은 뒤로 버튼 없음
+}
+// 아래 탭 (산성 앱과 같은 모양). tabs = [[키, 아이콘, 이름]], 없으면 탭을 지움
+export function setNav(tabs, cur, onGo) {
+  let n = $('nav');
+  if (!tabs) { if (n) n.remove(); return; }
+  if (!n) { n = document.createElement('nav'); n.id = 'nav'; document.body.appendChild(n); }
+  n.innerHTML = `<div class="in">${tabs.map(([k, i, t]) => `<a href="#" data-tab="${k}" class="${k === cur ? 'on' : ''}"><i>${i}</i>${t}</a>`).join('')}</div>`;
+  n.onclick = e => { const a = e.target.closest('a[data-tab]'); if (!a) return; e.preventDefault(); onGo(a.dataset.tab); };
 }
 // 버튼 눌렀을 때: 잠그고, 실패하면 이유를 보여 줌
 export async function busy(btn, fn) {

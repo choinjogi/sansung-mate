@@ -1,9 +1,9 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=6';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=6';
-import * as sched from './sched.js?v=6';
-import * as records from './records.js?v=6';
+import * as api from './fb.js?v=7';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=7';
+import * as sched from './sched.js?v=7';
+import * as records from './records.js?v=7';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -28,10 +28,10 @@ function box(label, p, late, attrs = '') {
     <div class="tval" style="color:${hm ? (late || p.flag ? 'var(--warn)' : 'var(--ok)') : 'var(--dim)'}">${esc(hm || '--:--')}</div><div class="thow">${how(p)}</div></div>`;
 }
 
-// ---------- 직원 홈 ----------
+// ---------- 오늘 출퇴근 카드 (직원 홈 탭, 매니저는 오늘 탭 맨 위) ----------
 let LAST = null; // 방금 찍은 결과 (⚠ 안내를 보여 주려고)
-export async function staffHome(storeId, me, store, again) {
-  const t = api.kst(), uid = api.auth.currentUser.uid;
+export async function punchCard(store, me, again) {
+  const storeId = store.id, t = api.kst(), uid = api.auth.currentUser.uid;
   const [rules, tin, tout, sch] = await Promise.all([api.rulesOf(storeId), api.punchDoc(storeId, t.date, uid, 'in'), api.punchDoc(storeId, t.date, uid, 'out'), api.getSchedule(storeId, api.mondayOf(t.date))]);
   let date = t.date, pin = tin, pout = tout;
   if (!tin && !tout && t.hour < 12) { // 자정 넘겨 일하는 중이면 어제 근무를 보여 줌
@@ -41,22 +41,11 @@ export async function staffHome(storeId, me, store, again) {
   }
   const r = rules.current, plan = sched.todayPlan(date === t.date ? sch : await api.getSchedule(storeId, api.mondayOf(date)), r, { ...me, id: uid }, date);
   const start = plan.start, late = lateMin(pin && api.hmOf(pin.at), start, r ? r.open.lateGraceMin : 0);
-  const mStart = t.date.slice(0, 8) + '01';
-  const [mine, flagged] = await Promise.all([
-    api.myPunches(storeId, mStart, t.date),
-    me.role === 'manager' ? api.flaggedSince(storeId, api.addDays(t.date, -31)) : Promise.resolve([]),
-  ]);
-  const todo = flagged.filter(p => !p.reviewed).length;
-  const byDay = {};
-  mine.forEach(p => { (byDay[p.date] = byDay[p.date] || {})[p.kind] = p; });
-  const days = Object.keys(byDay).sort().reverse();
   const next = !pin && !pout ? 'in' : !pout ? 'out' : null;
   const res = LAST && LAST.date === date ? LAST : null;
-
-  show(`${top(store.name)}
-    <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1>${me.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}</div>
+  const html = `
     <div class="card hero">
-      <div class="row between"><b>${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">${plan.published ? esc(sched.codeText(plan.code)) + ' · ' : ''}${plan.early ? '일찍 부름 ' : '정시 '}${esc(start)}</span></div>
+      <div class="row between"><b>⏱️ ${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">${plan.published ? esc(sched.codeText(plan.code)) + ' · ' : ''}${plan.early ? '일찍 부름 ' : '정시 '}${esc(start)}</span></div>
       <div class="tgrid">${box('출근', pin, late)}${box('퇴근', pout, 0)}</div>
       ${next === 'in' ? `<button id="pIn" class="big-btn">출근</button><button class="ghost sm" id="pOut0" style="width:100%;margin-top:8px">출근을 못 찍었어요 · 퇴근 찍기</button>`
         : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : '<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>'}
@@ -67,59 +56,95 @@ export async function staffHome(storeId, me, store, again) {
       <p>기록은 됐고, 사장님이 확인해요.</p>
       <p class="small">· 폰이 매장 와이파이에 연결돼 있는지 확인해 주세요 (모바일 데이터 말고)<br>
       · 아이폰: 설정 → Wi-Fi → 매장 와이파이 옆 ⓘ → <b>IP 주소 추적 제한</b> 끄기<br>
-      ${res.geo ? '' : '· 위치 허용도 켜 주세요 (퇴근 확인에 써요)'}</p></div>` : ''}
-    <div class="row" style="gap:8px"><button class="ghost" id="goSched">근무표</button><button class="ghost" id="goLeave">휴무신청</button></div>
-    ${me.role === 'manager' ? `<h2>매니저</h2><div class="row" style="gap:8px"><button class="ghost" id="goToday">오늘 출근 현황</button><button class="ghost" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
-      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
-      <button class="ghost" id="goMonth" style="margin-top:8px">월 근무 기록</button>` : ''}
-    <h2>이번 달 기록</h2>
-    <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${days.map(d => {
-      const x = byDay[d], i = x.in, o = x.out, li = lateMin(i && api.hmOf(i.at), start, r ? r.open.lateGraceMin : 0);
-      const cell = p => (p ? `${esc(api.hmOf(p.at))}${p.flag ? ' ⚠' : ''}` : '<span class="small">-</span>');
-      return `<tr><td>${dayLabel(d)}</td><td style="text-align:center">${cell(i)}${li ? ` <span class="small" style="color:var(--warn)">+${li}분</span>` : ''}</td><td>${cell(o)}</td></tr>`;
-    }).join('')}</table>` : '<p class="small">이번 달 기록이 아직 없어요.</p>'}</div>`);
-  wireTop();
-  const doPunch = (kind, alone) => e => busy(e.target, async () => {
-    LAST = await api.punch(storeId, kind, alone);
-    toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
-    await again();
-  });
-  // 퇴근: 알바가 폰을 들고 사장님·매니저에게 가서 눌러 달라고 함 (번호 없이 버튼만). 아무도 없으면 혼자 퇴근 → ⚠
-  const outScreen = () => {
-    show(`${top(store.name)}
-      <div class="card hero" style="text-align:center;margin-top:16px">
-        <div style="font-size:44px;line-height:1.2">🙋</div>
-        <h1 style="margin:8px 0 4px">${esc(me.name)}님 퇴근</h1>
-        <p style="margin:0 0 4px">이 폰을 들고 <b>사장님이나 매니저</b>에게 가서<br>“퇴근할게요!” 하고 눌러 달라고 하세요.</p>
-        <button id="oYes" class="big-btn" style="margin-top:16px">퇴근 (사장님·매니저가 눌러요)</button>
-        <button class="ghost sm" id="oAlone" style="width:100%;margin-top:12px">확인해 줄 사람이 없어요 · 혼자 퇴근</button>
-        <button class="ghost sm" id="oBack" style="width:100%;margin-top:8px">취소</button>
-      </div>`);
-    wireTop();
-    $('oYes').onclick = doPunch('out', false);
-    $('oAlone').onclick = e => {
-      $('oAlone').outerHTML = `<div class="card" style="border-color:var(--warn);margin-top:12px;text-align:left"><b style="color:var(--warn)">혼자 퇴근하면 ⚠가 붙어요</b>
-        <p class="small">사장님이 나중에 확인해요. 사장님·매니저가 매장에 있으면 꼭 눌러 달라고 하세요.</p>
-        <button id="oAlone2" class="sm" style="width:100%;margin-top:8px">그래도 혼자 퇴근</button></div>`;
-      $('oAlone2').onclick = doPunch('out', true);
+      ${res.geo ? '' : '· 위치 허용도 켜 주세요 (퇴근 확인에 써요)'}</p></div>` : ''}`;
+  const wire = () => {
+    const doPunch = (kind, alone) => e => busy(e.target, async () => {
+      LAST = await api.punch(storeId, kind, alone);
+      toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
+      await again();
+    });
+    // 퇴근: 알바가 폰을 들고 사장님·매니저에게 가서 눌러 달라고 함 (비밀번호 없이 버튼만). 아무도 없으면 혼자 퇴근 → ⚠
+    const outScreen = () => {
+      show(`${top(store.name)}
+        <div class="card hero" style="text-align:center;margin-top:16px">
+          <div style="font-size:44px;line-height:1.2">🙋</div>
+          <h1 style="margin:8px 0 4px">${esc(me.name)}님 퇴근</h1>
+          <p style="margin:0 0 4px">이 폰을 들고 <b>사장님이나 매니저</b>에게 가서<br>“퇴근할게요!” 하고 눌러 달라고 하세요.</p>
+          <button id="oYes" class="big-btn" style="margin-top:16px">퇴근 (사장님·매니저가 눌러요)</button>
+          <button class="ghost sm" id="oAlone" style="width:100%;margin-top:12px">확인해 줄 사람이 없어요 · 혼자 퇴근</button>
+          <button class="ghost sm" id="oBack" style="width:100%;margin-top:8px">취소</button>
+        </div>`);
+      wireTop();
+      $('oYes').onclick = doPunch('out', false);
+      $('oAlone').onclick = () => {
+        $('oAlone').outerHTML = `<div class="card" style="border-color:var(--warn);margin-top:12px;text-align:left"><b style="color:var(--warn)">혼자 퇴근하면 ⚠가 붙어요</b>
+          <p class="small">사장님이 나중에 확인해요. 사장님·매니저가 매장에 있으면 꼭 눌러 달라고 하세요.</p>
+          <button id="oAlone2" class="sm" style="width:100%;margin-top:8px">그래도 혼자 퇴근</button></div>`;
+        $('oAlone2').onclick = doPunch('out', true);
+      };
+      $('oBack').onclick = () => again();
     };
-    $('oBack').onclick = () => again();
+    const go = kind => (kind === 'out' ? () => outScreen() : doPunch('in', false));
+    if ($('pIn')) $('pIn').onclick = go('in');
+    if ($('pOut')) $('pOut').onclick = go('out');
+    if ($('pOut0')) $('pOut0').onclick = go('out');
   };
-  const go = kind => (kind === 'out' ? () => outScreen() : doPunch('in', false));
-  if ($('pIn')) $('pIn').onclick = go('in');
-  if ($('pOut')) $('pOut').onclick = go('out');
-  if ($('pOut0')) $('pOut0').onclick = go('out');
-  if ($('goToday')) $('goToday').onclick = () => todayScreen(store, again);
-  if ($('goReview')) $('goReview').onclick = () => reviewScreen(store, again);
-  $('goSched').onclick = () => sched.scheduleView(store, uid, again);
-  $('goLeave').onclick = () => sched.leaveForm(store, me, again);
-  if ($('goEdit')) $('goEdit').onclick = () => sched.scheduleEditor(store, again);
-  if ($('goLvAdm')) $('goLvAdm').onclick = () => sched.leaveAdmin(store, again);
-  if ($('goMonth')) $('goMonth').onclick = () => records.monthScreen(store, again, null, false);
+  return { html, wire, sch, today: t.date };
+}
+
+// 이번 주 내 근무 (7칸)
+const SHORT = { O: '근무', '오전': '오전', 'O+오전': '오전+저녁', X: '휴무', '': '-' };
+export function myWeek(sch, uid, today) {
+  const week = api.mondayOf(today), dates = api.weekDates(week);
+  if (!sch || !sch.published) return { html: '<div class="card"><p class="small">이번 주 근무표가 아직 확정 전이에요.</p></div>', n: 0 };
+  const row = (sch.cells || {})[uid] || [];
+  const n = row.filter(c => ['O', '오전', 'O+오전'].includes(c)).length;
+  return { n, html: `<div class="week">${dates.map((d, i) => { const c = row[i] || ''; const work = ['O', '오전', 'O+오전'].includes(c); return `<div class="day${work ? ' work' : ''}${c === 'X' ? ' offd' : ''}${d === today ? ' today' : ''}"><b>${DOW[api.dowOf(d)]}</b><span${work || c === 'X' ? '' : ' style="color:var(--dim)"'}>${esc(SHORT[c] || c)}</span></div>`; }).join('')}</div>` };
+}
+
+// ---------- 직원 홈 탭 ----------
+export async function staffHome(store, me, again) {
+  const pc = await punchCard(store, me, again);
+  const w = myWeek(pc.sch, api.auth.currentUser.uid, pc.today);
+  show(`${top(store.name)}
+    <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1>${me.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}</div>
+    ${pc.html}
+    <h2>이번 주 내 근무${w.n ? ` <span class="small">· ${w.n}일</span>` : ''}</h2>${w.html}`);
+  wireTop();
+  pc.wire();
+}
+
+// ---------- 내 기록 탭 (이번 달 내 출퇴근) ----------
+const nextMonth = m => { const [y, mo] = m.split('-').map(Number); return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; };
+const prevMonth = m => { const [y, mo] = m.split('-').map(Number); return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`; };
+export async function myRecords(store, me, back, month) {
+  const now = api.month(), t = api.kst(); month = month || now;
+  const from = month + '-01', to = month === now ? t.date : api.addDays(nextMonth(month) + '-01', -1);
+  const [r, mine] = await Promise.all([api.rulesFor(store.id, month), api.myPunches(store.id, from, to)]);
+  const start = startOf(me, r), grace = r ? r.open.lateGraceMin : 0;
+  const byDay = {};
+  mine.forEach(p => { (byDay[p.date] = byDay[p.date] || {})[p.kind] = p; });
+  const days = Object.keys(byDay).sort().reverse();
+  let lateN = 0, flagN = 0;
+  const rows = days.map(d => {
+    const x = byDay[d], i = x.in, o = x.out, li = lateMin(i && api.hmOf(i.at), start, grace);
+    if (li) lateN++; if ((i && i.flag) || (o && o.flag)) flagN++;
+    const cell = p => (p ? `${esc(api.hmOf(p.at))}${p.flag ? ' ⚠' : ''}` : '<span class="small">-</span>');
+    return `<tr><td>${dayLabel(d)}</td><td style="text-align:center">${cell(i)}${li ? ` <span class="small" style="color:var(--warn)">+${li}분</span>` : ''}</td><td>${cell(o)}</td></tr>`;
+  }).join('');
+  show(`${top('내 기록', true)}
+    <div class="row between"><h2 style="margin:12px 0">${esc(month.replace('-', '년 '))}월 내 출퇴근</h2>
+      <span class="row" style="gap:6px"><button class="sm ghost" id="mPrev">‹ 지난달</button>${month < now ? '<button class="sm ghost" id="mNext">다음 ›</button>' : ''}</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${days.length}일</span><span class="pill warn">지각 ${lateN}번</span><span class="pill warn">⚠ ${flagN}번</span></div>
+    <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${rows}</table>` : '<p class="small">이 달 기록이 아직 없어요.</p>'}</div>
+    <p class="small">지각은 정시(${esc(start)}) 기준이에요. 일찍 부른 날은 그 시각 기준으로 계산돼요. 틀린 기록은 사장님·매니저에게 말해 주세요.</p>`);
+  wireTop(back);
+  $('mPrev').onclick = () => myRecords(store, me, back, prevMonth(month));
+  if ($('mNext')) $('mNext').onclick = () => myRecords(store, me, back, nextMonth(month));
 }
 
 // ---------- 오늘 출근 현황 (매니저·사장님) ----------
-export async function todayScreen(store, back, date) {
+export async function todayScreen(store, back, date, pre) {
   const t = api.kst(); date = date || t.date;
   const [ms, ps, rules, sch] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, date, date), api.rulesOf(store.id), api.getSchedule(store.id, api.mondayOf(date))]);
   const r = rules.current, grace = r ? r.open.lateGraceMin : 0, isToday = date === t.date;
@@ -134,8 +159,8 @@ export async function todayScreen(store, back, date) {
     return { m, x, start, late, state, show: !hasSched || sched_ || x.in || x.out, early: plan.early };
   }).filter(x => x.show);
   const cnt = f => rows.filter(f).length;
-  show(`${top('출근 현황', true)}
-    <div class="row between"><h2 style="margin:12px 0">${date === t.date ? '오늘' : ''} ${dayLabel(date)}</h2>
+  show(`${top(back ? '출근 현황' : store.name, true)}${pre ? pre.html : ''}
+    <div class="row between"><h2 style="margin:12px 0">${date === t.date ? '오늘' : ''} ${dayLabel(date)} 출근 현황</h2>
       <span class="row" style="gap:6px"><button class="sm ghost" id="prev">‹ 전날</button>${date < t.date ? '<button class="sm ghost" id="nextd">다음 ›</button>' : ''}</span></div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(x => x.x.in || x.x.out)}</span><span class="pill warn">지각 ${cnt(x => x.late)}</span>
       <span class="pill warn">⚠ ${ps.filter(p => p.flag && !p.reviewed).length}</span>${hasSched ? `<span class="pill bad">미출근 ${cnt(x => x.state === '미출근')}</span><span class="pill">출근 전 ${cnt(x => x.state === '출근 전')}</span>` : `<span class="pill">기록 없음 ${cnt(x => !x.x.in && !x.x.out)}</span>`}</div>
@@ -151,9 +176,10 @@ export async function todayScreen(store, back, date) {
       <label>몇 시</label><input type="time" id="et" value="17:00" step="300">
       <button id="eb" style="margin-top:14px">${esc(dayLabel(date))} 일찍 부르기 등록</button></div>`);
   wireTop(back);
-  $('prev').onclick = () => todayScreen(store, back, api.addDays(date, -1));
-  if ($('nextd')) $('nextd').onclick = () => todayScreen(store, back, api.addDays(date, 1));
-  const again = () => todayScreen(store, back, date);
+  if (pre) pre.wire();
+  $('prev').onclick = () => todayScreen(store, back, api.addDays(date, -1), pre);
+  if ($('nextd')) $('nextd').onclick = () => todayScreen(store, back, api.addDays(date, 1), pre);
+  const again = () => (pre && pre.again ? pre.again() : todayScreen(store, back, date, pre));
   $('eb').onclick = e => busy(e.target, async () => {
     const id = $('en').value, hm = $('et').value;
     if (!id || !hm) throw new Error('이름과 시각을 골라 주세요');
@@ -185,13 +211,14 @@ function editor(host, store, m, date, kind, p, pin, again) {
 }
 
 // ---------- 확인 필요 (⚠ 기록 모아 보기) ----------
-export async function reviewScreen(store, back) {
+export async function reviewScreen(store, back, pre) {
   const t = api.kst(), mStart = t.date.slice(0, 8) + '01', from = [api.addDays(t.date, -31), mStart].sort()[0];
   const fl = (await api.flaggedSince(store.id, from)).sort((a, b) => (a.date + a.kind < b.date + b.kind ? 1 : -1));
   const todo = fl.filter(p => !p.reviewed);
   const month = {}; fl.filter(p => p.date >= mStart).forEach(p => { month[p.name] = (month[p.name] || 0) + 1; });
   const why = p => (p.why === 'alone' ? '확인 없이 혼자 퇴근' : (p.alone ? '혼자 퇴근 · ' : '') + (p.why === 'far' && p.dist != null ? `매장에서 ${km(p.dist)}` : p.kind === 'out' && p.dist == null ? '매장 와이파이 아님 · 위치 없음' : '매장 와이파이 아님'));
-  show(`${top('확인 필요', true)}
+  show(`${top(back ? '확인 필요' : '승인', true)}${pre ? pre.html : ''}
+    <h2>⚠ 확인 필요${todo.length ? ` <span class="small">· ${todo.length}건</span>` : ''}</h2>
     <p class="small">매장 와이파이가 아닌 곳에서 찍은 기록이에요. 맞으면 [확인], 틀리면 [시각 고치기].</p>
     ${todo.length ? todo.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">⚠ ${esc(why(p))}</span></div>
       <p>${dayLabel(p.date)} ${p.kind === 'in' ? '출근' : '퇴근'} <b style="color:var(--text)">${esc(api.hmOf(p.at))}</b></p>
@@ -200,7 +227,8 @@ export async function reviewScreen(store, back) {
     <h2>이번 달 ⚠ 횟수</h2>
     <div class="card">${Object.keys(month).length ? `<table class="kv">${Object.entries(month).sort((a, b) => b[1] - a[1]).map(([n, c]) => `<tr><td>${esc(n)}</td><td>${c}번</td></tr>`).join('')}</table>` : '<p class="small">이번 달은 없어요.</p>'}</div>`);
   wireTop(back);
-  const again = () => reviewScreen(store, back);
+  if (pre) pre.wire();
+  const again = () => (pre && pre.again ? pre.again() : reviewScreen(store, back, pre));
   document.querySelectorAll('[data-ok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.reviewPunch(store.id, b.dataset.ok); await again(); }); });
   document.querySelectorAll('[data-fix]').forEach(b => {
     b.onclick = async () => {
@@ -216,11 +244,7 @@ export async function ownerSection(store) {
   const t = api.kst();
   const [wifi, place, fl] = await Promise.all([api.getSetting(store.id, 'wifi'), api.getSetting(store.id, 'place'), api.flaggedSince(store.id, api.addDays(t.date, -31))]);
   const n = wifi && wifi.ips ? wifi.ips.length : 0, todo = fl.filter(p => !p.reviewed).length;
-  const head = `
-    <div class="row" style="gap:8px;margin-top:12px"><button id="goToday">오늘 출근 현황</button><button class="${todo ? '' : 'ghost'}" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
-    <button class="ghost" id="goMonth" style="margin-top:8px">월 근무 기록 · 엑셀</button>
-    ${n ? '' : '<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">매장 와이파이 등록 전이에요</b><p class="small">등록하기 전에는 모든 출근에 ⚠가 붙어요. 맨 아래 [출퇴근 확인]에서 등록해 주세요.</p></div>'}
-    `;
+  const head = n ? '' : '<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">매장 와이파이 등록 전이에요</b><p class="small">등록하기 전에는 모든 출근에 ⚠가 붙어요. ☰ 더보기 → [출퇴근 확인]에서 등록해 주세요.</p></div>';
   const settings = `
     <h2>출퇴근 확인</h2>
     <div class="card"><div class="row between"><b>매장 와이파이</b>${n ? `<span class="pill ok">등록 ${n}개</span>` : '<span class="pill warn">등록 전</span>'}</div>
@@ -231,12 +255,9 @@ export async function ownerSection(store) {
       <p class="small">퇴근 확인에 써요 (와이파이가 아니어도 반경 안이면 ✓). 매장 안에서 누르세요.</p>
       <div class="row" style="margin-top:8px"><input id="rad" type="number" min="20" max="1000" step="10" inputmode="numeric" value="${place ? place.radius : 100}" style="width:110px"><span class="small">m</span>
         <button class="sm" id="pSave">지금 위치를 매장 위치로</button></div></div>`;
-  return { head, settings, wifiN: n, place: !!place };
+  return { head, settings, wifiN: n, place: !!place, todo };
 }
 export function wireOwnerSection(store, again) {
-  $('goToday').onclick = () => todayScreen(store, again);
-  $('goReview').onclick = () => reviewScreen(store, again);
-  $('goMonth').onclick = () => records.monthScreen(store, again, null, true);
   const reg = reset => e => busy(e.target, async () => {
     if (reset && !confirm('등록한 와이파이를 모두 지우고 지금 와이파이만 등록할까요?')) return;
     const r = await api.registerWifi(store.id, reset);
