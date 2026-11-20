@@ -4,11 +4,15 @@
 //   POST /registerWifi  { storeId, reset }
 //   POST /resetPin      { storeId, target }   직원 번호 다시 정하기 (사장님만) → { pin, name }
 //   GET  /myIp          주소 확인 페이지
+//   GET  /pushMsg?s=매장  폰 알림 글 (폰이 빈 알림을 받으면 여기서 글을 받아 띄움)
+//   POST /pushTest      { storeId }  내 폰에 시험 알림 (사장님·매니저)
+//   cron 10분마다       휴무신청 열림·마감 1시간 전 알림 (push.js)
 //   GET  /ipSig         { ip, t, sig }  예전 NFC 출퇴근용 (sig = HMAC-SHA256(IP_SECRET, ip|t))
 // 회선 주소는 Cloudflare가 붙여 주는 CF-Connecting-IP (보내는 쪽이 위조할 수 없음)
 import { punchCore, registerWifiCore, resetPinCore, myIpPage, Fail } from '../functions/core.js';
 import { normIp } from '../functions/lib.js';
 import { verifyIdToken, firestore, authAdmin } from './google.js';
+import { runCron, pushTo, MSG } from './push.js';
 
 const CODES = { unauthenticated: 401, 'permission-denied': 403, 'invalid-argument': 400, 'failed-precondition': 400, 'already-exists': 409 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Max-Age': '86400' };
@@ -21,6 +25,9 @@ export async function hmacHex(secret, msg) {
 }
 
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runCron(env, firestore(env)).then(r => { if (r.length) console.log('알림', JSON.stringify(r)); }).catch(e => console.error('알림 실패', e)));
+  },
   async fetch(request, env) {
     const url = new URL(request.url), emu = env.EMULATOR === '1';
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -34,7 +41,18 @@ export default {
       const t = Date.now();
       return out(200, { ok: true, ip: realIp, t, sig: await hmacHex(env.IP_SECRET, realIp + '|' + t) });
     }
-    const fn = { '/punch': punchCore, '/registerWifi': registerWifiCore, '/resetPin': (db, a) => resetPinCore(db, authAdmin(env), a) }[url.pathname];
+    if (url.pathname === '/pushMsg') {
+      const sid = url.searchParams.get('s') || '';
+      const m = /^[a-z0-9]{3,30}$/.test(sid) ? await firestore(env).get(`stores/${sid}/settings/pushMsg`).catch(() => null) : null;
+      return out(200, m ? { title: m.title, body: m.body } : {});
+    }
+    const fn = { '/punch': punchCore, '/registerWifi': registerWifiCore, '/resetPin': (db, a) => resetPinCore(db, authAdmin(env), a),
+      '/pushTest': async (db, a) => {
+        if (!/^[a-z0-9]{3,30}$/.test(a.storeId || '')) throw new Fail('invalid-argument', '매장 정보가 없어요');
+        const st = await db.get(`stores/${a.storeId}`), me = await db.get(`stores/${a.storeId}/members/${a.uid}`);
+        if (!st || !((st.ownerUids || []).includes(a.uid) || (me && me.status === 'active' && me.role === 'manager'))) throw new Fail('permission-denied', '사장님·매니저만 시험할 수 있어요');
+        return pushTo(env, db, a.storeId, [a.uid], MSG.test);
+      } }[url.pathname];
     if (!fn || request.method !== 'POST') return out(404, { ok: false, code: 'not-found', message: '없는 주소예요' });
     try {
       let body = {};

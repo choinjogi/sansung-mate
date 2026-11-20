@@ -146,6 +146,15 @@ service cloud.firestore {
         allow delete: if manager(s);
       }
 
+      // 폰 알림 구독 (내 폰만). 보내기는 Cloudflare 서버(서비스 계정)
+      match /push/{id} {
+        allow read: if owner(s) || (signedIn() && resource.data.uid == uid());
+        allow create, update: if signedIn() && inStore(s) && d().keys().hasOnly(['uid', 'endpoint', 'at'])
+          && d().uid == uid() && id.matches('^' + uid() + '_[0-9a-f]{16}$')
+          && d().endpoint is string && d().endpoint.matches('^https://.*') && d().endpoint.size() <= 1000 && d().at == request.time;
+        allow delete: if owner(s) || (signedIn() && resource.data.uid == uid());
+      }
+
       // 시급 이력 { history: [{from:'YYYY-MM', wage}] }
       match /wages/{m} {
         allow read: if owner(s) || (signedIn() && uid() == m && active(s));

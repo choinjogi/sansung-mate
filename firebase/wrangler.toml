@@ -6,3 +6,8 @@ compatibility_date = "2024-11-01"
 
 [vars]
 PROJECT_ID = "sansung-sheets"
+VAPID_PUBLIC = "BJ4Feq_8iOq3B9RKMwH2F_5br-p5CgFmW1aCAxaQbEN94g5RVV7v_ldSsan81fnWvKQfgnUfu5eHmIdg3x1WI4c"   # 폰 알림 공개 열쇠 (multi/config.js PUSH_KEY와 같음)
+
+# 폰 알림: 10분마다 휴무신청 열림·마감 1시간 전 확인 (worker/push.js). VAPID_PRIVATE는 비밀값
+[triggers]
+crons = ["*/10 * * * *"]

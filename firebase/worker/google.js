@@ -114,6 +114,23 @@ export function firestore(env) {
       if (!r.ok) throw new Error('Firestore 읽기 실패 ' + r.status);
       return fromValue({ mapValue: { fields: (await r.json()).fields || {} } });
     },
+    // 모음 안의 문서 전부 [{ id, ...칸 }] (300개씩 넘겨 받음)
+    async list(path) {
+      const out = []; let tok = '';
+      do {
+        const r = await fetch(`${base}/${path}?pageSize=300${tok ? '&pageToken=' + encodeURIComponent(tok) : ''}`, { headers: await auth() });
+        if (r.status === 404) return out;
+        if (!r.ok) throw new Error('Firestore 목록 실패 ' + r.status);
+        const j = await r.json();
+        (j.documents || []).forEach(d => out.push({ id: d.name.split('/').pop(), ...fromValue({ mapValue: { fields: d.fields || {} } }) }));
+        tok = j.nextPageToken || '';
+      } while (tok);
+      return out;
+    },
+    async del(path) {
+      const r = await fetch(`${base}/${path}`, { method: 'DELETE', headers: await auth() });
+      if (!r.ok && r.status !== 404) throw new Error('Firestore 지우기 실패 ' + r.status);
+    },
     create: (path, obj) => commit(path, obj, 'new'),
     set: (path, obj) => commit(path, obj, 'set'),
     patch: (path, obj) => commit(path, obj, 'patch'),

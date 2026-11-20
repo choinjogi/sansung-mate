@@ -316,3 +316,15 @@ test('본인은 자기 퇴근에 근무 구분, 출근에 일찍 온 날 답만.
   await assertSucceeds(updateDoc(doc(as('mgr', P), inn), { earlyReq: { status: 'ok', hm: '17:00', at: serverTimestamp(), by: 'mgr' } }));
   await assertFails(updateDoc(doc(as('alba', P), inn), { earlyReq: { status: 'wait', hm: '16:00', at: serverTimestamp() } }));  // 승인 뒤엔 못 바꿈
 });
+
+// ---------- 폰 알림 구독 ----------
+test('알림 구독은 내 이름표로만 쓰고, 남의 구독은 못 봄', async () => {
+  const ok = { uid: 'alba', endpoint: 'https://push.example/abc', at: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(as('alba', P), 'stores/sansung/push/alba_0123456789abcdef'), ok));
+  await assertFails(setDoc(doc(as('alba', P), 'stores/sansung/push/mgr_0123456789abcdef'), { ...ok }));            // 남의 이름표
+  await assertFails(setDoc(doc(as('alba', P), 'stores/sansung/push/alba_1123456789abcdef'), { ...ok, uid: 'mgr' }));
+  await assertFails(setDoc(doc(as('alba', P), 'stores/sansung/push/alba_2123456789abcdef'), { ...ok, endpoint: 'http://evil' }));
+  await assertFails(getDoc(doc(as('mgr', P), 'stores/sansung/push/alba_0123456789abcdef')));
+  await assertSucceeds(getDoc(doc(as('boss', G), 'stores/sansung/push/alba_0123456789abcdef')));
+  await assertSucceeds(deleteDoc(doc(as('alba', P), 'stores/sansung/push/alba_0123456789abcdef')));
+});

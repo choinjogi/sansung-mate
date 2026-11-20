@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=14';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=14';
+import * as F from './vendor/firebase.js?v=15';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=15';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -228,9 +228,11 @@ export async function punch(storeId, kind, alone) {
 // 직원 비밀번호 임의 재설정 (사장님만, 서버가 임시 비밀번호 6자리를 만들어 돌려줌)
 export const resetPin = (storeId, target) => server('resetPin', { storeId, target });
 // 임시 비밀번호로 로그인한 직원이 새 번호를 정함 → 표시 지움
+// 표시를 먼저 지우고 비밀번호를 바꿈 (비밀번호를 바꾸면 로그인이 바로 풀리기도 해서, 뒤에 지우면 못 지울 수 있음)
 export async function changePin(storeId, pw) {
-  await F.updatePassword(auth.currentUser, pw);
-  await F.updateDoc(ref(`stores/${storeId}/members/${auth.currentUser.uid}`), { pinReset: false });
+  const u = auth.currentUser;
+  await F.updateDoc(ref(`stores/${storeId}/members/${u.uid}`), { pinReset: false });
+  await F.updatePassword(u, pw);
 }
 export const registerWifi = (storeId, reset) => server('registerWifi', { storeId, reset: !!reset, _testIp: testIp() });
 export const getSetting = (storeId, k) => F.getDoc(ref(`stores/${storeId}/settings/${k}`)).then(data);
@@ -250,6 +252,11 @@ export async function decideEarly(storeId, p, ok) {
   if (ok) await setEarly(storeId, p.date, p.uid, p.earlyReq.hm);
   await F.updateDoc(ref(`stores/${storeId}/punches/${p.id}`), { earlyReq: { ...p.earlyReq, status: ok ? 'ok' : 'no', by: auth.currentUser.uid, at: F.serverTimestamp() } });
 }
+// 폰 알림 구독 (내 폰). 문서 이름 = uid_주소해시16
+async function subId(endpoint) { const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint))); return auth.currentUser.uid + '_' + Array.from(h.slice(0, 8), b => b.toString(16).padStart(2, '0')).join(''); }
+export async function savePushSub(storeId, endpoint) { await F.setDoc(ref(`stores/${storeId}/push/${await subId(endpoint)}`), { uid: auth.currentUser.uid, endpoint, at: F.serverTimestamp() }); }
+export async function removePushSub(storeId, endpoint) { await F.deleteDoc(ref(`stores/${storeId}/push/${await subId(endpoint)}`)); }
+export const pushTest = storeId => server('pushTest', { storeId });
 export const reviewPunch = (storeId, id) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { reviewed: true, reviewedBy: auth.currentUser.uid, reviewedAt: F.serverTimestamp() });
 export const editPunch = (storeId, id, at) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { at, editedBy: auth.currentUser.uid, editedAt: F.serverTimestamp() });
 export const addPunch = (storeId, { uid, name, date, kind, at }) =>

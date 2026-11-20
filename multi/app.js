@@ -1,15 +1,17 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=14';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=14';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=14';
-import * as attend from './attend.js?v=14';
-import * as sched from './sched.js?v=14';
-import * as records from './records.js?v=14';
-import * as pay from './pay.js?v=14';
-import * as sales from './sales.js?v=14';
-import * as dash from './dash.js?v=14';
-import * as staff from './staff.js?v=14';
-import * as info from './info.js?v=14';
+import * as api from './fb.js?v=15';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=15';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=15';
+import * as attend from './attend.js?v=15';
+import * as sched from './sched.js?v=15';
+import * as records from './records.js?v=15';
+import * as pay from './pay.js?v=15';
+import * as sales from './sales.js?v=15';
+import * as dash from './dash.js?v=15';
+import * as staff from './staff.js?v=15';
+import * as info from './info.js?v=15';
+import * as notify from './notify.js?v=15';
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); // 폰 알림 받기용
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -251,6 +253,7 @@ async function managerMore(ctx, again) {
     <h2>기록</h2>
     <div class="card list">
       <a href="#" class="item" id="goMonth">📊 월 근무 기록<span class="small">›</span></a></div>
+    ${notify.pushHtml}
     <h2>내 것</h2>
     <div class="card list">
       <a href="#" class="item" id="goMyRec">⏱️ 내 출퇴근 기록<span class="small">›</span></a>
@@ -259,6 +262,7 @@ async function managerMore(ctx, again) {
   wireTop();
   const on = (id, fn) => { if ($(id)) $(id).onclick = ev => { ev.preventDefault(); fn(); }; };
   on('goNeed', () => sched.staffingScreen(s, again));
+  notify.wirePush(s, true).catch(() => {});
   on('goEdit', () => sched.scheduleEditor(s, again));
   on('goLvAdm', () => sched.leaveAdmin(s, again));
   on('goSched', () => sched.scheduleView(s, me.id, again));
@@ -437,11 +441,13 @@ async function ownerMore(id, again) {
       <p class="small">${r.id}부터 적용${rules.next ? ` · <b>${rules.next.id}부터 바뀐 규칙 예약됨</b>` : ''}</p>` : '<p class="small">규칙이 없어요.</p>'}
       <button class="ghost" id="editRules" style="margin-top:10px">규칙 바꾸기</button></div>
     ${attendHtml.settings}
+    ${notify.pushHtml}
     <h2>다른 매장</h2><button class="ghost" id="goStores">매장 목록 · 총괄 화면</button>
     <p class="small" style="text-align:center"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p>`);
   wireTop(); wireLinks();
   attend.wireOwnerSection(s, again);
   $('goStores').onclick = () => ownerHome();
+  notify.wirePush(s, true).catch(() => {});
   $('goMonth').onclick = () => records.monthScreen(s, again, null, true);
   $('goPay').onclick = () => pay.payrollScreen(s, again);
   document.querySelectorAll('[data-mset]').forEach(b => {

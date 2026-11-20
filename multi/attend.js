@@ -1,11 +1,12 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=14';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=14';
-import * as sched from './sched.js?v=14';
-import * as records from './records.js?v=14';
-import * as pay from './pay.js?v=14';
-import * as info from './info.js?v=14';
+import * as api from './fb.js?v=15';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=15';
+import * as sched from './sched.js?v=15';
+import * as records from './records.js?v=15';
+import * as pay from './pay.js?v=15';
+import * as info from './info.js?v=15';
+import * as notify from './notify.js?v=15';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -166,10 +167,12 @@ export async function staffHome(store, me, again) {
     ${pc.html}
     <h2>이번 주 내 근무${w.n ? ` <span class="small">· ${w.n}일</span>` : ''}</h2>${w.html}
     ${nts.length ? `<h2>공지</h2>${info.noticeCards(nts)}` : ''}
+    ${notify.pushHtml}
     <a href="#" id="goInfo" class="card row between" style="color:inherit;text-decoration:none;display:flex;margin-top:12px"><div><b>👤 내 정보</b><div class="small">급여 받을 계좌 · 이메일</div></div><span class="small">›</span></a>`);
   wireTop();
   pc.wire();
   $('goInfo').onclick = ev => { ev.preventDefault(); info.myInfoScreen(store, me, again); };
+  notify.wirePush(store, false).catch(() => {});
 }
 
 // ---------- 내 기록 탭 (이번 달 내 출퇴근) ----------
