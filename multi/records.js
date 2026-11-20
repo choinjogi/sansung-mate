@@ -1,8 +1,8 @@
 // 월 근무 기록: 직원별 일한 날·시간·지각·⚠ 합계, 날짜별 상세, 엑셀(CSV) 내려받기 (사장님·매니저)
 // 급여 기능 전까지 사장님이 이 표로 급여를 계산. 대표님께는 합계(근무 시간·인원)만 보낼 수 있음
-import * as api from './fb.js?v=9';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=9';
-import * as sched from './sched.js?v=9';
+import * as api from './fb.js?v=10';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=10';
+import * as sched from './sched.js?v=10';
 
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
 export const hmText = min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;

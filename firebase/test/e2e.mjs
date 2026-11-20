@@ -451,14 +451,25 @@ try {
   assert.match(await text(park), /시급 10,030원/);
   await tab(park, '홈');
 
+  // 12-2) 대시보드: 사장님 = 인건비·매출·비율·근태, 매니저 = 매출·근태만
+  await tab(boss, '대시보드');
+  await boss.getByText('현재까지 알바 인건비').waitFor();
+  assert.match(await text(boss), /₩1,300,000/);
+  assert.match(await text(boss), /이번 달 지각/);
+  await shot(boss, '대시보드');
+  await tab(alba, '대시보드');
+  await alba.getByText('현재까지 매출').waitFor();
+  assert.doesNotMatch(await text(alba), /알바 인건비|인건비 비율/);
+  await tab(boss, '더보기');
+
   // 13) 아래 탭: 직원 4개, 매니저·사장님 3개. 내 기록 탭
   assert.equal(await park.locator('#nav a').count(), 4);
   await tab(park, '내 기록');
   await park.getByText('내 출퇴근').waitFor();
-  assert.equal(await boss.locator('#nav a').count(), 4);
+  assert.equal(await boss.locator('#nav a').count(), 5);
   await alba.reload();
   await alba.locator('#nav a').first().waitFor();
-  assert.equal(await alba.locator('#nav a').count(), 4);
+  assert.equal(await alba.locator('#nav a').count(), 5);
 
   console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·비밀번호 임의 재설정·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {

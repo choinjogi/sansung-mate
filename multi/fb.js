@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=9';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=9';
+import * as F from './vendor/firebase.js?v=10';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=10';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
