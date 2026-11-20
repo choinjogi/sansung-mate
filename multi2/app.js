@@ -234,7 +234,7 @@
   }
   function clockRun(kind, alone) {
     render(`<div>${header()}<div class="card" style="margin-top:16px;text-align:center"><p>기록 중… 퇴근은 5초쯤 걸려요.</p></div></div>`);
-    doClock(kind, alone).catch(e => clockDone({ mode: 'msg', kind: 'warn', title: '기록하지 못했어요', text: e.message + '\n다시 눌러 주세요. 계속 안 되면 스티커나 퇴근 폼으로.' }));
+    doClock(kind, alone).catch(e => clockDone({ mode: 'msg', kind: 'warn', title: '기록하지 못했어요', text: e.message + '\n다시 눌러 주세요. 계속 안 되면 사장님·매니저에게 말해 주세요.' }));
   }
   async function doClock(kind, alone) {
     const w = await getW();
@@ -425,7 +425,7 @@
     const pills = tags => tags.map(t => `<span class="pill ${LV.indexOf(t) >= 0 ? 'lv' : /대타|추가/.test(t) && !/쉼/.test(t) ? 'ok' : 'warn'}">${esc(t)}</span>`).join(' ');
     const detail = d => { const x = by[d], o = off[d], h = `<b>${r.mon}/${d} (${W(d)})</b>`; return x
       ? `<div class="row between">${h}</div>${x.tags.length ? '<div class="tags">' + pills(x.tags) + '</div>' : ''}
-         ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}${x.tap ? ' · 스티커 찍은 시각 ' + esc(x.tap) : ''}</p>`}`
+         ${r.hours === false ? `<div class="big" style="font-size:24px;margin-top:4px">퇴근 ${esc(x.out)}</div>` : `<div class="big" style="font-size:24px;margin-top:4px">${hm(x.mins)}</div><p class="small">출근 ${esc(x.in)} ~ 퇴근 ${esc(x.out)}${x.tap ? ' · 찍은 시각 ' + esc(x.tap) : ''}</p>`}`
       : o ? `<div class="row between">${h}</div><div class="tags">${pills(o.tags)}</div><p class="small">${LV.indexOf(o.tags[0]) >= 0 ? '스케줄에 ' + esc(o.tags[0]) + '(으)로 적힌 날이에요.' : '스케줄에는 근무였는데 출퇴근 기록이 없어요. 사장님이 쉬라고 한 날이나 대타를 구한 날도 여기 나와요.'}</p>`
       : plan[d] ? `<div class="row between">${h}<span class="pill ok">출근 예정</span></div>
          <p style="color:var(--text)">${plan[d] === '오전' ? '주말 오전 12:00 ~ 15:00' : ME.today.start ? ME.today.start + ' 출근' : '근무'} 예정이에요.</p>`
@@ -443,13 +443,13 @@
       rows.push(['연차·반차·병가·무급', lv || '없음']);
       if (!r.hours) sumCard = `<div class="card"><div class="row between"><b>이번 달 요약</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto}</span></div>
         <table class="kv">${rows.map(x => `<tr><td>${x[0]}</td><td>${esc(x[1])}</td></tr>`).join('')}</table></div>`;
-      if (r.hours && S.weeks) sumCard += `<div class="card"><div class="row between"><b>근무시간 · 주휴</b><span class="small">결산 기준</span></div>
+      if (r.hours && S.weeks) sumCard += `<div class="card"><div class="row between"><b>근무시간 · 주휴</b><span class="small">출퇴근 기록 기준</span></div>
         <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">총 근무시간</div><div class="big" style="font-size:22px">${S.totalH != null ? S.totalH + '시간' : hm(r.total)}</div></div>
         <div><div class="small">주휴수당</div><div class="big" style="font-size:22px">${S.noJuhu ? '해당 없음' : won(S.juhu)}</div></div></div>
         <table class="kv"><tr><th>주차</th><th>시간</th><th>주휴</th></tr>${S.weeks.map(w => `<tr><td>${esc(w.wk)}</td><td>${w.h.toFixed(1)}h</td><td>${S.noJuhu ? '-' : w.pay ? won(w.pay) : '<span class="small">' + (w.h < 15 ? '15시간 미만' : '0원') + '</span>'}</td></tr>`).join('')}</table>
         <p class="small">주휴는 한 주 15시간 이상 일하면 생겨요(1~7일·8~14일처럼 7일씩 끊어서 계산). 최종 금액은 월말결제 기준이에요.</p></div>`;
       if (r.hours && S.payLocked) sumCard += `<div class="card"><b>내 급여</b><p class="small" style="margin-top:6px">사장님·매니저님이 앱 가입을 확인하면 보여요.</p></div>`;
-      if (r.hours && S.pay) sumCard += `<div class="card"><div class="row between"><b>내 급여</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto} 결산 기준</span></div>
+      if (r.hours && S.pay) sumCard += `<div class="card"><div class="row between"><b>내 급여</b><span class="small">${r.mon}/1 ~ ${r.mon}/${S.upto} 출퇴근 기록 기준</span></div>
         <div class="row" style="gap:22px;margin:6px 0 10px"><div><div class="small">현재까지 받을 돈</div><div class="big" style="font-size:22px">${won(S.pay.now)}</div></div>
 </div>
         <table class="kv"><tr><td>그중 주휴수당</td><td>${S.noJuhu ? '해당 없음' : won(S.juhu)}</td></tr></table>
@@ -473,7 +473,7 @@
   };
 
   // ---------- 관리: 오늘 ----------
-  const STEP2 = '<p class="small">NFC 관리 화면도 그대로 쓸 수 있어요(앱이 안 될 때).</p>';
+  const STEP2 = ''; // 새 앱: NFC 관리 화면 없음
   let PEOPLE = null; const people = async () => PEOPLE || (PEOPLE = (await API.people()).list);
   const opts = (list, sel) => list.map(p => `<option value="${esc(p.name)}" ${p.name === sel ? 'selected' : ''}>${esc(p.disp)}${p.disp !== p.name ? ' (' + esc(p.name) + ')' : ''}</option>`).join('');
   const busy = async (b, fn) => { const t = b.textContent; b.disabled = true; b.textContent = '처리 중…'; try { await fn(); } catch (x) { toast(x.message); } finally { b.disabled = false; b.textContent = t; } };
@@ -530,7 +530,7 @@
       ${list.length ? list.map(p => `<div class="card"><div class="row between"><b>${esc(p.name)}</b><span class="pill warn">${esc(p.kind)}</span></div><p${p.warn ? ' class="chg" style="color:var(--bad)"' : ''}>${esc(p.when)} · ${esc(p.detail)}</p>
         ${can(p) ? `<div class="row" style="gap:8px;margin-top:8px"><button class="sm" data-id="${esc(p.id)}" data-ok="1">승인</button><button class="sm ghost" data-id="${esc(p.id)}" data-ok="">거절</button></div>` : '<p class="small">새 폰 승인은 사장님만 해요.</p>'}</div>`).join('')
         : `<div class="card empty">${bear('grill')}<p>처리할 게 없어요. 고기나 구우세요!</p></div>`}
-      <p class="small">조기 출근 승인 = 그 시각부터 계산(퇴근한 날이면 결산 줄도 바로 고쳐져요). 거절 = 정시부터. 새 가입 = 직원이 앱에 직접 가입한 것 — 본인이 아니면 거절(가입 지움).</p>${STEP2}</div>`);
+      <p class="small">조기 출근 승인 = 그 시각부터 계산. 거절 = 정시부터. 새 가입 = 직원이 앱에 직접 가입한 것 — 본인이 아니면 거절(가입 지움). 확인 필요 = 매장 와이파이가 아니거나 혼자 퇴근한 기록.</p>${STEP2}</div>`);
     $app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => busy(b, async () => {
       const ok = !!b.dataset.ok, j = /^acc/.test(b.dataset.id);
       const inf = /^inf/.test(b.dataset.id);
@@ -556,7 +556,7 @@
     }).join('');
     render(`<div>${header()}<h2>대시보드</h2><p class="small">${(d.head || []).map(esc).join(' · ')}</p>
       <div class="card list">${body || '<p class="small">대시보드 값을 못 읽었어요.</p>'}</div>
-      <p class="small">결산 시트 "대시보드" 값 그대로예요 (10분마다 새로 읽음).</p></div>`);
+      <p class="small">출퇴근 기록·시급·매출로 계산한 값이에요. 정직원 인건비는 23시가 지나야 그날을 넣어요.</p></div>`);
   };
 
   // ---------- 관리: 매출 (보기만) ----------
@@ -570,11 +570,11 @@
         <label>날짜</label><input type="date" id="sd" value="${td}" max="${td}">
         <label>매출 (원)</label><input id="sa" inputmode="numeric" autocomplete="off" placeholder="예: 1,850,000">
         <button id="ss" style="margin-top:14px">저장</button>
-        <p class="small" style="margin-top:8px">결산 "일별매출"에 바로 들어가요. 이미 값이 있는 날은 바꿀지 한 번 더 물어봐요.</p></div>
+        <p class="small" style="margin-top:8px">이미 값이 있는 날은 바꿀지 한 번 더 물어봐요.</p></div>
       <div class="card"><div class="row" style="gap:22px"><div><div class="small">이번 달 합계</div><div class="big" style="font-size:22px">${won(s.monthTotal)}</div></div>
         <div><div class="small">하루 평균${s.days ? ' (' + s.days + '일)' : ''}</div><div class="big" style="font-size:22px">${won(s.avg || 0)}</div></div></div></div>
       <div class="card list">${s.list.length ? s.list.map(x => `<div class="item"><span${x.dow === '토' ? ' style="color:#9cc3ff"' : x.dow === '일' ? ' style="color:var(--bad)"' : ''}>${esc(x.label)}</span>${x.missing ? '<span class="small" style="color:var(--warn)">입력 안 됨</span>' : '<b>' + won(x.amount) + '</b>'}</div>`).join('') : '<p class="small">이번 달 매출 기록이 아직 없어요.</p>'}</div>
-      <p class="small">결산 "일별매출" 이번 달 1일부터 오늘까지예요. 하루 평균은 입력된 날만으로 계산해요. 앱이 안 되면 하던 대로 시트에 넣어 주세요.</p></div>`);
+      <p class="small">이번 달 1일부터 오늘까지예요. 하루 평균은 입력된 날만으로 계산해요.</p></div>`);
     const sa = document.getElementById('sa');
     sa.oninput = () => { const n = sa.value.replace(/[^\d]/g, ''); sa.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
     const btn = document.getElementById('ss');
@@ -611,7 +611,7 @@
         <tr class="sum"><td class="name">가능</td>${f.days.map((d, i) => `<td style="${avail[i] < d.need ? 'color:var(--bad)' : ''}">${avail[i]}/${d.need}</td>`).join('')}</tr></table></div>
       <div class="card"><b>주말 오전(12~15시) 가능</b><p>토: ${amNames('토').map(esc).join(', ') || '없음'}<br>일: ${amNames('일').map(esc).join(', ') || '없음'}</p></div>
       ${sent.length ? `<div class="card list">${sent.map(r => `<div class="item"><span>${esc(r.disp)}</span><span class="row" style="gap:8px"><span class="small">${esc(r.at)} 보냄</span>${f.open ? `<button class="sm ghost" data-del="${esc(r.name)}" data-disp="${esc(r.disp)}" style="width:auto;margin:0">삭제</button>` : ''}</span></div>`).join('')}</div>` : ''}
-      <p class="small">✕ = 못 나오는 날. 가능 = 그날 나올 수 있는 알바 수 / 필요한 알바 수. 같은 사람이 여러 번 내면 마지막 것만 써요. 스케줄 짜기는 지금처럼 스케줄 시트 메뉴로 해 주세요.</p></div>`);
+      <p class="small">✕ = 못 나오는 날. 가능 = 그날 나올 수 있는 알바 수 / 필요한 알바 수. 같은 사람이 여러 번 내면 마지막 것만 써요. 근무표는 더보기 → 근무표 짜기에서 짜요.</p></div>`);
     const cp = document.getElementById('cp');
     if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('복사했어요. 단톡방에 붙여 넣으세요'); } catch (e) { prompt('아래 글을 길게 눌러 복사하세요', msg); } };
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
@@ -631,19 +631,19 @@
           <div style="flex:1"><label>정시 출근</label><input id="sp" type="time" value="18:00" step="300"></div></div>
         <label>최소 출근일 (주)</label><select id="sm">${[1, 2, 3, 4, 5].map(n => `<option ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}</select>
         <button id="sadd" style="margin-top:14px">입사 처리</button>
-        <p class="small" style="margin-top:8px">이번 달 결산(직원명부·월말근무내역·월말결제·대시보드)에 바로 들어가고, 앱 계정이 생겨요. 계좌·주민번호는 본인이 앱 "내 정보"로 넣어요. 정직원 입사는 Claude에게 요청해 주세요.</p></div>
+        <p class="small" style="margin-top:8px">입사 등록한 뒤 직원이 앱에서 [처음 가입]으로 같은 이름으로 가입하면 승인 탭에 떠요. 승인하면 시급·정시가 자동으로 들어가요. 계좌는 본인이 앱 "내 정보"로 넣어요.</p></div>
       <div class="card"><b>👋 퇴사</b>
         <label>누구</label><select id="rn"><option value="">이름 고르기</option>${opts(list.filter(p => p.name !== ME.name))}</select>
         <label>퇴사일 (마지막 근무일)</label><input type="date" id="rd" value="${td}">
         <button class="ghost" id="rdel" style="margin-top:14px">퇴사 처리</button>
-        <p class="small" style="margin-top:8px">직원명부 퇴사일만 들어가요. 스케줄·휴무신청·앱 로그인에서 빠지고, 이번 달 급여·출퇴근 기록은 그대로 남아요.</p></div>
-      <p class="small">NFC 명단도 같이 바뀌어요. 새 직원은 바로 매장 스티커로 폰을 등록하면 돼요.</p></div>`);
+        <p class="small" style="margin-top:8px">퇴사일까지는 그대로 일하고, 다음 날부터 근무표·휴무신청·앱 로그인에서 빠져요. 이번 달 급여·출퇴근 기록은 그대로 남아요.</p></div>
+      </div>`);
     const $ = id => document.getElementById(id), sw = $('sw');
     sw.oninput = () => { const n = sw.value.replace(/[^\d]/g, ''); sw.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
     $('sadd').onclick = e => busy(e.target, async () => {
       const name = $('sn').value.trim(), disp = $('sd').value.trim(), wage = Number(sw.value.replace(/[^\d]/g, '')), plain = $('sp').value, minDays = $('sm').value;
       if (!name) return toast('이름을 써 주세요');
-      if (!confirm(`${name} (${disp || '표시이름 자동'}) · 시급 ${wage.toLocaleString('ko-KR')}원 · ${plain} 출근\n이번 달 결산에 알바로 넣을까요?`)) return;
+      if (!confirm(`${name} · 시급 ${wage ? wage.toLocaleString('ko-KR') + '원' : '매장 기본'} · ${plain} 출근\n알바로 입사 등록할까요?`)) return;
       const r = await API.addStaff({ name, disp, wage, plain, minDays, kind: '알바' });
       if (!r.saved) return alert(r.msg);
       alert(r.msg + (r.detail ? '\n\n' + r.detail.join('\n') : '')); PEOPLE = null; VIEWS.astaff();
@@ -666,7 +666,7 @@
       ${d.list.map((p, i) => `<div class="card"><div class="row between"><b>${esc(p.disp)}</b><span class="big" style="font-size:20px">${won(p.wage)}</span></div>
         ${p.next ? `<p class="small" style="margin-top:4px"><span class="pill warn">${Number(p.next.ym.slice(5))}월부터 ${won(p.next.wage)}</span>${p.next.reserved ? ` 예약 · <a href="#" data-cancel="${esc(p.name)}" style="color:var(--sub)">취소</a>` : ' (다음 달 파일)'}</p>` : ''}
         <div class="row" style="gap:8px;margin-top:10px"><input id="w${i}" inputmode="numeric" placeholder="새 시급" style="flex:1;margin:0"><select id="s${i}" style="width:auto;margin:0"><option value="now">이번 달부터</option><option value="next">다음 달부터</option></select><button class="sm" data-i="${i}" style="width:auto;margin:0">바꾸기</button></div></div>`).join('')}
-      <p class="small">이번 달부터 = ${d.month}월 1일부터 다시 계산(지금까지 일한 시간도 새 시급). 다음 달부터 = ${d.nextMonth}월 1일부터 (새 달 파일이 생기면 자동으로 들어가요). 결산 직원명부 시급 칸만 바뀌고, 근무내역·주휴·월말결제는 알아서 따라가요.</p></div>`);
+      <p class="small">이번 달부터 = ${d.month}월 1일부터 다시 계산(지금까지 일한 시간도 새 시급). 다음 달부터 = ${d.nextMonth}월 1일부터. 근무 시간·주휴·정산표는 알아서 따라가요.</p></div>`);
     d.list.forEach((p, i) => { const el = document.getElementById('w' + i); el.oninput = () => { const n = el.value.replace(/[^\d]/g, ''); el.value = n ? Number(n).toLocaleString('ko-KR') : ''; }; });
     $app.querySelectorAll('[data-i]').forEach(b => b.onclick = () => busy(b, async () => {
       const p = d.list[+b.dataset.i], w = Number(document.getElementById('w' + b.dataset.i).value.replace(/[^\d]/g, ''));
@@ -686,7 +686,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     render(`<div>${header()}<h2>직원 계정</h2>
       <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? (a.pend ? '<span style="color:var(--warn)">새 가입(확인 전)</span>' : '가입함') + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
         <button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button></div>`).join('')}</div>
-      <p class="small">처음 가입은 직원이 앱에서 [처음 가입]으로 직접 해요(가입하면 승인 탭에 "새 가입"으로 떠요). [임시 비번]은 비밀번호를 잊은 직원용 — 나온 6자리를 1:1로 알려 주면 직원이 로그인 칸에 넣고 새 번호로 바꿔요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 48시간 동안만 쓸 수 있어요.</p></div>`);
+      <p class="small">처음 가입은 직원이 앱에서 [처음 가입]으로 직접 해요(가입하면 승인 탭에 "새 가입"으로 떠요). [임시 비번]은 비밀번호를 잊은 직원용 — 나온 6자리를 1:1로 알려 주면 직원이 로그인 칸에 넣고 새 번호로 바꿔요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 사장님만 만들 수 있어요.</p></div>`);
     const all = document.getElementById('all');
     if (all) all.onclick = async () => {
       if (!confirm('아직 가입 안 한 직원 모두에게 임시 비밀번호를 만들까요?\n(각자 1:1 카톡으로 보내 주세요. 단톡방에 올리면 안 돼요)')) return;
@@ -709,7 +709,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
       try {
         const r = await API.issueCode(n);
         render(`<div>${header()}<div class="card hero" style="margin-top:24px;text-align:center"><div class="small">${esc(r.name)}님 임시 비밀번호</div>
-          <div class="big" style="font-size:44px;letter-spacing:8px;margin:10px 0">${esc(r.code)}</div><p class="small">${r.hours}시간 안에 이 번호로 로그인하면 본인 번호로 바꾸게 돼요. 이 화면을 나가면 다시 볼 수 없어요.</p></div>
+          <div class="big" style="font-size:44px;letter-spacing:8px;margin:10px 0">${esc(r.code)}</div><p class="small">이 번호로 로그인하면 본인 번호로 바꾸게 돼요. 지금 비밀번호는 더 이상 안 돼요. 이 화면을 나가면 다시 볼 수 없어요.</p></div>
           <button class="ghost" id="bk">목록으로</button></div>`);
         document.getElementById('bk').onclick = () => VIEWS.aacc();
       } catch (e) { toast(e.message); b.disabled = false; }
@@ -729,7 +729,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
         <label>근무 구분</label><select id="fk"><option value="normal">스케줄대로</option><option value="sub">대타</option><option value="extra">추가 출근 (사장님·매니저 요청)</option></select>
         <div id="fsw" hidden><label>누구 대신? (풀네임)</label><input id="fb" placeholder="예: 홍길동"></div>
         <button id="fsv" style="margin-top:16px">저장</button></div>
-      <p class="small">퇴근을 안 찍은 날이나 잘못 찍힌 날을 고쳐요. 결산 "설문지 응답 시트1"에도 바로 반영돼요(같은 날 퇴근 폼 줄이 있으면 경고만 하고 안 넣어요). 정직원은 퇴근만 넣어요.</p>${STEP2}</div>`);
+      <p class="small">퇴근을 안 찍은 날이나 잘못 찍힌 날을 고쳐요. 고친 사람은 기록에 남아요. 정직원은 퇴근만 넣어요.</p>${STEP2}</div>`);
     const $ = id => document.getElementById(id);
     const kind = () => { $('fsw').hidden = $('fk').value !== 'sub'; };
     $('fk').onchange = kind;

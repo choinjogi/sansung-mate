@@ -143,7 +143,63 @@ try {
   await alba.locator('#go').click();
   await alba.getByText('이번 주 내 근무').waitFor();
 
-  console.log('✔ 산성 화면(multi2) 직원 시험 통과');
+  // 6) 대표님: 산성 화면(multi2)으로 사장님 화면
+  const boss2 = await (await phone()).newPage(); watch(boss2, '대표님2');
+  await boss2.goto(APP2);
+  await boss2.getByText('내 매장 찾기').waitFor();
+  await boss2.waitForFunction(() => window.API && window.API._api);
+  await boss2.evaluate(() => window.API._api.testGoogle('boss@example.com', '대표님'));
+  await boss2.reload();
+  await boss2.getByText(/출근 현황/).first().waitFor();
+  assert.equal(await boss2.locator('#nav a').count(), 5);
+  assert.match(await text(boss2), /김알바/);
+  assert.match(await text(boss2), /오늘 매출 · 알바 인건비/);
+  await shot(boss2, 'm2-오늘');
+  // 승인: 김알바 내 정보 → 반영
+  await tab(boss2, '승인');
+  await boss2.getByText('승인 대기').waitFor();
+  assert.match(await text(boss2), /내 정보/);
+  await boss2.locator('[data-ok="1"]').first().click();
+  await boss2.waitForFunction(() => /처리할 게 없어요|확인 필요/.test(document.getElementById('app').innerText));
+  // 매출 넣기
+  await tab(boss2, '매출');
+  await boss2.locator('#sa').fill('1500000');
+  await boss2.locator('#ss').click();
+  await boss2.getByText('₩1,500,000').first().waitFor();
+  // 대시보드
+  await tab(boss2, '대시보드');
+  await boss2.getByText('현재까지 매출').waitFor();
+  // 더보기 → 기록 고치기: 김알바 오늘 불러오기 → 퇴근 22:00으로 저장
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="afix"]').click();
+  await boss2.selectOption('#fn', '김알바');
+  await boss2.getByText(/지금 기록: 출근/).waitFor();
+  await boss2.fill('#fo', '22:00');
+  await boss2.locator('#fsv').click();
+  await boss2.getByText(/지금 기록: .*퇴근 22:00/).waitFor();
+  // 입사 · 퇴사: 새 알바 입사 등록
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="astaff"]').click();
+  await boss2.fill('#sn', '이신입'); await boss2.fill('#sw', '10500');
+  await boss2.locator('#sadd').click();
+  await boss2.waitForFunction(() => { const e = document.getElementById('sn'); return e && e.value === ''; }); // 입사 뒤 화면이 다시 그려질 때까지
+  // 시급
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="awage"]').click();
+  await boss2.getByText('알바 시급').waitFor();
+  assert.match(await text(boss2), /김알바\s+10,030원/);
+  // 직원 계정 → 임시 비밀번호
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="aacc"]').click();
+  await boss2.locator('[data-n="김알바"]').click();
+  await boss2.getByText('김알바님 임시 비밀번호').waitFor();
+  // 휴무신청 현황
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="aleave"]').click();
+  await boss2.getByText(/휴무신청 · /).waitFor();
+  await shot(boss2, 'm2-휴무현황');
+
+  console.log('✔ 산성 화면(multi2) 직원·사장님 시험 통과');
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;
