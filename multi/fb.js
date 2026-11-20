@@ -55,8 +55,23 @@ export async function staffSignup(storeId, joinCode, name, pw) {
     if (await myMember(storeId)) return;
   }
   await F.setDoc(ref(`stores/${storeId}/members/${auth.currentUser.uid}`), {
-    name: name.trim(), role: 'staff', status: 'pending', joinCode, joinedAt: F.serverTimestamp(),
+    name: name.trim(), role: 'staff', status: 'pending', ...(joinCode ? { joinCode } : {}), joinedAt: F.serverTimestamp(),
   });
+}
+
+// ---------- 매장 이름 검색 (직원 가입용) ----------
+// storeNames/{이름 키} = { storeId, name }. 이름을 정확히 알아야 찾음 (목록은 못 봄). 키 = 띄어쓰기 빼고 소문자
+export const nameKey = n => n.replace(/\s+/g, '').toLowerCase();
+export async function findStore(name) {
+  const k = nameKey(name);
+  if (!k || k.length > 40 || k.includes('/')) return null;
+  const d = await F.getDoc(ref('storeNames/' + k)).then(data);
+  return d ? { storeId: d.storeId, storeName: d.name } : null;
+}
+// 사장님 매장 화면을 열 때: 이름 등록이 없으면 등록 (예전에 만든 매장용)
+export async function ensureStoreName(store) {
+  const k = nameKey(store.name), cur = await F.getDoc(ref('storeNames/' + k)).then(data);
+  if (!cur) await F.setDoc(ref('storeNames/' + k), { storeId: store.id, name: store.name });
 }
 
 // ---------- 읽기 ----------
@@ -85,7 +100,10 @@ export async function rulesFor(storeId, m) {
 // ---------- 쓰기 ----------
 // 매장 + 규칙 + 직원 초대 코드를 한 번에 (초대받은 사장님이면 초대도 "사용됨" 표시)
 export async function createStore({ orgId, name, direct, inviteCode, rules }) {
+  if (name.includes('/')) throw new Error('매장 이름에 / 는 쓸 수 없어요');
+  if (await findStore(name)) throw new Error('같은 이름의 매장이 이미 있어요. 다른 이름으로 해 주세요 (예: 지점 이름 붙이기)');
   const id = newStoreId(), joinCode = newCode(8), uid = auth.currentUser.uid, b = F.writeBatch(db);
+  b.set(ref('storeNames/' + nameKey(name)), { storeId: id, name });
   b.set(ref('stores/' + id), { orgId, name, ownerUids: [uid], direct, inviteCode: inviteCode || null, joinCode, createdAt: F.serverTimestamp() });
   if (!direct) b.update(ref('ownerInvites/' + inviteCode), { usedBy: uid, storeId: id });
   b.set(ref(`stores/${id}/rules/${month()}`), { from: month(), ...rules });

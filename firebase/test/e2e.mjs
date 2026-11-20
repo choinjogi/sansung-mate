@@ -81,7 +81,7 @@ try {
   await boss.getByText('매장 이름을 넣어 주세요').waitFor();
   await fillRules(boss, '산성', 10030);
   await boss.getByText('매장 만들기', { exact: true }).click();
-  await boss.getByText('직원 초대').first().waitFor();
+  await boss.getByText('직원 가입').first().waitFor();
   const joinUrl = (await boss.locator('.url').first().innerText()).trim();
   assert.match(joinUrl, /\?join=[A-Z0-9]{8}$/);
   assert.ok(await boss.locator('.qr svg').count(), 'QR이 없음');
@@ -103,7 +103,7 @@ try {
   await kim.getByText('초대받은 매장 만들기').click();
   await fillRules(kim, '두번째', 10500);
   await kim.getByText('매장 만들기', { exact: true }).click();
-  await kim.getByText('직원 초대').first().waitFor();
+  await kim.getByText('직원 가입').first().waitFor();
   assert.match(await text(kim), /10,500원/);
   // 같은 초대로 또 만들 수 없음
   await kim.goto(ownerUrl);
@@ -154,10 +154,10 @@ try {
   await alba.getByText('로그아웃').click();
   await alba.locator('#nm').waitFor();
   await alba.fill('#nm', '김알바'); await alba.fill('#pw', '000000');
-  await alba.getByText('로그인', { exact: true }).click();
+  await alba.locator('#go').click();
   await alba.getByText('이름이나 번호가 맞지 않아요').waitFor();
   await alba.fill('#pw', '123456');
-  await alba.getByText('로그인', { exact: true }).click();
+  await alba.locator('#go').click();
   await alba.getByText('김알바님').waitFor();
 
   // 7-1) 출퇴근: 사장님이 매장 와이파이·위치 등록
@@ -326,7 +326,7 @@ try {
   await boss.locator('[data-store]', { hasText: '두번째' }).click();
   await boss.getByText('월 합계와 요일별 숫자만').waitFor();
   await shot(boss, '합계만');
-  assert.doesNotMatch(await text(boss), /직원 초대|가입 신청/);
+  assert.doesNotMatch(await text(boss), /직원 가입|가입 신청/);
   assert.match(await text(boss), /근무 시간\s+0시간/);
   // 안내서 페이지
   const g = await (await phone()).newPage(); watch(g, '안내서');
@@ -338,6 +338,21 @@ try {
   await kim.reload();
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
+
+  // 10-1) 초대 링크 없이: 첫 화면 → 직원 → 매장 이름 검색(띄어쓰기 달라도) → 가입 신청 → 사장님 승인 대기
+  const walk = await (await phone()).newPage(); watch(walk, '검색가입');
+  await walk.goto(APP);
+  await walk.getByText('직원 · 로그인 / 가입').click();
+  await walk.fill('#sc', '없는 매장');
+  await walk.locator('#scGo').click();
+  await walk.getByText('그 이름의 매장이 없어요').waitFor();
+  await walk.fill('#sc', ' 산 성 ');
+  await walk.locator('#scGo').click();
+  await walk.locator('#pw2').waitFor();
+  await walk.fill('#nm', '최검색'); await walk.fill('#pw', '444444'); await walk.fill('#pw2', '444444');
+  await walk.locator('#go').click();
+  await walk.getByText('승인 기다리는 중').waitFor();
+  await shot(walk, '검색가입');
 
   // 11) 박알바가 번호를 잊음 → 사장님 [비밀번호 임의 재설정] → 임시 비밀번호로 로그인 → 새 비밀번호 정하기
   await park.reload();
@@ -354,10 +369,10 @@ try {
   assert.match(pin, /^\d{6}$/);
   await shot(boss, '임시번호');
   await park.fill('#nm', '박알바'); await park.fill('#pw', '222222');           // 옛 번호는 이제 안 됨
-  await park.getByText('로그인', { exact: true }).click();
+  await park.locator('#go').click();
   await park.getByText('비밀번호 임의 재설정').waitFor();
   await park.fill('#pw', pin);
-  await park.getByText('로그인', { exact: true }).click();
+  await park.locator('#go').click();
   await park.getByText('새 비밀번호 정하기').waitFor();
   await shot(park, '새번호');
   await park.fill('#np', '333333'); await park.fill('#np2', '333333');
@@ -366,7 +381,7 @@ try {
   await park.getByText('로그아웃').click();
   await park.locator('#nm').waitFor();
   await park.fill('#nm', '박알바'); await park.fill('#pw', '333333');
-  await park.getByText('로그인', { exact: true }).click();
+  await park.locator('#go').click();
   await park.getByText('박알바님').waitFor();
 
   // 12) 사장님: 박알바 퇴사 처리 → 직원 목록·로그인에서 빠짐, 다시 일함으로 되돌리기

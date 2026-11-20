@@ -24,7 +24,7 @@ async function route(user) {
   if (!user) {
     if (ls.get('mate_join')) return joinScreen(ls.get('mate_join'));
     if (ls.get('mate_owner')) return landing('invite');
-    if (ls.get('mate_store')) return staffLoginScreen();
+    if (ls.get('mate_store')) return staffAuthScreen({ storeId: ls.get('mate_store'), storeName: ls.get('mate_store_name') || '내 매장' }, 'login');
     return landing();
   }
   if (api.isGoogle(user)) return ownerHome();
@@ -39,52 +39,63 @@ function landing(mode) {
   show(`<div class="splash">
     <div class="t2">MATE</div><p class="t1">매장 근무 앱</p>
     ${mode === 'invite' ? '<div class="card hero" style="width:100%"><b>매장 만들기 초대를 받으셨어요</b><p class="small">구글 계정으로 로그인하면 매장을 만들 수 있어요.</p></div>' : ''}
-    <div style="width:100%;margin-top:18px"><button id="g">사장님 · 구글로 로그인</button>
-    <button class="ghost" id="st" style="margin-top:10px">직원 로그인</button>
-    <p class="small" style="margin-top:14px">처음 가입은 사장님이 보낸 <b>초대 링크</b>로 해 주세요.</p></div></div>`);
+    <div style="width:100%;margin-top:18px"><button id="st">직원 · 로그인 / 가입</button>
+    <button class="ghost" id="g" style="margin-top:10px">사장님 · 구글로 로그인</button></div></div>`);
   $('g').onclick = e => busy(e.target, () => api.googleLogin());
-  $('st').onclick = () => (ls.get('mate_store') ? staffLoginScreen() : storeCodeScreen());
+  $('st').onclick = () => (ls.get('mate_store')
+    ? staffAuthScreen({ storeId: ls.get('mate_store'), storeName: ls.get('mate_store_name') || '내 매장' }, 'login')
+    : storeFindScreen());
 }
 
-// 직원 로그인인데 이 폰이 매장을 모를 때: 초대 링크(또는 코드)를 붙여 넣으면 그 매장 로그인 화면으로
-function storeCodeScreen() {
-  show(`${top('직원 로그인', true)}<div class="card">
-      <label>초대 링크 또는 매장 코드</label><input id="sc" autocapitalize="characters" placeholder="사장님이 보낸 링크를 붙여 넣기">
-      <button id="scGo" style="margin-top:16px">다음</button>
-      <p class="small">단톡방에 올라온 초대 링크를 길게 눌러 복사해서 붙여 넣으면 돼요. 그 링크를 바로 눌러 열어도 돼요.</p></div>`);
+// ---------- 직원: 매장 찾기 → 처음 가입 / 로그인 ----------
+// 매장 이름을 정확히 쳐야 나옴 (띄어쓰기·대소문자 상관없음). 사장님 초대 링크·코드를 넣어도 됨
+function storeFindScreen() {
+  show(`${top('내 매장 찾기', true)}<div class="card">
+      <label>일하는 매장 이름</label><input id="sc" placeholder="예: 산성식육점">
+      <button id="scGo" style="margin-top:16px">찾기</button>
+      <p class="small">매장 이름을 정확히 넣어 주세요. 모르면 사장님께 물어보세요.</p></div>`);
   wireTop(() => landing());
   $('scGo').onclick = e => busy(e.target, async () => {
-    const v = $('sc').value.trim(), m = v.match(/[?&]join=([A-Za-z0-9]+)/);
-    const code = (m ? m[1] : v).toUpperCase();
-    if (!/^[A-Z0-9]{6,12}$/.test(code)) throw new Error('초대 링크나 매장 코드를 넣어 주세요');
-    if (!(await api.joinInfo(code).catch(() => null))) throw new Error('없는 코드예요. 사장님께 새 초대 링크를 받아 주세요');
-    return joinScreen(code, 'login');
+    const v = $('sc').value.trim();
+    if (!v) throw new Error('매장 이름을 넣어 주세요');
+    const st = await api.findStore(v).catch(() => null);
+    if (st) return staffAuthScreen(st, 'join');
+    const m = v.match(/[?&]join=([A-Za-z0-9]+)/), code = (m ? m[1] : v).toUpperCase();
+    if (/^[A-Z0-9]{6,12}$/.test(code) && (await api.joinInfo(code).catch(() => null))) return joinScreen(code, 'join');
+    throw new Error('그 이름의 매장이 없어요. 사장님께 매장 이름을 다시 물어봐 주세요');
   });
 }
 
-// ---------- 직원: 초대 링크로 가입 / 로그인 ----------
+// 초대 링크로 들어온 경우 (예전 방식, 계속 됨)
 async function joinScreen(code, tab = 'join') {
   const j = await api.joinInfo(code).catch(() => null);
   if (!j) {
     ls.del('mate_join');
-    show(`${top('MATE')}<div class="card"><b>초대 링크가 바뀌었거나 없어졌어요</b><p>사장님께 새 초대 링크를 받아 주세요.</p></div>`);
+    show(`${top('MATE')}<div class="card"><b>초대 링크가 바뀌었거나 없어졌어요</b><p>앱 첫 화면에서 [직원 · 로그인 / 가입] → 매장 이름으로 찾아 주세요.</p></div>`);
     return wireTop();
   }
-  ls.set('mate_store', j.storeId); ls.set('mate_store_name', j.storeName);
+  return staffAuthScreen({ storeId: j.storeId, storeName: j.storeName, joinCode: code }, tab);
+}
+
+function staffAuthScreen(st, tab = 'join') {
+  ls.set('mate_store', st.storeId); ls.set('mate_store_name', st.storeName);
   const isJoin = tab === 'join';
   show(`<div class="top"><div class="brand"><span>MATE</span></div></div>
-    <div class="card hero"><div class="small">초대받은 매장</div><div class="big">${esc(j.storeName)}</div></div>
-    <div class="row" style="margin:10px 0"><button class="sm ${isJoin ? '' : 'ghost'}" id="tj">처음 가입</button><button class="sm ${isJoin ? 'ghost' : ''}" id="tl">이미 가입했어요</button></div>
+    <div class="card hero"><div class="small">매장</div><div class="big">${esc(st.storeName)}</div></div>
+    <div class="row" style="margin:10px 0"><button class="sm ${isJoin ? 'ghost' : ''}" id="tl">로그인</button><button class="sm ${isJoin ? '' : 'ghost'}" id="tj">처음 가입</button></div>
     <div class="card">
       <label>이름 (실명)</label><input id="nm" autocomplete="name" maxlength="20" placeholder="홍길동">
-      <label>비밀번호 (숫자 6자리) ${isJoin ? '<span class="small">(로그인할 때 써요. 잊지 마세요)</span>' : ''}</label>
+      <label>비밀번호 (숫자 6자리) ${isJoin ? '<span class="small">(내가 정해요. 로그인할 때 써요)</span>' : ''}</label>
       <input id="pw" type="password" inputmode="numeric" maxlength="6" autocomplete="${isJoin ? 'new-password' : 'current-password'}" placeholder="●●●●●●">
       ${isJoin ? '<label>한 번 더</label><input id="pw2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="●●●●●●">' : ''}
       <button id="go" style="margin-top:16px">${isJoin ? '가입 신청' : '로그인'}</button>
-      ${isJoin ? '<p class="small">신청하면 사장님이 확인하고 승인해요.</p>' : ''}
-    </div>`);
-  $('tj').onclick = () => joinScreen(code, 'join');
-  $('tl').onclick = () => joinScreen(code, 'login');
+      ${isJoin ? '<p class="small">신청하면 사장님이 확인하고 승인해요.</p>' : '<p class="small">비밀번호를 잊었으면 사장님께 "비밀번호 임의 재설정"을 부탁해 주세요.</p>'}
+    </div>
+    <p class="small" style="text-align:center"><a href="#" id="other" style="color:var(--sub)">다른 매장이에요</a> · <a href="#" id="own" style="color:var(--sub)">사장님 로그인</a></p>`);
+  $('tj').onclick = () => staffAuthScreen(st, 'join');
+  $('tl').onclick = () => staffAuthScreen(st, 'login');
+  $('other').onclick = ev => { ev.preventDefault(); ls.del('mate_store'); ls.del('mate_store_name'); ls.del('mate_join'); storeFindScreen(); };
+  $('own').onclick = ev => { ev.preventDefault(); ls.del('mate_join'); landing(); };
   $('go').onclick = e => busy(e.target, async () => {
     const name = $('nm').value.trim(), pw = $('pw').value;
     if (!name) throw new Error('이름을 넣어 주세요');
@@ -92,32 +103,16 @@ async function joinScreen(code, tab = 'join') {
     if (isJoin) {
       if (pw !== $('pw2').value) throw new Error('두 비밀번호가 달라요');
       hold = true;
-      try { await api.staffSignup(j.storeId, code, name, pw); }
+      try { await api.staffSignup(st.storeId, st.joinCode || null, name, pw); }
       catch (err) { if (api.auth.currentUser) await api.logout(); throw err; }
       finally { hold = false; }
       ls.del('mate_join');
       await route(api.auth.currentUser);
     } else {
-      await api.staffLogin(j.storeId, name, pw);
+      await api.staffLogin(st.storeId, name, pw);
       ls.del('mate_join');
     }
   });
-}
-
-function staffLoginScreen() {
-  const storeId = ls.get('mate_store'), storeName = ls.get('mate_store_name');
-  show(`<div class="top"><div class="brand"><span>MATE</span></div></div>
-    <div class="card hero"><div class="small">매장</div><div class="big">${esc(storeName || '내 매장')}</div></div>
-    <div class="card"><label>이름</label><input id="nm" autocomplete="name" maxlength="20">
-      <label>비밀번호 (숫자 6자리)</label><input id="pw" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
-      <button id="go" style="margin-top:16px">로그인</button></div>
-    <p class="small" style="text-align:center">처음이면 사장님이 보낸 초대 링크로 가입해 주세요.<br><a href="#" id="own" style="color:var(--sub)">사장님 로그인</a></p>`);
-  $('go').onclick = e => busy(e.target, async () => {
-    const name = $('nm').value.trim(), pw = $('pw').value;
-    if (!name || !/^\d{6}$/.test(pw)) throw new Error('이름과 비밀번호(숫자 6자리)를 넣어 주세요');
-    await api.staffLogin(storeId, name, pw);
-  });
-  $('own').onclick = ev => { ev.preventDefault(); landing(); };
 }
 
 // ---------- 직원 홈 (승인 전·퇴사 안내, 승인 뒤에는 출퇴근 화면) ----------
@@ -146,8 +141,8 @@ async function staffHome(storeId) {
 
 // 사장님이 번호를 다시 정해 준 뒤 임시 비밀번호로 로그인하면: 새 비밀번호 정하기
 function newPinScreen(storeId, m) {
-  show(`${top('MATE')}<div class="card hero"><div class="big">새 비밀번호 정하기</div>
-      <p>${esc(m.name)}님, 임시 비밀번호로 들어왔어요. 앞으로 쓸 비밀번호 (숫자 6자리)를 정해 주세요.</p></div>
+  show(`${top('MATE')}<div class="card hero"><div class="small">로그인 됐어요</div><div class="big">새 비밀번호 정하기</div>
+      <p>${esc(m.name)}님, 사장님이 만든 <b>임시 비밀번호</b>로 들어왔어요.<br>임시 비밀번호는 한 번만 써요. 앞으로 쓸 <b>내 비밀번호</b>(숫자 6자리)를 새로 정해 주세요.</p></div>
     <div class="card"><label>새 비밀번호 (숫자 6자리)</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
       <label>한 번 더</label><input id="np2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
       <button id="npGo" style="margin-top:16px">이 비밀번호로 정하기</button></div>`);
@@ -260,6 +255,7 @@ function storeForm(ctx) {
 // ---------- 매장 화면 (그 매장 사장님) ----------
 async function storeScreen(id) {
   const s = await api.getStore(id);
+  api.ensureStoreName(s).catch(e => console.error('매장 이름 등록', e)); // 예전에 만든 매장도 이름 검색되게
   const wk = api.mondayOf(api.kst().date);
   const [ms, rules, attendHtml, schNow, schNext] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s),
     api.getSchedule(id, wk), api.getSchedule(id, api.addDays(wk, 7))]);
@@ -284,7 +280,7 @@ async function storeScreen(id) {
       <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
         <button class="sm" data-ok="${m.id}">승인</button><button class="sm ghost" data-no="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
       <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>` : ''}
-    ${linkCard({ title: '직원 초대', desc: '단톡방에 이 링크나 QR을 올려 주세요. 직원이 이름과 비밀번호(숫자 6자리)로 가입하면 위에 승인 요청이 떠요.',
+    ${linkCard({ title: '직원 가입', desc: `직원은 앱 첫 화면 [직원 · 로그인 / 가입] → 매장 이름 <b>${esc(s.name)}</b> 검색 → 이름·비밀번호로 가입 신청하면 위에 승인 요청이 떠요. 이 링크나 QR로 들어오면 검색 없이 바로 돼요.`,
       url: `${BASE}?join=${s.joinCode}`, qr: true, extra: '<button class="sm ghost" id="regen">새 링크로 바꾸기</button>' })}
     <h2>직원 ${act.length}명</h2>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
