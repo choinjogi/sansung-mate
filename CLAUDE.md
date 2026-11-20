@@ -49,12 +49,13 @@
    - ✅ 다른 사장님 매장에 먼저 넘기기 준비 (2026-11-20 결정: 급여 전에 출퇴근·근무표만 먼저, 다른 사장님 매장, 서버는 Cloudflare 그대로)
      - `multi/records.js` 월 근무 기록(직원별 일한 날·시간·지각·⚠, 날짜별) + 엑셀(CSV) 내려받기 (사장님·매니저). 대표님께 합계 보내기(stats: hours·headcount·byWeekday, 직영 아닌 매장만)
      - 매장 화면 "처음 할 일" 체크리스트(와이파이·위치·직원 승인·정직원/매니저·근무표 확정), 사장님 안내서 `multi/guide.html` (총괄 초대 링크 옆에 같이 나옴)
-     - 브랜치 `ccr-b39546c3-2ix4te` (main 아직 안 합침 → 합칠지 사용자에게 묻기). 다음 후보: 급여·정산표
+     - 브랜치 `ccr-b39546c3-2ix4te` (11/20 main 합침). 다음 후보: 급여·정산표
      - ✅ (11/20 메인 노트북) 번호 다시 정하기·퇴사 처리: 직원 [설정] → [번호 다시 정하기](사장님만) = 서버 `/resetPin`(core.js resetPinCore)이
        임시 6자리로 계정 비번을 바꾸고 members.pinReset=true → 직원이 임시 번호로 로그인하면 "새 번호 정하기"(updatePassword, 본인이 pinReset=false만 씀).
        [퇴사 처리] = status 'left' + leftAt (로그인·출퇴근·근무표에서 빠짐, 기록 유지), 직원 목록 아래 "퇴사한 직원"에서 [다시 일함]. e2e 11)·12) 추가
-       - ⏳ 실제로 쓰려면(운영자): ① 서비스 계정 mate-server 에 역할 **Firebase 인증 관리자(roles/firebaseauth.admin)** 추가 ② `npm run deploy`(규칙)
-         ③ `npm run deploy:server`(Cloudflare. 이 브랜치엔 /ipSig 도 들어 있음 — 예전 산성 앱 출퇴근용이라 빠지면 안 됨) ④ main 합치기
+       - ✅ (11/20) 실제 적용: mate-server 에 Firebase 인증 관리자 역할 추가(사용자), 규칙·Cloudflare 서버 올림(/ipSig 유지 확인), main 합침
+         ⏳ 홍길동 계정으로 실제 시험(사장님 폰): 번호 다시 정하기 → 임시 번호 로그인 → 새 번호 / 퇴사 → 다시 일함
+         ⚠ Cloudflare 서버는 /ipSig(예전 산성 앱 출퇴근용)가 든 코드에서만 올릴 것
        - ⏳ 이 PC엔 자바가 없어 에뮬레이터 시험(npm test·e2e)을 못 돌림 → 단위 시험(core·lib·google)만 통과 확인. e2e는 클라우드 컨테이너에서
      - 이 컨테이너에서 e2e 돌릴 때 `LANG=C.UTF-8` 필요 (아니면 한글 파일 이름 내려받기가 'download'로 바뀜)
    - ⬜ 급여·정산표 → ⬜ 알림
