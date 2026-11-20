@@ -1,8 +1,8 @@
 // 월 근무 기록: 직원별 일한 날·시간·지각·⚠ 합계, 날짜별 상세, 엑셀(CSV) 내려받기 (사장님·매니저)
 // 급여 기능 전까지 사장님이 이 표로 급여를 계산. 대표님께는 합계(근무 시간·인원)만 보낼 수 있음
-import * as api from './fb.js?v=10';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=10';
-import * as sched from './sched.js?v=10';
+import * as api from './fb.js?v=11';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=11';
+import * as sched from './sched.js?v=11';
 
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
 export const hmText = min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
@@ -52,7 +52,7 @@ export async function monthData(store, month) {
     const m = mById[uid] || { id: uid, name: x.name };
     const days = Object.keys(x.days).sort().map(date => dayCalc({ date, inP: x.days[date].in, outP: x.days[date].out, plan: sched.todayPlan(S[api.mondayOf(date)], rules, m, date), rules }));
     const sum = k => days.reduce((a, d) => a + (typeof d[k] === 'number' ? d[k] : d[k] ? 1 : 0), 0);
-    return { uid, name: m.name || x.name, type: m.type, left: m.status === 'left' || !mById[uid], days,
+    return { uid, name: m.name || x.name, type: m.type, left: api.isGone(m) || !mById[uid], days,
       workDays: days.length, min: sum('min'), lateN: days.filter(d => d.late).length, lateMin: sum('late'), flags: sum('flags'), noOut: sum('noOut') };
   }).sort((a, b) => (a.name < b.name ? -1 : 1));
   // 요일별 평균 근무 인원 (지난 날만)

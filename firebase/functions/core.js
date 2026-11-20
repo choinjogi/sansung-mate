@@ -18,6 +18,9 @@ export async function punchCore(db, { uid, storeId, kind, geo, alone, ip, now = 
   const S = `stores/${storeId}`;
   const [mem, wifiDoc, place] = await Promise.all([db.get(`${S}/members/${uid}`), db.get(`${S}/settings/wifi`), db.get(`${S}/settings/place`)]);
   need(mem && mem.status === 'active', 'permission-denied', '이 매장 직원으로 승인된 뒤에 찍을 수 있어요');
+  // 퇴사일(마지막 근무일) 다음 날부터는 못 찍음. 자정 넘긴 퇴근(새벽)은 전날 근무라 그날까지 됨
+  const lastDay = mem.leaveDate, td = kst(now);
+  need(!lastDay || lastDay >= (kind === 'out' && td.hour < 12 ? prevDate(td.date) : td.date), 'permission-denied', '퇴사 처리된 계정이에요');
 
   const wifi = ((wifiDoc && wifiDoc.ips) || []).some(x => sameNet(x, ip));
   let dist = null, acc = null;

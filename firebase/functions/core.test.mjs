@@ -66,3 +66,14 @@ test('매니저·직원·다른 사람은 번호 못 바꿈, 없는 직원·사�
   await rej({ uid: 'boss', target: '../x' }, 'invalid-argument');
   await rej({ uid: null, target: 'u1' }, 'unauthenticated');
 });
+
+// ---------- 퇴사일 ----------
+test('퇴사일(마지막 근무일) 다음 날부터 못 찍음, 당일·자정 넘긴 퇴근은 됨', async () => {
+  const mk = leaveDate => fakeDb({ 'stores/st1/members/u1': { status: 'active', name: '알바', leaveDate }, 'stores/st1/settings/wifi': { ips: ['1.2.3.4'] } });
+  const day = new Date('2026-11-20T09:00:00Z');   // 한국 18:00
+  const dawn = new Date('2026-11-20T16:30:00Z');  // 한국 11/21 01:30
+  await punchCore(mk('2026-11-20'), { uid: 'u1', storeId: 'st1', kind: 'in', ip: '1.2.3.4', now: day });          // 당일 출근 됨
+  await assert.rejects(punchCore(mk('2026-11-19'), { uid: 'u1', storeId: 'st1', kind: 'in', ip: '1.2.3.4', now: day }), e => e.code === 'permission-denied');
+  await punchCore(mk('2026-11-20'), { uid: 'u1', storeId: 'st1', kind: 'out', ip: '1.2.3.4', now: dawn });        // 자정 넘긴 퇴근 됨
+  await assert.rejects(punchCore(mk('2026-11-20'), { uid: 'u1', storeId: 'st1', kind: 'in', ip: '1.2.3.4', now: dawn }), e => e.code === 'permission-denied');
+});

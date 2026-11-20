@@ -6,11 +6,11 @@
 //          급여 = 시급분 + 주휴 (원 단위 반올림은 맨 끝에 한 번)
 //  · 정직원: 월급. 그 달 중간에 들어오거나 나가면 일한 날짜 수만큼 (월급 ÷ 그 달 일수 × 날짜 수)
 //  · 가감(보너스·공제 등)은 사장님이 정산표에서 직접 넣음
-import * as api from './fb.js?v=10';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=10';
-import * as records from './records.js?v=10';
+import * as api from './fb.js?v=11';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=11';
+import * as records from './records.js?v=11';
 
-import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=10';
+import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=11';
 export { weekNo, wageOf, albaPay, fullPay };
 
 const ymd = ts => (ts && ts.toDate ? api.kst(ts.toDate()).date : null);
@@ -24,7 +24,8 @@ export async function payrollData(store, month, until, data) {
   const adj = (saved && saved.adjust) || {};
   const first = month + '-01', last = `${month}-${String(lastDay(month)).padStart(2, '0')}`;
   // 정산 대상: 그 달 기록이 있는 사람 + 그 달에 재직한 정직원
-  const inMonth = m => { const l = ymd(m.leftAt); return m.status !== 'pending' && !(l && l < first); };
+  const endOf = m => m.leaveDate || ymd(m.leftAt);
+  const inMonth = m => { const l = endOf(m); return m.status !== 'pending' && !(l && l < first) && !(m.startDate && m.startDate > last); };
   const ids = new Set([...data.people.map(p => p.uid), ...ms.filter(m => m.type === '정' && inMonth(m)).map(m => m.id)]);
   const rows = [...ids].map(uid => {
     const m = ms.find(x => x.id === uid) || { id: uid, name: (P[uid] || {}).name || '?' };
@@ -33,11 +34,11 @@ export async function payrollData(store, month, until, data) {
     const full = m.type === '정', wage = wageOf(W[uid], month, data.rules, full);
     const a = +(adj[uid] || 0);
     if (full) {
-      const l = ymd(m.leftAt), f = fullPay(month, wage, { startDate: m.startDate || null, endDate: until && (!l || until < l) ? until : l });
-      return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: f.pay, juhu: 0, juhuW: [], weeks: [], adjust: a, pay: f.pay + a, note: f.days < f.monthDays ? `${f.days}/${f.monthDays}일` : '', left: m.status === 'left' };
+      const l = endOf(m), f = fullPay(month, wage, { startDate: m.startDate || null, endDate: until && (!l || until < l) ? until : l });
+      return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: f.pay, juhu: 0, juhuW: [], weeks: [], adjust: a, pay: f.pay + a, note: f.days < f.monthDays ? `${f.days}/${f.monthDays}일` : '', left: api.isGone(m) };
     }
     const x = albaPay(p.days, wage, { noJuhu: !!m.noJuhu, juhu: data.rules && data.rules.pay && data.rules.pay.juhu });
-    return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: x.base, juhu: x.juhu, juhuW: x.juhuW, weeks: x.weeks, adjust: a, pay: x.pay + a, noJuhu: !!m.noJuhu, note: m.noJuhu ? '주휴 없음' : '', left: m.status === 'left' };
+    return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: x.base, juhu: x.juhu, juhuW: x.juhuW, weeks: x.weeks, adjust: a, pay: x.pay + a, noJuhu: !!m.noJuhu, note: m.noJuhu ? '주휴 없음' : '', left: api.isGone(m) };
   }).sort((a, b) => (a.full !== b.full ? (a.full ? 1 : -1) : a.name < b.name ? -1 : 1));
   const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
   return { month, data, rows, saved, total: sum('pay'), albaTotal: rows.filter(r => !r.full).reduce((t, r) => t + r.pay, 0), totalMin: rows.reduce((t, r) => t + (r.min || 0), 0) };

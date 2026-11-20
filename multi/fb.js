@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=10';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=10';
+import * as F from './vendor/firebase.js?v=11';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=11';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -146,6 +146,13 @@ export async function monthSales(storeId, m) {
   const rows = await list(F.query(col(`stores/${storeId}/sales`), F.where('date', '>=', m + '-01'), F.where('date', '<=', m + '-31')));
   return rows.reduce((a, r) => a + (+r.amount || 0), 0);
 }
+// 재직 판단: 퇴사일(leaveDate)이 지났으면 퇴사. 퇴사일 당일까지는 재직
+export const isActive = (m, today = kst().date) => m.status === 'active' && !(m.leaveDate && m.leaveDate < today);
+export const isGone = (m, today = kst().date) => m.status === 'left' || (m.status === 'active' && !!m.leaveDate && m.leaveDate < today);
+// 입사 등록 (가입 전에 미리): stores/{매장}/hires/{이름 키} = { name, type, startTime, startDate, wage?(사장님만), by, at }
+export const hiresOf = storeId => list(col(`stores/${storeId}/hires`));
+export const addHire = (storeId, h) => F.setDoc(ref(`stores/${storeId}/hires/${nameKey(h.name)}`), { ...h, by: auth.currentUser.uid, at: F.serverTimestamp() });
+export const removeHire = (storeId, id) => F.deleteDoc(ref(`stores/${storeId}/hires/${id}`));
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
 export async function saveRules(storeId, from, rules) {

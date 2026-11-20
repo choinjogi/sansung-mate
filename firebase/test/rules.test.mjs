@@ -103,9 +103,10 @@ test('가입하면서 스스로 승인·매니저가 될 수 없다', async () =
 test('다른 매장 초대 코드로는 가입할 수 없다', async () => {
   await assertFails(setDoc(doc(as('n2', P), 'stores/second/members/n2'), { name: '새직원', role: 'staff', status: 'pending', joinCode: 'JOINSS', joinedAt: serverTimestamp() }));
 });
-test('승인은 그 매장 사장님만', async () => {
+test('승인은 그 매장 사장님·매니저만, 매니저는 역할을 못 바꿈', async () => {
+  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/members/newbie'), { status: 'active', role: 'manager' }));
   await assertSucceeds(updateDoc(doc(as('boss', G), 'stores/sansung/members/newbie'), { status: 'active' }));
-  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/members/newbie'), { status: 'active' }));
+  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/members/newbie'), { role: 'manager' }));
   await assertFails(updateDoc(doc(as('kim', G), 'stores/sansung/members/newbie'), { status: 'active' }));
   await assertFails(updateDoc(doc(as('newbie', P), 'stores/sansung/members/newbie'), { status: 'active' }));
 });

@@ -1,10 +1,10 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=10';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=10';
-import * as sched from './sched.js?v=10';
-import * as records from './records.js?v=10';
-import * as pay from './pay.js?v=10';
+import * as api from './fb.js?v=11';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=11';
+import * as sched from './sched.js?v=11';
+import * as records from './records.js?v=11';
+import * as pay from './pay.js?v=11';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -151,7 +151,7 @@ export async function todayScreen(store, back, date, pre) {
   const t = api.kst(); date = date || t.date;
   const [ms, ps, rules, sch] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, date, date), api.rulesOf(store.id), api.getSchedule(store.id, api.mondayOf(date))]);
   const r = rules.current, grace = r ? r.open.lateGraceMin : 0, isToday = date === t.date;
-  const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
+  const act = ms.filter(m => api.isActive(m, date)).sort((a, b) => (a.name < b.name ? -1 : 1));
   const P = {}; ps.forEach(p => { (P[p.uid] = P[p.uid] || {})[p.kind] = p; });
   const hasSched = !!(sch && sch.published);
   // 근무표가 확정됐으면 그날 근무인 사람 + 찍은 사람만, 아니면 전원

@@ -1,13 +1,14 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=10';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=10';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=10';
-import * as attend from './attend.js?v=10';
-import * as sched from './sched.js?v=10';
-import * as records from './records.js?v=10';
-import * as pay from './pay.js?v=10';
-import * as sales from './sales.js?v=10';
-import * as dash from './dash.js?v=10';
+import * as api from './fb.js?v=11';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=11';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=11';
+import * as attend from './attend.js?v=11';
+import * as sched from './sched.js?v=11';
+import * as records from './records.js?v=11';
+import * as pay from './pay.js?v=11';
+import * as sales from './sales.js?v=11';
+import * as dash from './dash.js?v=11';
+import * as staff from './staff.js?v=11';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -136,8 +137,8 @@ async function staffHome(storeId) {
     $('rf').onclick = e => busy(e.target, () => staffHome(storeId));
     return;
   }
-  if (m.pinReset && m.status !== 'left') return newPinScreen(storeId, m);
-  if (m.status === 'left') {
+  if (m.pinReset && !api.isGone(m)) return newPinScreen(storeId, m);
+  if (api.isGone(m)) {
     show(`${top('MATE')}<div class="card"><b>퇴사 처리된 계정이에요</b><p>다시 일하게 되면 사장님께 말해 주세요.</p></div>`);
     return wireTop();
   }
@@ -186,7 +187,7 @@ async function todayTab(ctx, again) {
   if (ctx.owner) {
     const wk = api.mondayOf(api.kst().date);
     const [ms, att, schNow, schNext] = await Promise.all([api.members(s.id), attend.ownerSection(s), api.getSchedule(s.id, wk), api.getSchedule(s.id, api.addDays(wk, 7))]);
-    const act = ms.filter(m => m.status === 'active');
+    const act = ms.filter(m => api.isActive(m));
     const steps = [
       ['매장 와이파이 등록', '매장 안에서 폰을 매장 와이파이에 연결하고, ☰ 더보기 → 출퇴근 확인의 등록 버튼', att.wifiN > 0],
       ['매장 위치 저장', '매장 안에서 ☰ 더보기 → 출퇴근 확인의 위치 버튼 (퇴근 확인용)', att.place],
@@ -208,15 +209,17 @@ async function todayTab(ctx, again) {
 // 승인 탭: 가입 신청 (사장님·매니저) + ⚠ 확인 필요
 async function approvalTab(ctx, again) {
   const s = ctx.store;
-  const pending = (await api.members(s.id)).filter(m => m.status === 'pending');
+  const [ms, hires] = await Promise.all([api.members(s.id), api.hiresOf(s.id)]);
+  const pending = ms.filter(m => m.status === 'pending'), H = Object.fromEntries(hires.map(h => [h.id, h]));
+  const hireOf = m => H[api.nameKey(m.name)] || null;
   const html = `<h2>가입 신청${pending.length ? ` <span class="small">· ${pending.length}명</span>` : ''}</h2>
     ${pending.length ? `<div class="card hero"><div class="list">${pending.map(m => `
-      <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
+      <div class="item"><span><b>${esc(m.name)}</b><br>${hireOf(m) ? `<span class="small" style="color:var(--ok)">✓ 입사 등록됨 · ${hireOf(m).type === '정' ? '정직원' : '알바'} · ${esc(hireOf(m).startDate.slice(5).replace('-', '/'))} 입사</span>` : '<span class="small" style="color:var(--warn)">입사 등록 없음 — 본인 맞는지 꼭 확인</span>'}</span><span class="row" style="gap:6px">
         <button class="sm" data-jok="${m.id}">승인</button><button class="sm ghost" data-jno="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
       <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>`
       : '<div class="card"><p class="small">새 가입 신청이 없어요.</p></div>'}`;
   const wire = () => {
-    document.querySelectorAll('[data-jok]').forEach(b => { b.onclick = () => busy(b, async () => { await api.setMember(s.id, b.dataset.jok, { status: 'active' }); toast('승인했어요'); await again(); }); });
+    document.querySelectorAll('[data-jok]').forEach(b => { b.onclick = () => busy(b, async () => { const m = pending.find(x => x.id === b.dataset.jok); await staff.approveWithHire(s, m, hireOf(m), !!ctx.owner); toast('승인했어요'); await again(); }); });
     document.querySelectorAll('[data-jno]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(s.id, b.dataset.jno); await again(); }); }; });
   };
   return attend.reviewScreen(s, null, { html, wire, again });
@@ -232,6 +235,8 @@ async function managerMore(ctx, again) {
       <a href="#" class="item" id="goEdit">📅 근무표 짜기<span class="small">›</span></a>
       <a href="#" class="item" id="goLvAdm">📝 휴무신청 현황<span class="small">›</span></a>
       <a href="#" class="item" id="goSched">🗓️ 확정된 근무표 보기<span class="small">›</span></a></div>
+    <h2>직원</h2>
+    <div class="card list"><a href="#" class="item" id="goStaff">🙋 입사 · 퇴사<span class="small">›</span></a></div>
     <h2>기록</h2>
     <div class="card list">
       <a href="#" class="item" id="goMonth">📊 월 근무 기록<span class="small">›</span></a></div>
@@ -245,6 +250,7 @@ async function managerMore(ctx, again) {
   on('goLvAdm', () => sched.leaveAdmin(s, again));
   on('goSched', () => sched.scheduleView(s, me.id, again));
   on('goMonth', () => records.monthScreen(s, again, null, false));
+  on('goStaff', () => staff.staffScreen(s, again, false));
   on('goMyRec', () => attend.myRecords(s, me, again));
   on('goMyLeave', () => sched.leaveForm(s, me, again));
 }
@@ -382,16 +388,17 @@ async function ownerMore(id, again) {
   CTX.store = s;
   const [ms, rules, attendHtml, wages] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s), api.wagesAll(id)]);
   const W = Object.fromEntries(wages.map(w => [w.id, w]));
-  const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
-  const gone = ms.filter(m => m.status === 'left').sort((a, b) => (a.name < b.name ? -1 : 1));
+  staff.finishHires(s, ms).catch(e => console.error('입사 시급', e));
+  const act = ms.filter(m => api.isActive(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
+  const gone = ms.filter(m => api.isGone(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
   show(`${top(s.name)}
     ${linkCard({ title: '직원 가입', desc: `직원은 앱 첫 화면 [직원 · 로그인 / 가입] → 매장 이름 <b>${esc(s.name)}</b> 검색 → 이름·비밀번호로 가입 신청하면 ✅ 승인 탭에 떠요. 이 링크나 QR로 들어오면 검색 없이 바로 돼요.`,
       url: `${BASE}?join=${s.joinCode}`, qr: true, extra: '<button class="sm ghost" id="regen">새 링크로 바꾸기</button>' })}
-    <h2>직원 ${act.length}명</h2>
+    <div class="row between"><h2>직원 ${act.length}명</h2><button class="sm" id="goStaff">🙋 입사 · 퇴사</button></div>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
       <div class="item" style="display:block"><div class="row between"><span><b>${esc(m.name)}</b> <span class="pill">${m.type === '정' ? '정직원' : '알바'}</span>
-        ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}${(() => { const w = pay.wageOf(W[m.id], api.month(), r, m.type === '정'); return w ? ` <span class="small">${m.type === '정' ? '월급' : '시급'} ${w.toLocaleString()}</span>` : ''; })()}${m.noJuhu ? ' <span class="small">주휴 없음</span>' : ''}</span>
+        ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}${(() => { const w = pay.wageOf(W[m.id], api.month(), r, m.type === '정'); return w ? ` <span class="small">${m.type === '정' ? '월급' : '시급'} ${w.toLocaleString()}</span>` : ''; })()}${m.noJuhu ? ' <span class="small">주휴 없음</span>' : ''}${m.leaveDate ? ` <span class="pill warn">${esc(m.leaveDate.slice(5).replace('-', '/'))} 퇴사</span>` : ''}</span>
         <button class="sm ghost" data-mset="${m.id}">설정</button></div><div id="ms_${m.id}"></div></div>`).join('')}</div>`
       : '<p class="small">아직 승인된 직원이 없어요.</p>'}
       <p class="small">매니저는 근무표·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요. 휴무신청은 알바만 내요.</p>
@@ -436,7 +443,7 @@ async function ownerMore(id, again) {
           <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="mwf" value="next" style="width:auto">다음 달부터</label></div>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="mnj" ${m.noJuhu ? 'checked' : ''} style="width:auto">주휴수당 없음 <span class="small">(계약상 주휴 미포함인 알바)</span></label>
         <button id="msv" style="margin-top:12px">저장</button>
-        <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">비밀번호 임의 재설정</button><button class="sm ghost" id="mleft">퇴사 처리</button></div>
+        <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">비밀번호 임의 재설정</button></div>
         <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
         await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null, noJuhu: $('mnj').checked });
@@ -455,13 +462,10 @@ async function ownerMore(id, again) {
           $('mpinCp').onclick = () => copy(msg);
         });
       };
-      $('mleft').onclick = e => {
-        if (!confirm(m.name + '님을 퇴사 처리할까요? 로그인·출퇴근·근무표에서 빠지고, 지난 기록은 그대로 남아요.')) return;
-        busy(e.target, async () => { await api.setMember(id, m.id, { status: 'left', leftAt: api.F.serverTimestamp() }); toast('퇴사 처리했어요'); again(); });
-      };
     };
   });
-  document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active' }); toast('다시 직원이 됐어요'); again(); }); }; });
+  document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active', leaveDate: null }); toast('다시 직원이 됐어요'); again(); }); }; });
+  $('goStaff').onclick = () => staff.staffScreen(s, again, true);
   $('goEdit').onclick = () => sched.scheduleEditor(s, again);
   $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => again());
   $('goSched').onclick = () => sched.scheduleView(s, null, () => again());

@@ -398,22 +398,42 @@ try {
   await park.locator('#go').click();
   await park.getByText('박알바님').waitFor();
 
-  // 12) 사장님: 박알바 퇴사 처리 → 직원 목록·로그인에서 빠짐, 다시 일함으로 되돌리기
+  // 12) 사장님: 입사·퇴사 화면에서 박알바 퇴사(어제 = 바로) → 로그인에서 빠짐, 다시 일함으로 되돌리기
   await boss.reload();
   await boss.locator('[data-store]', { hasText: '산성' }).click();
   await tab(boss, '더보기');
   await boss.getByText('직원 2명', { exact: true }).waitFor();
-  await parkRow().locator('[data-mset]').click();
-  await boss.locator('#mleft').click();
+  await boss.locator('#goStaff').click();
+  await boss.getByText('새 직원 입사').waitFor();
+  await boss.selectOption('#rn', { label: '박알바' });
+  const yday = new Date(Date.now() + 9 * 3600e3 - 864e5).toISOString().slice(0, 10);
+  await boss.fill('#rd', yday);
+  await boss.locator('#rdel').click();
   await boss.getByText('퇴사한 직원 1명').waitFor();
-  await boss.getByText('직원 1명', { exact: true }).waitFor();
   await park.reload();
   await park.getByText('퇴사 처리된 계정이에요').waitFor();
-  await boss.getByText('퇴사한 직원 1명').click();
   await boss.locator('[data-back]').click();
-  await boss.getByText('직원 2명', { exact: true }).waitFor();
+  await boss.waitForFunction(() => !document.body.innerText.includes('퇴사한 직원'));
   await park.reload();
   await park.getByText('박알바님').waitFor();
+  // 12-3) 입사 등록: 최검색(10-1에서 가입 신청해 둔 사람) → 승인 탭에 "입사 등록됨" → 승인하면 정직원·정시 자동
+  await boss.fill('#hn', '최 검색');
+  await boss.selectOption('#ht', '정');
+  await boss.fill('#hw', '2500000');
+  await boss.fill('#hs', '11:00');
+  await boss.locator('#hadd').click();
+  await boss.getByText('가입 기다리는 입사 등록 1명').waitFor();
+  await tab(boss, '승인');
+  await boss.getByText('✓ 입사 등록됨').waitFor();
+  await shot(boss, '입사등록승인');
+  await boss.locator('[data-jok]').click();
+  await boss.getByText('새 가입 신청이 없어요').waitFor();
+  await tab(boss, '더보기');
+  await boss.getByText('직원 3명', { exact: true }).waitFor();
+  const chRow = await boss.locator('.item', { hasText: '최검색' }).first().innerText();
+  assert.match(chRow, /정직원/); assert.match(chRow, /정시 11:00/); assert.match(chRow, /월급 2,500,000/);
+  await walk.reload();
+  await walk.locator('#nav a').first().waitFor();
 
   // 12-0) 매출: 김알바(매니저)가 오늘 매출 넣기 → 바꾸기(확인 창) → 사장님도 보임
   await tab(alba, '매출');
