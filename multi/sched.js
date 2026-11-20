@@ -1,8 +1,9 @@
 // 근무표·휴무신청 화면
 // 직원: 근무표 보기, 휴무신청(알바만). 매니저·사장님: 근무표 짜기(휴무신청 반영·자동 채우기 초안·확정), 휴무신청 현황
-import * as api from './fb.js?v=28';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=28';
-import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=28';
+import * as api from './fb.js?v=29';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=29';
+import * as auto from './autosched.js?v=29';
+import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=29';
 
 const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
 export const isAlba = m => m.type !== '정';
@@ -44,7 +45,7 @@ export async function staffingScreen(store, back) {
 const order = ms => [...ms.filter(m => !isAlba(m)), ...ms.filter(isAlba)];
 const byName = (a, b) => (a.name < b.name ? -1 : 1);
 async function loadWeek(store, week) {
-  const [ms, sch, rules] = await Promise.all([api.members(store.id), api.getSchedule(store.id, week), api.rulesOf(store.id)]);
+  const [ms, sch, rules] = await Promise.all([api.membersAll(store.id), api.getSchedule(store.id, week), api.rulesOf(store.id)]);   // 근무표 전용 직원 포함
   const act = order(ms.filter(m => api.isActive(m, week)).sort(byName)); // 그 주 시작에 재직 중인 사람
   return { act, sch: sch || { cells: {}, published: false }, rules: rules.current };
 }
@@ -181,7 +182,7 @@ export async function scheduleEditor(store, back, week) {
   const nd = await needOf(store, rules);
   const dates = api.weekDates(week), need = nd.alba, needFull = nd.full, openDays = (rules && rules.open.days) || [0, 1, 2, 3, 4, 5, 6];
   const cells = {}; act.forEach(m => { cells[m.id] = [...((sch.cells || {})[m.id] || ['', '', '', '', '', '', ''])]; });
-  let dirty = false;
+  let dirty = false, notes = [];
   const draw = () => {
     show(`${top('근무표 짜기', true)}
       <div class="row between"><h2 style="margin:12px 0">${weekTitle(week)}</h2>
@@ -190,8 +191,9 @@ export async function scheduleEditor(store, back, week) {
         <span class="pill">휴무신청 ${lvs.length}명</span>${dirty ? '<span class="pill warn">저장 안 함</span>' : ''}</div>
       ${grid(act, cells, dates, { editable: true, need, needFull })}
       <p class="small">칸을 누르면 바뀌어요: 빈칸 → 근무 → ${'(주말: 오전 → 근무+오전 →)'} ✕ → 빈칸</p>
-      <div class="row" style="gap:8px"><button class="ghost" id="fLeave">휴무신청 반영</button><button class="ghost" id="fAuto">빈칸 자동 채우기</button></div>
-      <p class="small">휴무신청 반영 = 알바가 못 나온다고 한 날을 ✕로. 자동 채우기 = 알바 빈칸을 그날 필요 인원만큼, 이번 주 근무가 적은 사람부터 채워요(초안). 정직원 칸은 직접 정해 주세요.</p>
+      <div class="row" style="gap:8px"><button class="ghost" id="fLeave">휴무신청 반영</button><button class="ghost" id="fAuto">자동으로 짜기</button></div>
+      <p class="small">자동으로 짜기 = 스케줄 규칙대로(정 그룹 고정휴무 → 동시휴무 검사 → 휴무신청 ✕ → 최소출근일·요일 인원·지난 4주 균등 → 과인원 순서). 알바 칸은 ✕만 남기고 새로 짜고, 정 그룹은 빈칸만 채워요. 휴무신청 반영 = ✕만 넣기.</p>
+      ${notes.length ? `<div class="card">${notes.map((m, k) => `<p class="small" style="margin:6px 0;${m.kind === 'stop' ? 'color:var(--bad)' : m.kind === 'warn' ? 'color:var(--warn)' : ''}">${esc(m.text)}${m.kind === 'notice' ? ` <button class="sm ghost" data-note="${k}">복사</button>` : ''}</p>`).join('')}</div>` : ''}
       <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="save">초안 저장</button><button id="pub">확정해서 직원에게 보이기</button></div>`);
     wireTop(() => { if (!dirty || confirm('저장 안 한 내용이 있어요. 나갈까요?')) back(); });
     $('wPrev').onclick = () => (!dirty || confirm('저장 안 한 내용이 있어요. 넘어갈까요?')) && scheduleEditor(store, back, api.addDays(week, -7));
@@ -207,19 +209,19 @@ export async function scheduleEditor(store, back, week) {
       lvs.forEach(l => (l.off || []).forEach(d => { const i = dates.indexOf(d); if (i >= 0 && cells[l.uid] && cells[l.uid][i] !== 'X') { cells[l.uid][i] = 'X'; n++; } }));
       dirty = dirty || n > 0; toast(n ? `${n}칸을 ✕로 바꿨어요` : '바꿀 칸이 없어요'); draw();
     };
-    $('fAuto').onclick = () => {
-      const off = {}; lvs.forEach(l => { off[l.uid] = new Set(l.off || []); });
-      const albas = act.filter(isAlba), cnt = m => cells[m.id].filter(works).length;
-      let n = 0;
-      dates.forEach((d, i) => {
-        if (!openDays.includes(api.dowOf(d))) return;
-        let lack = need[api.dowOf(d)] - albas.filter(m => works(cells[m.id][i])).length;
-        const pool = albas.filter(m => cells[m.id][i] === '' && !(off[m.id] && off[m.id].has(d)))
-          .sort((a, b) => cnt(a) - cnt(b) || Math.random() - 0.5);
-        for (const m of pool) { if (lack <= 0) break; cells[m.id][i] = 'O'; lack--; n++; }
-      });
-      dirty = dirty || n > 0; toast(n ? `${n}칸을 채웠어요. 확인하고 고쳐 주세요` : '채울 칸이 없어요'); draw();
-    };
+    $('fAuto').onclick = e => busy(e.target, async () => {
+      if (!confirm('알바 칸은 ✕만 남기고 새로 짜요. 정 그룹은 빈칸만 채워요. 짤까요?')) return;
+      const cfg = await api.schedCfg(store.id).catch(() => null);
+      const past = await Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map(w => api.getSchedule(store.id, api.addDays(week, -7 * w)).catch(() => null)));
+      const people = act.map(m => ({ id: m.id, name: m.name, disp: m.disp || m.name, group: isAlba(m) ? '알' : '정', offDays: m.offDays || [], minDays: m.minDays == null ? null : m.minDays, priority: !!m.priority }));
+      const nameOf = Object.fromEntries(act.map(m => [m.id, m.name])), pub = past.map(s => (s && s.published ? s : null));
+      let streak = 0; for (const s of pub) { if (!auto.wasOverflow(s, people, cfg)) break; streak++; }
+      const leaves = {}; lvs.forEach(l => { leaves[l.uid] = { off: l.off || [], am: l.am || [] }; });
+      const r = auto.autoSchedule({ people, cells, leaves, dates, cfg, hist: auto.historyOf(pub.slice(0, 4), id => nameOf[id]), overflowStreak: streak, now: api.kst().hm });
+      act.forEach(m => { cells[m.id] = r.cells[m.id]; });
+      notes = r.msgs; dirty = true; toast(r.ok ? '자동으로 짰어요. 확인하고 고쳐 주세요' : '동시휴무 금지 위반이 있어 멈췄어요'); draw();
+    });
+    document.querySelectorAll('[data-note]').forEach(b => { b.onclick = () => copy(notes[+b.dataset.note].text.replace(/^📢 \[단톡 공지용\] /, ''), '공지 멘트를 복사했어요'); });
     const save = published => e => busy(e.target, async () => {
       if (published && !confirm('확정하면 직원들 근무표에 바로 보여요. 확정할까요?')) return;
       await api.saveSchedule(store.id, week, cells, published);

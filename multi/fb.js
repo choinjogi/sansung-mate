@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=28';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=28';
+import * as F from './vendor/firebase.js?v=29';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=29';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -82,7 +82,14 @@ export const getStore = id => F.getDoc(ref('stores/' + id)).then(data);
 export const myOrgs = () => list(F.query(col('orgs'), F.where('adminUids', 'array-contains', auth.currentUser.uid)));
 export const myStores = () => list(F.query(col('stores'), F.where('ownerUids', 'array-contains', auth.currentUser.uid)));
 export const orgStores = orgId => list(F.query(col('stores'), F.where('orgId', '==', orgId)));
-export const members = storeId => list(col(`stores/${storeId}/members`));
+// 근무표 전용 직원(noLogin, 예: 사장님 본인)은 근무표에만 나오고 출퇴근·급여·계정 목록엔 안 나옴
+export const membersAll = storeId => list(col(`stores/${storeId}/members`));
+export const members = storeId => membersAll(storeId).then(ms => ms.filter(m => !m.noLogin));
+export const addNoLoginMember = (storeId, v) => F.setDoc(ref(`stores/${storeId}/members/x_${rand(12, 'abcdefghijkmnpqrstuvwxyz23456789')}`),
+  { ...v, role: 'staff', status: 'active', type: '정', noLogin: true, joinedAt: F.serverTimestamp() });
+export const removeNoLogin = (storeId, id) => F.deleteDoc(ref(`stores/${storeId}/members/${id}`));
+export const schedCfg = storeId => F.getDoc(ref(`stores/${storeId}/settings/sched`)).then(data);
+export const saveSchedCfg = (storeId, v) => F.setDoc(ref(`stores/${storeId}/settings/sched`), v);
 export const stats = storeId => list(col(`stores/${storeId}/stats`));
 // 지금 적용 중인 규칙 = 이번 달 이전(포함) 중 가장 최근 것. 다음 달부터 예약된 규칙도 같이 돌려줌
 export async function rulesOf(storeId) {

@@ -6,12 +6,12 @@
 //          급여 = 시급분 + 주휴 (원 단위 반올림은 맨 끝에 한 번)
 //  · 정직원: 월급. 그 달 중간에 들어오거나 나가면 일한 날짜 수만큼 (월급 ÷ 그 달 일수 × 날짜 수)
 //  · 가감(보너스·공제 등)은 사장님이 정산표에서 직접 넣음
-import * as api from './fb.js?v=28';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=28';
-import * as records from './records.js?v=28';
-import * as sched from './sched.js?v=28';
+import * as api from './fb.js?v=29';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=29';
+import * as records from './records.js?v=29';
+import * as sched from './sched.js?v=29';
 
-import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=28';
+import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=29';
 export { weekNo, wageOf, albaPay, fullPay };
 
 const ymd = ts => (ts && ts.toDate ? api.kst(ts.toDate()).date : null);

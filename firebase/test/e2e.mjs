@@ -303,7 +303,7 @@ try {
   await boss.locator('#fLeave').click();
   await boss.getByText('2칸을 ✕로 바꿨어요').waitFor();
   await boss.locator('#fAuto').click();
-  await boss.getByText('칸을 채웠어요').waitFor();
+  await boss.getByText('자동으로 짰어요. 확인하고 고쳐 주세요').waitFor();
   const xCount = await boss.locator('td.sc.x').count();
   assert.equal(xCount, 2, '휴무 반영 칸 수');
   await boss.locator('td[data-c]').first().click(); // 칸 눌러 바꾸기

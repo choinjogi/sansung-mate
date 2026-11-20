@@ -1,11 +1,11 @@
 // 새 앱(여러 매장용) = 산성 앱 화면(app.js) 그대로 + 데이터만 Firebase.
 // 산성 앱의 data-live.js(구글 시트 서버)와 같은 window.API 43개를 여기서 Firebase·Cloudflare 서버로 대신 만든다.
 // 화면(app.js)은 산성 앱 것을 거의 그대로 쓰고, 매장 고르기·사장님 구글 로그인만 조금 붙였다.
-import * as api from '../multi/fb.js?v=28';
-import * as records from '../multi/records.js?v=28';
-import * as sched from '../multi/sched.js?v=28';
-import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=28';
-import { PUSH_KEY } from '../multi/config.js?v=28';
+import * as api from '../multi/fb.js?v=29';
+import * as records from '../multi/records.js?v=29';
+import * as sched from '../multi/sched.js?v=29';
+import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=29';
+import { PUSH_KEY } from '../multi/config.js?v=29';
 
 const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -67,7 +67,7 @@ async function me() {
 
 async function schedule() {
   const c = await ctx(), t = api.kst(), w = await weekInfo(c, t.date), dates = api.weekDates(w.mon);
-  const ms = (await api.members(c.store.id)).filter(m => api.isActive(m, w.mon)).sort((a, b) => (a.name < b.name ? -1 : 1));
+  const ms = (await api.membersAll(c.store.id)).filter(m => api.isActive(m, w.mon)).sort((a, b) => (a.name < b.name ? -1 : 1));
   const cells = (w.sch && w.sch.cells) || {};
   const rows = ms.map(m => ({ disp: dispOf(m), group: m.type === '정' ? '정' : '알', codes: dates.map((d, i) => toSansung((cells[m.id] || [])[i])) }));
   const count = dates.map((d, i) => { const j = rows.filter(r => r.group === '정' && isWork(r.codes[i] === '오전+오후' ? 'O' : r.codes[i])).length, a = rows.filter(r => r.group === '알' && (r.codes[i] === 'O' || r.codes[i] === '오전+오후')).length; return `${j}+${a}`; });
@@ -249,7 +249,7 @@ if (qs.get('owner')) ls.set('mate_owner', qs.get('owner').toUpperCase());   // �
 if ([...qs.keys()].length) history.replaceState(null, '', location.pathname);
 
 // 사장님·매니저 화면 데이터 + 화면 스크립트는 로그인 상태를 안 뒤에 불러옴
-await import('./admin.js?v=28');
-await import('./extra.js?v=28');
+await import('./admin.js?v=29');
+await import('./extra.js?v=29');
 await new Promise(res => { const off = api.onUser(() => { off(); res(); }); });
-const s = document.createElement('script'); s.src = new URL('app.js?v=28', import.meta.url).href; document.body.appendChild(s);
+const s = document.createElement('script'); s.src = new URL('app.js?v=29', import.meta.url).href; document.body.appendChild(s);

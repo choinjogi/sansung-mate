@@ -119,6 +119,21 @@ test('스케줄용 직원 설정(표시이름·고정휴무·최소출근일·�
   await assertFails(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), { priority: 'yes' }));
   await assertFails(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), { disp: '아주아주긴표시이름입니다요' }));
 });
+test('근무표 전용 직원(로그인 없음)은 사장님만 만든다', async () => {
+  const v = { name: '홍사장', role: 'staff', status: 'active', type: '정', noLogin: true, offDays: ['월'] };
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/members/x_owner01'), v));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/members/x_owner02'), v));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/members/x_owner03'), { ...v, role: 'manager' }));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/members/owner04'), v));
+  await assertFails(setDoc(doc(as('kim', G), 'stores/sansung/members/x_owner05'), v));
+});
+test('스케줄 규칙(settings/sched)은 사장님만 쓰고 매장 사람은 읽는다', async () => {
+  const v = { min: [7, 7, 7, 7, 9, 9, 7], max: [7, 7, 7, 7, 10, 10, 8], alba: [4, 4, 4, 4, null, null, null], pairs: [{ a: '최고정', b: '이주방' }], overflow: ['토', '금'], defMin: 3 };
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/settings/sched'), v));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/settings/sched'), v));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/settings/sched'), { ...v, defMin: 9 }));
+  await assertSucceeds(getDoc(doc(as('alba', P), 'stores/sansung/settings/sched')));
+});
 test('승인 대기 중에는 매장 정보와 스케줄을 못 본다', async () => {
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung')));
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung/schedules/2026-11-23')));

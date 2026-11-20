@@ -726,28 +726,59 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     loading(); const list = await API.staffCfg(), DAYS = ['월', '화', '수', '목', '금', '토', '일'];
     const sum = a => [a.kind, a.start && a.start + ' 출근', a.offDays.length ? a.offDays.join('·') + ' 고정휴무' : '', a.kind === '알바' && a.minDays != null ? '최소 ' + a.minDays + '일' : '', a.priority ? '우선배정' : '', a.noJuhu ? '주휴 없음' : ''].filter(Boolean).join(' · ');
     render(`<div>${header()}<h2>직원 설정</h2>
-      <div class="card list">${list.map((a, i) => `<a class="item" href="#" data-i="${i}" style="color:inherit;text-decoration:none"><div><b>${esc(a.disp || a.name)}</b>${a.disp ? ` <span class="small">(${esc(a.name)})</span>` : ''}<div class="small">${esc(sum(a))}</div></div><span class="small">›</span></a>`).join('')}</div>
-      <p class="small">근무표 자동 짜기와 급여 계산에 쓰는 정보예요. 사장님만 고칠 수 있어요.</p></div>`);
+      <div class="card list">${list.map((a, i) => `<a class="item" href="#" data-i="${i}" style="color:inherit;text-decoration:none"><div><b>${esc(a.disp || a.name)}</b>${a.disp ? ` <span class="small">(${esc(a.name)})</span>` : ''}<div class="small">${esc(sum(a))}${a.noLogin ? ' · 근무표 전용' : ''}</div></div><span class="small">›</span></a>`).join('')}</div>
+      <p class="small">근무표 자동 짜기와 급여 계산에 쓰는 정보예요. 사장님만 고칠 수 있어요.</p>
+      <div class="card"><b>근무표에만 넣을 사람</b><div class="small">앱에 로그인하지 않지만 근무표 정 그룹에 나와야 하는 사람 (예: 사장님 본인). 출퇴근·급여 목록엔 안 나와요.</div>
+        <div class="row" style="gap:6px;margin-top:8px"><input id="nn" maxlength="20" placeholder="이름 (예: 홍길동)" style="flex:1"><select id="nk" style="width:auto"><option>정직원</option><option>반직원</option></select></div>
+        <button class="ghost" id="nadd" style="margin-top:8px">근무표에 넣기</button></div></div>`);
     $app.querySelectorAll('[data-i]').forEach(el => el.onclick = e => { e.preventDefault(); edit(list[+el.dataset.i]); });
+    document.getElementById('nadd').onclick = e => busy(e.target, async () => { const r = await API.addNoLogin(document.getElementById('nn').value, document.getElementById('nk').value); toast(r.msg); if (r.saved) VIEWS.acfg(); });
     function edit(a) {
       render(`<div>${header()}<h2>${esc(a.name)}</h2><div class="card">
         <label>표시이름 (근무표에 보이는 이름, 비우면 이름 그대로)</label><input id="cd" maxlength="10" value="${esc(a.disp)}" placeholder="예: 길동">
-        <label>구분</label><select id="ck">${['정직원', '반직원', '알바'].map(k => `<option${k === a.kind ? ' selected' : ''}>${k}</option>`).join('')}</select>
+        <label>구분</label><select id="ck">${(a.noLogin ? ['정직원', '반직원'] : ['정직원', '반직원', '알바']).map(k => `<option${k === a.kind ? ' selected' : ''}>${k}</option>`).join('')}</select>
         <label>정시 출근 (비우면 매장 기본)</label><input id="cs" type="time" step="300" value="${esc(a.start)}">
         <label>고정휴무 요일</label><div class="row" style="flex-wrap:wrap;gap:6px">${DAYS.map(d => `<label style="display:inline-flex;align-items:center;gap:4px;margin:0"><input type="checkbox" data-d="${d}"${a.offDays.includes(d) ? ' checked' : ''} style="width:auto">${d}</label>`).join('')}</div>
         <div id="calba"><label>최소출근일 (한 주, 비우면 매장 기본)</label><input id="cm" type="number" min="0" max="7" value="${a.minDays == null ? '' : a.minDays}">
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cp" style="width:auto"${a.priority ? ' checked' : ''}>우선배정 (다른 알바보다 조금 더)</label></div>
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cj" style="width:auto"${a.noJuhu ? ' checked' : ''}>주휴수당 없음 (계약상 미포함)</label>
         <button id="csv" style="margin-top:16px">저장</button></div>
+        ${a.noLogin ? '<button class="ghost" id="cdel">근무표에서 빼기</button>' : ''}
         <button class="ghost" id="cbk">목록으로</button></div>`);
       const $ = id => document.getElementById(id), alba = () => { $('calba').hidden = $('ck').value !== '알바'; };
       $('ck').onchange = alba; alba(); $('cbk').onclick = () => VIEWS.acfg();
+      if ($('cdel')) $('cdel').onclick = () => busy($('cdel'), async () => { if (!confirm(a.name + '님을 근무표에서 뺄까요?')) return; toast((await API.removeNoLogin(a.name)).msg); VIEWS.acfg(); });
       $('csv').onclick = () => busy($('csv'), async () => {
         const o = { disp: $('cd').value, kind: $('ck').value, start: $('cs').value, offDays: [...$app.querySelectorAll('[data-d]')].filter(x => x.checked).map(x => x.dataset.d),
           minDays: $('ck').value === '알바' ? $('cm').value : null, priority: $('ck').value === '알바' && $('cp').checked, noJuhu: $('cj').checked };
         const r = await API.saveStaffCfg(a.name, o); toast(r.msg); if (r.saved) VIEWS.acfg();
       });
     }
+  };
+
+  // ---------- 관리: 스케줄 규칙 (새 앱: 산성 스케줄 "설정" 시트와 같은 칸, 사장님만) ----------
+  VIEWS.asched = async function () {
+    loading(); const { cfg, jung } = await API.schedCfg(), D = ['월', '화', '수', '목', '금', '토', '일'];
+    const row = (id, arr, ph) => `<tr><td class="name">${ph}</td>${D.map((d, i) => `<td><input type="number" min="0" max="50" inputmode="numeric" data-r="${id}" data-i="${i}" value="${arr[i] == null ? '' : arr[i]}" style="padding:8px 2px;text-align:center"></td>`).join('')}</tr>`;
+    const pairs = [...cfg.pairs, ...Array(Math.max(0, 5 - cfg.pairs.length)).fill({ a: '', b: '' })].slice(0, 10);
+    const sel = (v, k, i) => `<select data-p="${k}" data-i="${i}" style="flex:1"><option value="">-</option>${jung.map(n => `<option${n === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+    render(`<div>${header()}<h2>스케줄 규칙</h2>
+      <div class="card scroll"><table><tr><th class="name"></th>${D.map(d => `<th>${d}</th>`).join('')}</tr>
+        ${row('min', cfg.min, '최소(정+알)')}${row('max', cfg.max, '최대(정+알)')}${row('alba', cfg.alba, '알바 고정')}</table>
+        <p class="small">알바 고정에 숫자가 있는 요일은 정+알 대신 "그날 정 그룹 출근 수 + 알바 N명"으로 맞춰요. 비우면 정+알 기준.</p></div>
+      <div class="card"><b>동시휴무 금지 (정 그룹)</b>${pairs.map((p, i) => `<div class="row" style="gap:6px;margin-top:6px">${sel(p.a, 'a', i)}<span>+</span>${sel(p.b, 'b', i)}</div>`).join('')}
+        <p class="small">두 사람이 같은 날 함께 쉬면 자동 짜기가 멈추고 알려 줘요.</p></div>
+      <div class="card"><label>과인원 넣는 순서</label><input id="so" value="${esc(cfg.overflow.join(', '))}" placeholder="토, 금, 목, 토 오전, 일 오전">
+        <p class="small">최소출근일 때문에 인원이 넘칠 때 이 순서로 넣어요. 오전은 오전 가능하다고 한 사람만.</p>
+        <label>최소출근일 기본 (알바, 한 주)</label><input id="sd" type="number" min="0" max="7" value="${cfg.defMin}">
+        <p class="small">직원 설정에 따로 적은 사람은 그 값을 써요.</p></div>
+      <button id="ssv">저장</button></div>`);
+    const val = id => D.map((_, i) => document.querySelector(`[data-r="${id}"][data-i="${i}"]`).value);
+    document.getElementById('ssv').onclick = e => busy(e.target, async () => {
+      const ps = pairs.map((_, i) => ({ a: document.querySelector(`[data-p="a"][data-i="${i}"]`).value, b: document.querySelector(`[data-p="b"][data-i="${i}"]`).value }));
+      const r = await API.saveSchedCfg({ min: val('min'), max: val('max'), alba: val('alba'), pairs: ps, overflow: document.getElementById('so').value, defMin: document.getElementById('sd').value });
+      toast(r.msg);
+    });
   };
 
   // ---------- 관리: 출퇴근 기록 넣기·고치기 (NFC "지난 기록 넣기"와 같음) ----------
@@ -798,7 +829,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
         ${ME.role === '사장님' ? '<a class="item" href="#" data-go="awage" style="color:inherit;text-decoration:none"><span>💰 알바 시급</span><span class="small">›</span></a>' : ''}
-        ${ME.role === '사장님' && API.staffCfg ? '<a class="item" href="#" data-go="acfg" style="color:inherit;text-decoration:none"><span>🗂️ 직원 설정 (표시이름·고정휴무·최소출근일)</span><span class="small">›</span></a>' : ''}
+        ${ME.role === '사장님' && API.staffCfg ? '<a class="item" href="#" data-go="acfg" style="color:inherit;text-decoration:none"><span>🗂️ 직원 설정 (표시이름·고정휴무·최소출근일)</span><span class="small">›</span></a><a class="item" href="#" data-go="asched" style="color:inherit;text-decoration:none"><span>📐 스케줄 규칙 (인원·동시휴무·과인원)</span><span class="small">›</span></a>' : ''}
         <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
@@ -823,7 +854,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 28;
+  const APP_VER = 29;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

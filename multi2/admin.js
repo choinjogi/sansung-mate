@@ -1,11 +1,12 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=28';
-import * as sched from '../multi/sched.js?v=28';
-import * as pay from '../multi/pay.js?v=28';
-import * as dash from '../multi/dash.js?v=28';
-import * as staff from '../multi/staff.js?v=28';
-import { wageOf } from '../multi/paycalc.js?v=28';
+import * as api from '../multi/fb.js?v=29';
+import * as sched from '../multi/sched.js?v=29';
+import * as pay from '../multi/pay.js?v=29';
+import * as dash from '../multi/dash.js?v=29';
+import * as staff from '../multi/staff.js?v=29';
+import { wageOf } from '../multi/paycalc.js?v=29';
+import * as auto from '../multi/autosched.js?v=29';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -157,12 +158,14 @@ A.issueAll = async () => ({ list: [], hours: 0 });
 // ---------- 직원 설정 (스케줄·급여용, 산성 직원명부 K~Q와 같은 칸) ----------
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 A.staffCfg = async () => {
-  const c = await owner(), ms = await staffList(c);
-  return ms.map(m => ({ name: m.name, disp: m.disp || '', kind: m.type === '정' ? (m.half ? '반직원' : '정직원') : '알바', start: m.startTime || '',
+  const c = await owner(), ms = (await api.membersAll(c.store.id)).filter(m => api.isActive(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
+  return ms.map(m => ({ name: m.name, noLogin: !!m.noLogin, disp: m.disp || '', kind: m.type === '정' ? (m.half ? '반직원' : '정직원') : '알바', start: m.startTime || '',
     offDays: (m.offDays || []).filter(x => DAYS.includes(x)), minDays: m.minDays == null ? null : m.minDays, priority: !!m.priority, noJuhu: !!m.noJuhu, manager: m.role === 'manager' }));
 };
 A.saveStaffCfg = async (name, o) => {
-  const c = await owner(), m = await byName(c, name);
+  const c = await owner(), m = (await api.membersAll(c.store.id)).find(x => x.name === name && api.isActive(x));
+  if (!m) return { saved: false, msg: name + '님을 찾을 수 없어요' };
+  if (m.noLogin && o.kind === '알바') return { saved: false, msg: '근무표 전용(로그인 없음)은 정직원·반직원만 돼요' };
   const disp = String(o.disp || '').trim(), min = o.minDays === '' || o.minDays == null ? null : Math.round(+o.minDays);
   if (disp.length > 10) return { saved: false, msg: '표시이름은 10글자까지예요' };
   if (min != null && !(min >= 0 && min <= 7)) return { saved: false, msg: '최소출근일은 0~7일이에요' };
@@ -171,6 +174,40 @@ A.saveStaffCfg = async (name, o) => {
     offDays: DAYS.filter(x => (o.offDays || []).includes(x)), minDays: min, priority: !!o.priority, noJuhu: !!o.noJuhu };
   await api.setMember(c.store.id, m.id, patch);
   return { saved: true, msg: `${name}님 설정을 저장했어요` };
+};
+
+// 근무표 전용 직원 (로그인 없음, 예: 사장님 본인) — 근무표에만 나오고 출퇴근·급여 목록엔 안 나옴
+A.addNoLogin = async (name, kind) => {
+  const c = await owner(), n = String(name || '').trim();
+  if (!n || n.length > 20) return { saved: false, msg: '이름을 넣어 주세요 (20글자까지)' };
+  if ((await api.membersAll(c.store.id)).some(m => api.isActive(m) && api.nameKey(m.name) === api.nameKey(n))) return { saved: false, msg: '같은 이름이 이미 있어요' };
+  await api.addNoLoginMember(c.store.id, { name: n, half: kind === '반직원' });
+  return { saved: true, msg: n + '님을 근무표에 넣었어요' };
+};
+A.removeNoLogin = async name => {
+  const c = await owner(), m = (await api.membersAll(c.store.id)).find(x => x.name === name && x.noLogin);
+  if (!m) return { msg: '이미 빠졌어요' };
+  await api.removeNoLogin(c.store.id, m.id);
+  return { msg: name + '님을 근무표에서 뺐어요' };
+};
+
+// ---------- 스케줄 규칙 (산성 스케줄 "설정" 시트: 목표 인원·알바 고정 수·동시휴무 금지·과인원 순서·최소출근일 기본) ----------
+A.schedCfg = async () => {
+  const c = await owner(), [cfg, ms] = await Promise.all([api.schedCfg(c.store.id), api.membersAll(c.store.id)]);
+  return { cfg: { ...auto.SCHED_DEFAULT, ...(cfg || {}) }, saved: !!cfg, jung: ms.filter(m => api.isActive(m) && m.type === '정').map(m => m.name).sort() };
+};
+A.saveSchedCfg = async o => {
+  const c = await owner(), num = (v, lo, hi) => { const n = Math.round(+v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+  const min = o.min.map(v => num(v, 0, 50)), max = o.max.map(v => num(v, 0, 50)), alba = o.alba.map(v => (v === '' || v == null ? null : num(v, 0, 50)));
+  if (min.includes(null) || max.includes(null)) return { saved: false, msg: '최소·최대 인원은 숫자로 넣어 주세요' };
+  if (min.some((v, i) => v > max[i])) return { saved: false, msg: '최소가 최대보다 큰 요일이 있어요' };
+  const pairs = (o.pairs || []).filter(p => p.a && p.b && p.a !== p.b).slice(0, 10).map(p => ({ a: p.a, b: p.b }));
+  const OK = ['월', '화', '수', '목', '금', '토', '일', '토 오전', '일 오전'];
+  const overflow = String(o.overflow || '').split(/[,·\n]+/).map(s => s.trim()).filter(Boolean);
+  if (overflow.some(x => !OK.includes(x))) return { saved: false, msg: '과인원 순서는 "토, 금, 목, 토 오전, 일 오전"처럼 넣어 주세요' };
+  const defMin = num(o.defMin, 0, 7); if (defMin == null) return { saved: false, msg: '최소출근일 기본은 0~7이에요' };
+  await api.saveSchedCfg(c.store.id, { min, max, alba, pairs, overflow: [...new Set(overflow)].slice(0, 9), defMin });
+  return { saved: true, msg: '스케줄 규칙을 저장했어요' };
 };
 
 // ---------- 입사 · 퇴사 ----------

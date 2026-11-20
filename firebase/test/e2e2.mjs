@@ -217,7 +217,21 @@ try {
   // 7) 산성에 없던 화면 (더보기에 붙임)
   const more = async x => { await tab(boss2, '더보기'); await boss2.locator(`[data-x="${x}"]`).click(); };
   const backMore = async () => { await boss2.locator('#back').click(); await boss2.getByText('더보기').first().waitFor(); };
-  await more('edit'); await boss2.getByText('초안 (직원에게 안 보임)').waitFor(); await backMore();
+  // 근무표 전용 직원(사장님 본인) + 스케줄 규칙 → 근무표 짜기 [자동으로 짜기]
+  await tab(boss2, '더보기'); await boss2.locator('[data-go="acfg"]').click(); await boss2.locator('#nadd').waitFor();
+  await boss2.fill('#nn', '조사장'); await boss2.locator('#nadd').click(); await boss2.locator('.item', { hasText: '근무표 전용' }).first().waitFor();
+  assert.match(await text(boss2), /조사장\s+정직원 · 근무표 전용/);
+  await boss2.locator('.item', { hasText: '조사장' }).first().click(); await boss2.locator('[data-d="월"]').check(); await boss2.locator('#csv').click();
+  await boss2.getByText(/월 고정휴무 · 근무표 전용/).waitFor();
+  await tab(boss2, '더보기'); await boss2.locator('[data-go="asched"]').click(); await boss2.locator('#ssv').waitFor();
+  await boss2.locator('[data-r="alba"][data-i="0"]').fill('1'); await boss2.locator('#ssv').click(); await boss2.getByText('스케줄 규칙을 저장했어요').waitFor();
+  await more('edit'); await boss2.getByText('초안 (직원에게 안 보임)').waitFor();
+  assert.match(await text(boss2), /조사장/);           // 근무표 전용 직원이 근무표에 나옴
+  await boss2.locator('#fAuto').click(); await boss2.getByText(/✅ 자동 짜기 완료/).waitFor();
+  assert.match(await text(boss2), /정\+알: 월 0\+1/);  // 조사장 월 고정휴무, 월요일 알바 고정 1명
+  await boss2.locator('#save').click(); await boss2.getByText('초안을 저장했어요').waitFor();
+  await backMore();
+  await tab(boss2, '오늘'); await boss2.locator('#app').getByText('김알바').first().waitFor(); assert.doesNotMatch(await text(boss2), /조사장/);   // 출퇴근 현황엔 안 나옴
   await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
   await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();
   await more('pay'); await boss2.getByText('지급 합계').waitFor(); assert.match(await text(boss2), /김알바/); await backMore();
