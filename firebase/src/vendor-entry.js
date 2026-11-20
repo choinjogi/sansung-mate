@@ -3,7 +3,7 @@ export { initializeApp } from 'firebase/app';
 export { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signInWithPopup, signInWithRedirect, signInWithCredential, GoogleAuthProvider, signOut, updatePassword } from 'firebase/auth';
 export { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where,
-  writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+  writeBatch, serverTimestamp, Timestamp, orderBy, limit, addDoc } from 'firebase/firestore';
 export { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 import qrcode from 'qrcode-generator';
 export { qrcode };

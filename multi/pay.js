@@ -6,11 +6,11 @@
 //          급여 = 시급분 + 주휴 (원 단위 반올림은 맨 끝에 한 번)
 //  · 정직원: 월급. 그 달 중간에 들어오거나 나가면 일한 날짜 수만큼 (월급 ÷ 그 달 일수 × 날짜 수)
 //  · 가감(보너스·공제 등)은 사장님이 정산표에서 직접 넣음
-import * as api from './fb.js?v=12';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=12';
-import * as records from './records.js?v=12';
+import * as api from './fb.js?v=13';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=13';
+import * as records from './records.js?v=13';
 
-import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=12';
+import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=13';
 export { weekNo, wageOf, albaPay, fullPay };
 
 const ymd = ts => (ts && ts.toDate ? api.kst(ts.toDate()).date : null);
@@ -44,12 +44,12 @@ export async function payrollData(store, month, until, data) {
   return { month, data, rows, saved, total: sum('pay'), albaTotal: rows.filter(r => !r.full).reduce((t, r) => t + r.pay, 0), totalMin: rows.reduce((t, r) => t + (r.min || 0), 0) };
 }
 
-export function payrollCsv(store, pr) {
+export function payrollCsv(store, pr, priv = {}) {
   const q = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = [[`${store.name} ${pr.month} 정산표`], [],
-    ['이름', '구분', '일한 날', '근무 시간(시간)', '시급/월급', '시급분·월급', '주휴', '1주', '2주', '3주', '4주', '5주', '가감', '지급액', '메모']];
+    ['이름', '구분', '일한 날', '근무 시간(시간)', '시급/월급', '시급분·월급', '주휴', '1주', '2주', '3주', '4주', '5주', '가감', '지급액', '은행', '계좌', '메모']];
   pr.rows.forEach(r => rows.push([r.name, r.full ? '정직원' : '알바', r.workDays, Math.round(r.min / 6) / 10, r.wage, Math.round(r.base), Math.round(r.juhu),
-    ...[0, 1, 2, 3, 4].map(i => (r.full ? '' : Math.round(r.juhuW[i] || 0))), r.adjust, Math.round(r.pay), r.note]));
+    ...[0, 1, 2, 3, 4].map(i => (r.full ? '' : Math.round(r.juhuW[i] || 0))), r.adjust, Math.round(r.pay), (priv[r.uid] || {}).bank || '', (priv[r.uid] || {}).account || '', r.note]));
   rows.push([], ['합계', '', '', Math.round(pr.totalMin / 6) / 10, '', '', '', '', '', '', '', '', '', Math.round(pr.total)]);
   return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
 }
@@ -94,7 +94,10 @@ export async function payrollScreen(store, back, month) {
       $('detail').scrollIntoView({ behavior: 'smooth' });
     };
   });
-  if ($('csv')) $('csv').onclick = () => records.download(`${store.name}_${month}_정산표.csv`, payrollCsv(store, pr));
+  if ($('csv')) $('csv').onclick = e => busy(e.target, async () => {
+    const priv = Object.fromEntries((await api.privAll(store.id).catch(() => [])).map(p => [p.id, p]));
+    records.download(`${store.name}_${month}_정산표.csv`, payrollCsv(store, pr, priv));
+  });
   if ($('save')) $('save').onclick = e => busy(e.target, async () => {
     const adjust = readAdj();
     await api.savePayroll(store.id, month, {

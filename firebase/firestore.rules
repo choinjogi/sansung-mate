@@ -137,6 +137,15 @@ service cloud.firestore {
           && (!('wage' in d()) || (owner(s) && d().wage is int && d().wage > 0));
       }
 
+      // 공지: 사장님·매니저가 쓰고 지움, 매장 사람 모두 봄
+      match /notices/{n} {
+        allow read: if inStore(s);
+        allow create: if manager(s) && d().keys().hasOnly(['text', 'at', 'by', 'byName'])
+          && d().text is string && d().text.size() > 0 && d().text.size() <= 500
+          && d().at == request.time && d().by == uid() && d().byName is string && d().byName.size() <= 20;
+        allow delete: if manager(s);
+      }
+
       // 시급 이력 { history: [{from:'YYYY-MM', wage}] }
       match /wages/{m} {
         allow read: if owner(s) || (signedIn() && uid() == m && active(s));

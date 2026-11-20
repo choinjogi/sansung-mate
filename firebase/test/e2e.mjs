@@ -445,6 +445,31 @@ try {
   await walk.reload();
   await walk.locator('#nav a').first().waitFor();
 
+  // 12-4) 공지·내 정보: 사장님 공지 → 박알바 홈에 보임. 박알바 계좌 넣기 → 사장님 승인 탭 → 승인 → 박알바 화면에 끝 4자리만
+  await tab(boss, '더보기');
+  await boss.locator('#goNotice').click();
+  await boss.fill('#nt', '이번 주 금요일 회식합니다');
+  await boss.locator('#nsend').click();
+  await boss.getByText('올린 공지 1개').waitFor();
+  await park.reload();
+  await park.getByText('이번 주 금요일 회식합니다').waitFor();
+  await park.locator('#goInfo').click();
+  await park.fill('#ib', '국민'); await park.fill('#ia', '123-456-7890123'); await park.fill('#ie', 'park@example.com');
+  await park.locator('#isend').click();
+  await park.getByText('승인을 기다리는 중').waitFor();
+  await tab(boss, '승인');
+  await boss.getByText('••••0123').waitFor();
+  await shot(boss, '내정보승인');
+  await boss.locator('[data-iok]').click();
+  await boss.waitForFunction(() => !document.querySelector('[data-iok]'));
+  await park.locator('#back').click();
+  await park.locator('#goInfo').click();
+  await park.getByText('••••0123').waitFor();
+  assert.doesNotMatch(await text(park), /7890123/);
+  await tab(park, '홈');
+  await tab(boss, '더보기');
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 12-0) 매출: 김알바(매니저)가 오늘 매출 넣기 → 바꾸기(확인 창) → 사장님도 보임
   await tab(alba, '매출');
   await alba.getByText('매출 넣기').waitFor();
@@ -475,7 +500,9 @@ try {
   assert.equal(await boss.locator('.adj').first().inputValue(), '5000');
   const [pdl] = await Promise.all([boss.waitForEvent('download'), boss.locator('#csv').click()]);
   assert.match(pdl.suggestedFilename(), /^산성_\d{4}-\d{2}_정산표\.csv$/);
-  assert.match(await readFile(await pdl.path(), 'utf8'), /김알바,알바,1,.*,11000,/);
+  const pcsv = await readFile(await pdl.path(), 'utf8');
+  assert.match(pcsv, /김알바,알바,1,.*,11000,/);
+  assert.match(pcsv, /박알바,.*,국민,123-456-7890123,/);
   await tab(park, '내 기록');
   await park.getByText('내 급여').waitFor();
   assert.match(await text(park), /시급 10,030원/);

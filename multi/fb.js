@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=12';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=12';
+import * as F from './vendor/firebase.js?v=13';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=13';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -153,6 +153,22 @@ export const isGone = (m, today = kst().date) => m.status === 'left' || (m.statu
 export const hiresOf = storeId => list(col(`stores/${storeId}/hires`));
 export const addHire = (storeId, h) => F.setDoc(ref(`stores/${storeId}/hires/${nameKey(h.name)}`), { ...h, by: auth.currentUser.uid, at: F.serverTimestamp() });
 export const removeHire = (storeId, id) => F.deleteDoc(ref(`stores/${storeId}/hires/${id}`));
+// 공지 { text, at, by, byName } — 사장님·매니저가 쓰고, 매장 사람 모두 봄
+export const notices = storeId => list(F.query(col(`stores/${storeId}/notices`), F.orderBy('at', 'desc'), F.limit(30)));
+export const addNotice = (storeId, text, byName) => F.addDoc(col(`stores/${storeId}/notices`), { text, at: F.serverTimestamp(), by: auth.currentUser.uid, byName });
+export const removeNotice = (storeId, id) => F.deleteDoc(ref(`stores/${storeId}/notices/${id}`));
+// 내 정보(계좌·이메일): 직원은 req(변경 요청)만 씀 → 사장님 승인 때 실제 칸으로
+export const myPrivate = storeId => F.getDoc(ref(`stores/${storeId}/private/${auth.currentUser.uid}`)).then(data);
+export function requestPrivate(storeId, v, exists) {
+  const req = { bank: v.bank || '', account: v.account || '', email: v.email || '', at: F.serverTimestamp() }, r = ref(`stores/${storeId}/private/${auth.currentUser.uid}`);
+  return exists ? F.updateDoc(r, { req }) : F.setDoc(r, { req });
+}
+export const privAll = storeId => list(col(`stores/${storeId}/private`));
+export function decidePrivate(storeId, p, ok) {
+  const r = p.req || {}, patch = { req: null };
+  if (ok) Object.assign(patch, { bank: r.bank || p.bank || '', account: r.account || p.account || '', email: r.email || p.email || '', updatedAt: F.serverTimestamp() });
+  return F.updateDoc(ref(`stores/${storeId}/private/${p.id}`), patch);
+}
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
 export async function saveRules(storeId, from, rules) {
