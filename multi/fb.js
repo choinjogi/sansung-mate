@@ -76,6 +76,12 @@ export async function rulesOf(storeId) {
   return { current: all.filter(r => r.id <= now).pop() || null, next: all.find(r => r.id > now) || null };
 }
 
+// 그 달에 적용되는 규칙 (그 달 이전(포함) 중 가장 최근 것)
+export async function rulesFor(storeId, m) {
+  const all = (await list(col(`stores/${storeId}/rules`))).sort((a, b) => (a.id < b.id ? -1 : 1));
+  return all.filter(r => r.id <= m).pop() || all[0] || null;
+}
+
 // ---------- 쓰기 ----------
 // 매장 + 규칙 + 직원 초대 코드를 한 번에 (초대받은 사장님이면 초대도 "사용됨" 표시)
 export async function createStore({ orgId, name, direct, inviteCode, rules }) {
@@ -101,6 +107,8 @@ export async function newJoinCode(store) {
   await b.commit();
   return code;
 }
+// 월 합계 (총괄이 보는 숫자). 매출·인건비는 급여 단계에서 같이 채움 → merge
+export const saveStats = (storeId, m, v) => F.setDoc(ref(`stores/${storeId}/stats/${m}`), { month: m, ...v, updatedAt: F.serverTimestamp() }, { merge: true });
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
 export async function saveRules(storeId, from, rules) {

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MATE 사장님 안내서</title>
+<meta name="theme-color" content="#241624">
+<link rel="icon" href="../icons/icon-192.png">
+<!-- 다른 사장님께 초대 링크와 같이 보내는 안내서. 앱과 같은 색 -->
+<style>
+:root { --bg: #241624; --card: rgba(255,255,255,.055); --line: rgba(255,255,255,.10); --text: #f6f1f3; --sub: #bfaebb; --dim: #8c7a88; --wine: #a32442; --gold: #c9a27a; --ok: #6fcf97; --warn: #f2c14e; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
+main { max-width: 620px; margin: 0 auto; padding: 24px 16px 60px; }
+h1 { font-size: 26px; margin: 4px 0; letter-spacing: -.4px; }
+h2 { font-size: 18px; margin: 30px 0 8px; color: var(--gold); }
+p, li { color: var(--sub); }
+b { color: var(--text); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin: 10px 0; }
+.warn { border-color: rgba(242,193,78,.45); }
+.warn b:first-child { color: var(--warn); }
+ol, ul { padding-left: 20px; margin: 6px 0; }
+li { margin: 4px 0; }
+.n { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--wine); color: #fff; font-weight: 800; align-items: center; justify-content: center; font-size: 14px; margin-right: 6px; }
+.small { font-size: 13px; color: var(--dim); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { padding: 8px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--dim); font-weight: 600; font-size: 13px; }
+a { color: var(--gold); }
+@media print { body { background: #fff; color: #000; } p, li, td { color: #222; } b { color: #000; } .card { border-color: #ccc; background: #fff; } h2 { color: #7a1a33; } }
+</style>
+</head>
+<body><main>
+<p class="small">MATE · 매장 근무 앱</p>
+<h1>사장님 안내서</h1>
+<p>출퇴근 찍기, 휴무신청, 근무표를 한 앱에서 해요. 앱스토어 설치 없이 <b>링크로</b> 써요. 비용은 없어요.</p>
+
+<div class="card"><b>지금 되는 것</b>
+  <ul><li>출근·퇴근 버튼 (매장 와이파이로 확인)</li><li>알바 휴무신청 → 근무표 짜기·확정</li><li>오늘 출근 현황, 지각, 기록 고치기</li><li>월 근무 기록 (직원별 시간) → 엑셀로 내려받기</li></ul>
+  <b>아직 없는 것</b>
+  <ul><li>급여 계산·정산표: 지금은 <b>월 근무 기록 엑셀</b>을 보고 하던 방식대로 계산해 주세요 (곧 추가)</li><li>알림</li></ul>
+</div>
+
+<h2><span class="n">1</span>매장 만들기 (5분)</h2>
+<ol>
+  <li>대표님이 보낸 <b>매장 만들기 초대 링크</b>를 폰에서 열어요</li>
+  <li><b>[사장님 · 구글로 로그인]</b> → 구글 계정 고르기</li>
+  <li><b>[초대받은 매장 만들기]</b> → 매장 이름, 정시 출근, 기본 시급, 급여일, 휴무신청 받는 시간, 요일별 필요한 알바 수 넣기</li>
+  <li>[매장 만들기]. 규칙은 나중에 [규칙 바꾸기]에서 언제든 바꿀 수 있어요 (이번 달부터 / 다음 달부터)</li>
+</ol>
+<p class="small">초대 링크는 한 번만 쓸 수 있어요. 매장을 만든 구글 계정으로만 사장님 화면이 열려요.</p>
+
+<h2><span class="n">2</span>홈 화면에 추가</h2>
+<ul>
+  <li><b>아이폰</b>: Safari로 열고 → 아래 공유 버튼 → <b>홈 화면에 추가</b></li>
+  <li><b>안드로이드</b>: 크롬으로 열고 → 오른쪽 위 ⋮ → <b>홈 화면에 추가</b></li>
+</ul>
+<p class="small">직원들에게도 똑같이 하라고 알려 주세요. 앱처럼 열려요.</p>
+
+<h2><span class="n">3</span>매장 안에서 한 번 (중요)</h2>
+<ol>
+  <li>폰을 <b>매장 와이파이</b>에 연결 (모바일 데이터 말고)</li>
+  <li>매장 화면 맨 아래 <b>[이 와이파이를 매장으로 등록]</b>. 와이파이가 둘이면 각각 연결해서 한 번씩</li>
+  <li><b>[지금 위치를 매장 위치로]</b> (퇴근 확인용, 반경 기본 100m)</li>
+</ol>
+<div class="card warn"><b>꼭 매장에서 해 주세요</b><p>집에서 등록하면 직원 출근에 전부 ⚠가 붙어요. 잘못 등록했으면 매장에서 [처음부터 다시]를 누르면 돼요. 출근에 ⚠가 갑자기 많아지면 인터넷 회선 주소가 바뀐 거라 매장에서 다시 등록해 주세요.</p></div>
+
+<h2><span class="n">4</span>직원 초대</h2>
+<ol>
+  <li>매장 화면의 <b>직원 초대</b> 링크나 QR을 단톡방에 올려요</li>
+  <li>직원이 링크로 들어와 <b>이름(실명) + 번호 6자리</b>로 가입 신청</li>
+  <li>매장 화면 위에 뜨는 <b>가입 신청</b>에서 본인이 맞는지 보고 [승인]</li>
+  <li>직원 옆 <b>[설정]</b>: 정직원/알바, 매니저, 개인 정시 출근(다르면)</li>
+</ol>
+<p class="small">초대 링크가 밖으로 퍼졌으면 [새 링크로 바꾸기]. 옛 링크는 바로 막혀요. 주민번호는 앱에 넣지 않아요 (세무사에게 따로).</p>
+
+<h2><span class="n">5</span>매일: 출퇴근</h2>
+<ul>
+  <li><b>출근</b>: 직원이 매장 와이파이에 연결하고 [출근]. 일찍 찍어도 계산은 정시부터, 늦으면 찍은 시각부터</li>
+  <li><b>퇴근</b>: 직원이 폰을 들고 <b>사장님이나 매니저에게 와서</b> 눌러 달라고 해요. 아무도 없으면 [혼자 퇴근] → ⚠</li>
+  <li>매장 와이파이가 아니면 막지 않고 <b>⚠</b>가 붙어요 → 매장 화면 <b>[확인 필요]</b>에서 [확인] 또는 [시각 고치기]</li>
+  <li><b>[오늘 출근 현황]</b>: 누가 왔는지, 지각, 빠진 기록 넣기·고치기, <b>일찍 부르기</b>(정시보다 일찍 나오라고 한 사람)</li>
+  <li>출근을 안 찍은 날은 정시부터 계산해요. <b>퇴근을 안 찍은 날은 0시간</b>이라 꼭 넣어 주세요</li>
+</ul>
+
+<h2><span class="n">6</span>매주: 휴무신청 → 근무표</h2>
+<ol>
+  <li>알바가 정해진 시간(기본: 금 0시 ~ 토 22시)에 다음 주 <b>못 나오는 날</b>을 신청</li>
+  <li>사장님·매니저: <b>[휴무신청 현황]</b>에서 날짜별 가능 인원, 부족한 날 보기 (단톡 멘트 복사)</li>
+  <li><b>[근무표 짜기]</b>: 휴무신청 반영 → 빈칸 자동 채우기(초안) → 칸 눌러 고치기 → <b>[확정]</b></li>
+  <li>확정해야 직원 폰에 보여요</li>
+</ol>
+
+<h2><span class="n">7</span>매달: 근무 기록 → 급여</h2>
+<ol>
+  <li>매장 화면 <b>[월 근무 기록 · 엑셀]</b> → 달 고르기</li>
+  <li>⚠, 퇴근 없음이 남아 있으면 먼저 고치기</li>
+  <li><b>[엑셀로 내려받기]</b> → 직원별 일한 날·시간, 날짜별 출퇴근이 들어 있어요. 이걸로 급여 계산</li>
+  <li><b>[이 달 합계 보내기]</b>: 대표님께 전체 근무 시간·인원만 보내요</li>
+</ol>
+
+<h2>누가 무엇을 보나요</h2>
+<table>
+  <tr><th>사람</th><th>로그인</th><th>볼 수 있는 것</th></tr>
+  <tr><td><b>사장님</b></td><td>구글</td><td>내 매장 전부</td></tr>
+  <tr><td><b>매니저</b></td><td>이름 + 6자리</td><td>근무표 짜기, 출퇴근 현황·고치기, 휴무신청, 월 근무 시간. 시급·계좌는 못 봐요</td></tr>
+  <tr><td><b>직원</b></td><td>이름 + 6자리</td><td>자기 출퇴근, 근무표, 휴무신청</td></tr>
+  <tr><td><b>대표님</b></td><td>구글</td><td>이 매장은 <b>월 합계 숫자만</b> (직원 이름·시간·시급은 못 봐요)</td></tr>
+</table>
+
+<h2>자주 묻는 것</h2>
+<div class="card"><b>아이폰인데 매장에서 찍어도 ⚠가 떠요</b><p>설정 → Wi-Fi → 매장 와이파이 옆 ⓘ → <b>IP 주소 추적 제한</b> 끄기. 그래도 뜨면 와이파이를 껐다 켜기.</p></div>
+<div class="card"><b>직원이 번호 6자리를 잊었어요</b><p>지금은 번호를 바꿔 줄 수 없어요. 대표님께 말해 주세요. (번호 다시 정하기 기능을 넣을 예정이에요)</p></div>
+<div class="card"><b>폰을 바꿨어요 / 로그아웃됐어요</b><p>직원: 초대 링크를 다시 열고 [이미 가입했어요] → 이름 + 번호. 사장님: 같은 구글 계정으로 로그인.</p></div>
+<div class="card"><b>모르는 게 있으면</b><p>대표님께 연락 주세요.</p></div>
+</main></body>
+</html>

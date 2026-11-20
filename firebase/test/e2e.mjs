@@ -91,7 +91,7 @@ try {
   // 2) 대표님: 다른 사장님 초대 링크
   await boss.locator('#back').click();
   await boss.getByText('초대 링크 만들기').click();
-  const ownerUrl = (await boss.locator('#ownerInvOut .url').innerText()).trim();
+  const ownerUrl = (await boss.locator('#ownerInvOut .url').first().innerText()).trim();
   assert.match(ownerUrl, /\?owner=[A-Z0-9]{10}$/);
   await shot(boss, '총괄홈');
 
@@ -227,6 +227,25 @@ try {
   await boss.locator('#back').click();
   await boss.getByText('규칙 바꾸기').waitFor();
 
+  // 7-5-1) 처음 할 일: 와이파이·위치·직원·매니저는 됐고 근무표만 남음
+  assert.match(await text(boss), /처음 할 일\s+4\/5/);
+  // 7-5-2) 월 근무 기록: 두 명 다 1일, 엑셀 내려받기
+  await boss.locator('#goMonth').click();
+  await boss.getByText('전체 근무 시간').waitFor();
+  assert.match(await text(boss), /김알바\s+1일/);
+  assert.match(await text(boss), /박알바\s+1일/);
+  await boss.locator('[data-p]').nth(1).click();
+  await boss.getByText('18:05').first().waitFor();
+  await shot(boss, '월근무기록');
+  const [dl] = await Promise.all([boss.waitForEvent('download'), boss.locator('#csv').click()]);
+  assert.match(dl.suggestedFilename(), /^산성_\d{4}-\d{2}_근무기록\.csv$/);
+  const csv = await readFile(await dl.path(), 'utf8');
+  assert.ok(csv.startsWith('\ufeff'), 'BOM 없음');
+  assert.match(csv, /김알바,알바,1,/); assert.match(csv, /박알바,.*,18:05,/);
+  assert.equal(await boss.locator('#stat').count(), 0, '직영은 합계 보내기 없음');
+  await boss.locator('#back').click();
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 7-6) 근무표·휴무신청: (시험이 언제 돌든) 다음 주 휴무신청을 받는 중으로 설정 바꾸기
   const sid = (await (await fetch('http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/stores', { headers: { Authorization: 'Bearer owner' } })).json()).documents.find(d => d.fields.name.stringValue === '산성').name.split('/').pop();
   const lr = await fetch(`http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/stores/${sid}/settings/leave`, {
@@ -293,12 +312,27 @@ try {
   await late.goto(joinUrl);
   await late.getByText('초대 링크가 바뀌었거나 없어졌어요').waitFor();
 
+  // 8-1) 김사장: 처음 할 일 0/5, 월 근무 기록에서 대표님께 합계 보내기
+  await kim.reload();
+  await kim.locator('[data-store]', { hasText: '두번째' }).click();
+  await kim.getByText('처음 할 일').waitFor();
+  assert.match(await text(kim), /0\/5/);
+  await kim.locator('#goMonth').click();
+  await kim.locator('#stat').click();
+  await kim.getByText('대표님께 합계를 보냈어요').waitFor();
+
   // 9) 대표님: 김사장 매장은 합계만
   await boss.locator('#back').click();
   await boss.locator('[data-store]', { hasText: '두번째' }).click();
   await boss.getByText('월 합계와 요일별 숫자만').waitFor();
   await shot(boss, '합계만');
   assert.doesNotMatch(await text(boss), /직원 초대|가입 신청/);
+  assert.match(await text(boss), /근무 시간\s+0시간/);
+  // 안내서 페이지
+  const g = await (await phone()).newPage(); watch(g, '안내서');
+  await g.goto(APP + 'guide.html');
+  await g.getByText('사장님 안내서').waitFor();
+  await shot(g, '안내서');
 
   // 10) 김사장: 산성은 목록에 없음
   await kim.reload();

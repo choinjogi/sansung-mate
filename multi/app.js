@@ -162,7 +162,8 @@ async function ownerHome() {
   if ($('mkDirect')) $('mkDirect').onclick = () => storeForm({ orgId: org.id, direct: true });
   if ($('mkOwnerInv')) $('mkOwnerInv').onclick = e => busy(e.target, async () => {
     const code = await api.createOwnerInvite(org.id);
-    $('ownerInvOut').innerHTML = linkCard({ title: '매장 만들기 초대', desc: '이 링크를 사장님께 보내 주세요.', url: `${BASE}?owner=${code}`, qr: false });
+    $('ownerInvOut').innerHTML = linkCard({ title: '매장 만들기 초대', desc: '이 링크를 사장님께 보내 주세요.', url: `${BASE}?owner=${code}`, qr: false })
+      + linkCard({ title: '사장님 안내서', desc: '처음 쓰는 방법이에요. 초대 링크와 같이 보내 주세요.', url: new URL('guide.html', BASE).href, qr: false });
     wireLinks();
   });
 }
@@ -223,11 +224,25 @@ function storeForm(ctx) {
 // ---------- 매장 화면 (그 매장 사장님) ----------
 async function storeScreen(id) {
   const s = await api.getStore(id);
-  const [ms, rules, attendHtml] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s)]);
+  const wk = api.mondayOf(api.kst().date);
+  const [ms, rules, attendHtml, schNow, schNext] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s),
+    api.getSchedule(id, wk), api.getSchedule(id, api.addDays(wk, 7))]);
   const pending = ms.filter(m => m.status === 'pending');
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
-  show(`${top(s.name, true)}${attendHtml.head}
+  // 새 매장 처음 할 일 (다 하면 사라짐)
+  const steps = [
+    ['매장 와이파이 등록', '매장 안에서 폰을 매장 와이파이에 연결하고, 맨 아래 출퇴근 확인 칸의 등록 버튼', attendHtml.wifiN > 0],
+    ['매장 위치 저장', '매장 안에서 맨 아래 출퇴근 확인 칸의 위치 버튼 (퇴근 확인용)', attendHtml.place],
+    ['직원 초대 · 승인', '아래 직원 초대 링크를 단톡방에 올리고, 가입 신청이 오면 승인', act.length > 0],
+    ['정직원·매니저 정하기', '직원 옆 [설정]에서 정직원/알바, 매니저 고르기', act.some(m => m.role === 'manager' || m.type === '정')],
+    ['근무표 확정', '근무표 짜기에서 이번 주나 다음 주 근무표를 만들고 확정', !!((schNow && schNow.published) || (schNext && schNext.published))],
+  ];
+  const left = steps.filter(x => !x[2]).length;
+  const checklist = left ? `<div class="card" id="steps"><div class="row between"><b>처음 할 일</b><span class="pill">${steps.length - left}/${steps.length}</span></div>
+    <div class="list">${steps.map(([t, d, ok]) => `<div class="item" style="display:block"><b style="color:${ok ? 'var(--ok)' : 'var(--text)'}">${ok ? '✓' : '○'} ${t}</b>${ok ? '' : `<div class="small">${d}</div>`}</div>`).join('')}</div>
+    <p class="small"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p></div>` : '';
+  show(`${top(s.name, true)}${checklist}${attendHtml.head}
     ${pending.length ? `<div class="card hero"><b>가입 신청 ${pending.length}명</b><div class="list">${pending.map(m => `
       <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
         <button class="sm" data-ok="${m.id}">승인</button><button class="sm ghost" data-no="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>

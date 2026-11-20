@@ -3,6 +3,7 @@
 import * as api from './fb.js';
 import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js';
 import * as sched from './sched.js';
+import * as records from './records.js';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -69,7 +70,8 @@ export async function staffHome(storeId, me, store, again) {
       ${res.geo ? '' : '· 위치 허용도 켜 주세요 (퇴근 확인에 써요)'}</p></div>` : ''}
     <div class="row" style="gap:8px"><button class="ghost" id="goSched">근무표</button><button class="ghost" id="goLeave">휴무신청</button></div>
     ${me.role === 'manager' ? `<h2>매니저</h2><div class="row" style="gap:8px"><button class="ghost" id="goToday">오늘 출근 현황</button><button class="ghost" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
-      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>` : ''}
+      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
+      <button class="ghost" id="goMonth" style="margin-top:8px">월 근무 기록</button>` : ''}
     <h2>이번 달 기록</h2>
     <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${days.map(d => {
       const x = byDay[d], i = x.in, o = x.out, li = lateMin(i && api.hmOf(i.at), start, r ? r.open.lateGraceMin : 0);
@@ -113,6 +115,7 @@ export async function staffHome(storeId, me, store, again) {
   $('goLeave').onclick = () => sched.leaveForm(store, me, again);
   if ($('goEdit')) $('goEdit').onclick = () => sched.scheduleEditor(store, again);
   if ($('goLvAdm')) $('goLvAdm').onclick = () => sched.leaveAdmin(store, again);
+  if ($('goMonth')) $('goMonth').onclick = () => records.monthScreen(store, again, null, false);
 }
 
 // ---------- 오늘 출근 현황 (매니저·사장님) ----------
@@ -215,6 +218,7 @@ export async function ownerSection(store) {
   const n = wifi && wifi.ips ? wifi.ips.length : 0, todo = fl.filter(p => !p.reviewed).length;
   const head = `
     <div class="row" style="gap:8px;margin-top:12px"><button id="goToday">오늘 출근 현황</button><button class="${todo ? '' : 'ghost'}" id="goReview">확인 필요${todo ? ' ' + todo : ''}</button></div>
+    <button class="ghost" id="goMonth" style="margin-top:8px">월 근무 기록 · 엑셀</button>
     ${n ? '' : '<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">매장 와이파이 등록 전이에요</b><p class="small">등록하기 전에는 모든 출근에 ⚠가 붙어요. 맨 아래 [출퇴근 확인]에서 등록해 주세요.</p></div>'}
     `;
   const settings = `
@@ -227,11 +231,12 @@ export async function ownerSection(store) {
       <p class="small">퇴근 확인에 써요 (와이파이가 아니어도 반경 안이면 ✓). 매장 안에서 누르세요.</p>
       <div class="row" style="margin-top:8px"><input id="rad" type="number" min="20" max="1000" step="10" inputmode="numeric" value="${place ? place.radius : 100}" style="width:110px"><span class="small">m</span>
         <button class="sm" id="pSave">지금 위치를 매장 위치로</button></div></div>`;
-  return { head, settings };
+  return { head, settings, wifiN: n, place: !!place };
 }
 export function wireOwnerSection(store, again) {
   $('goToday').onclick = () => todayScreen(store, again);
   $('goReview').onclick = () => reviewScreen(store, again);
+  $('goMonth').onclick = () => records.monthScreen(store, again, null, true);
   const reg = reset => e => busy(e.target, async () => {
     if (reset && !confirm('등록한 와이파이를 모두 지우고 지금 와이파이만 등록할까요?')) return;
     const r = await api.registerWifi(store.id, reset);
