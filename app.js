@@ -10,7 +10,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="icons/emblem.png" alt=""><div>산성 MATE<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
-    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 28</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
+    <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 29</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
 
   // ---------- 탭 ----------
@@ -478,10 +478,14 @@
         ${f.rows.map(r => `<tr><td class="name"${r.sent ? '' : ' style="color:var(--dim)"'}>${esc(r.disp)}</td>${r.sent ? f.days.map(d => cell(r, d)).join('') : `<td colspan="7" class="small" style="text-align:center">미신청 (모두 가능)</td>`}</tr>`).join('')}
         <tr class="sum"><td class="name">가능</td>${f.days.map((d, i) => `<td style="${avail[i] < d.need ? 'color:var(--bad)' : ''}">${avail[i]}/${d.need}</td>`).join('')}</tr></table></div>
       <div class="card"><b>주말 오전(12~15시) 가능</b><p>토: ${amNames('토').map(esc).join(', ') || '없음'}<br>일: ${amNames('일').map(esc).join(', ') || '없음'}</p></div>
-      ${sent.length ? `<div class="card list">${sent.map(r => `<div class="item"><span>${esc(r.disp)}</span><span class="small">${esc(r.at)} 보냄</span></div>`).join('')}</div>` : ''}
+      ${sent.length ? `<div class="card list">${sent.map(r => `<div class="item"><span>${esc(r.disp)}</span><span class="row" style="gap:8px"><span class="small">${esc(r.at)} 보냄</span>${f.open ? `<button class="sm ghost" data-del="${esc(r.name)}" data-disp="${esc(r.disp)}" style="width:auto;margin:0">삭제</button>` : ''}</span></div>`).join('')}</div>` : ''}
       <p class="small">✕ = 못 나오는 날. 가능 = 그날 나올 수 있는 알바 수 / 필요한 알바 수. 같은 사람이 여러 번 내면 마지막 것만 써요. 스케줄 짜기는 지금처럼 스케줄 시트 메뉴로 해 주세요.</p></div>`);
     const cp = document.getElementById('cp');
     if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('복사했어요. 단톡방에 붙여 넣으세요'); } catch (e) { prompt('아래 글을 길게 눌러 복사하세요', msg); } };
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      if (!confirm(b.dataset.disp + ' 휴무신청을 지울까요?\n지우면 "미신청(모든 요일 가능)"으로 돌아가고, 본인이 마감 전에 다시 낼 수 있어요.')) return;
+      busy(b, async () => { const r = await API.leaveDel(b.dataset.del); toast(r.msg); if (r.saved) VIEWS.aleave(); });
+    });
   };
 
   // ---------- 관리: 입사 · 퇴사 (결산 직원명부·월말근무내역·월말결제에 바로 반영) ----------
@@ -648,7 +652,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 28;
+  const APP_VER = 29;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

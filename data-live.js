@@ -71,6 +71,7 @@
     // 2단계 쓰기
     saveSales: (date, amount, force) => write('saveSales', { date, amount, force: !!force }),
     submitLeave: (name, off, am) => write('submitLeave', { off, am }),
+    leaveDel: name => write('leaveDel', { name }),
     people: () => view('people'),
     early: (name, wd, time) => write('early', { name, wd, time }),
     decide: (id, ok) => write('decide', { id, ok }),
