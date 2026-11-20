@@ -1,8 +1,8 @@
 // 월 근무 기록: 직원별 일한 날·시간·지각·⚠ 합계, 날짜별 상세, 엑셀(CSV) 내려받기 (사장님·매니저)
 // 급여 기능 전까지 사장님이 이 표로 급여를 계산. 대표님께는 합계(근무 시간·인원)만 보낼 수 있음
-import * as api from './fb.js?v=13';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=13';
-import * as sched from './sched.js?v=13';
+import * as api from './fb.js?v=14';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=14';
+import * as sched from './sched.js?v=14';
 
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
 export const hmText = min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
@@ -33,6 +33,9 @@ export function dayCalc({ date, inP, outP, plan, rules }) {
   if (!outP) notes.push('퇴근 없음');
   if (late) notes.push(`지각 ${late}분`);
   if (plan.early) notes.push(`일찍 부름 ${plan.early}`);
+  if (inP && inP.earlyReq && inP.earlyReq.status === 'wait') notes.push(`조기 출근 ${inP.earlyReq.hm} 승인 대기`);
+  if (outP && outP.shift === 'sub') notes.push(`대타${outP.subFor ? ` (${outP.subFor} 대신)` : ''}`);
+  if (outP && outP.shift === 'extra') notes.push('추가 출근');
   const flags = [inP, outP].filter(p => p && p.flag).length;
   if (flags) notes.push('⚠ ' + flags);
   if ([inP, outP].some(p => p && p.editedBy)) notes.push('고침');

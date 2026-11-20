@@ -1,11 +1,11 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=13';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=13';
-import * as sched from './sched.js?v=13';
-import * as records from './records.js?v=13';
-import * as pay from './pay.js?v=13';
-import * as info from './info.js?v=13';
+import * as api from './fb.js?v=14';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=14';
+import * as sched from './sched.js?v=14';
+import * as records from './records.js?v=14';
+import * as pay from './pay.js?v=14';
+import * as info from './info.js?v=14';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -50,7 +50,8 @@ export async function punchCard(store, me, again) {
       <div class="row between"><b>⏱️ ${date === t.date ? '오늘' : '어제'} ${dayLabel(date)}</b><span class="small">${plan.published ? esc(sched.codeText(plan.code)) + ' · ' : ''}${plan.early ? '일찍 부름 ' : '정시 '}${esc(start)}</span></div>
       <div class="tgrid">${box('출근', pin, late)}${box('퇴근', pout, 0)}</div>
       ${next === 'in' ? `<button id="pIn" class="big-btn">출근</button><button class="ghost sm" id="pOut0" style="width:100%;margin-top:8px">출근을 못 찍었어요 · 퇴근 찍기</button>`
-        : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : '<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>'}
+        : next === 'out' ? '<button id="pOut" class="big-btn">퇴근</button>' : `<p style="text-align:center;margin-top:12px">오늘 근무 끝! 수고했어요</p>
+          <p class="small" style="text-align:center">근무 구분: ${esc(SHIFT_TXT(pout))} · <a href="#" id="pShift" style="color:var(--sub)">바꾸기</a></p>`}
       <p class="small" style="margin-top:8px">매장 와이파이에 연결된 상태로 찍어 주세요. 일찍 찍어도 계산은 정시부터예요.</p>
     </div>
     ${res && res.why === 'alone' ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">⚠ 확인 없이 혼자 퇴근했어요</b><p>기록은 됐고, 사장님이 확인해요.</p></div>` : ''}
@@ -63,6 +64,7 @@ export async function punchCard(store, me, again) {
     const doPunch = (kind, alone) => e => busy(e.target, async () => {
       LAST = await api.punch(storeId, kind, alone);
       toast(`${LAST.time} ${kind === 'in' ? '출근' : '퇴근'}${LAST.flag ? ' (⚠ 확인 필요)' : ' ✓'}`);
+      if (kind === 'out') return outDone(store, me, LAST.date, again);
       await again();
     });
     // 퇴근: 알바가 폰을 들고 사장님·매니저에게 가서 눌러 달라고 함 (비밀번호 없이 버튼만). 아무도 없으면 혼자 퇴근 → ⚠
@@ -90,8 +92,59 @@ export async function punchCard(store, me, again) {
     if ($('pIn')) $('pIn').onclick = go('in');
     if ($('pOut')) $('pOut').onclick = go('out');
     if ($('pOut0')) $('pOut0').onclick = go('out');
+    if ($('pShift')) $('pShift').onclick = ev => { ev.preventDefault(); outDone(store, me, date, again); };
   };
   return { html, wire, sch, today: t.date };
+}
+
+// ---------- 퇴근 완료: 근무 구분 + (알바·일찍 온 날) 정상 출근 확인 ----------
+export const SHIFT_TXT = p => (!p || !p.shift ? '안 고름' : p.shift === 'sub' ? `대타${p.subFor ? ` (${p.subFor} 대신)` : ''}` : p.shift === 'extra' ? '추가 출근' : '스케줄대로');
+const EARLY_MIN = 15; // 정시보다 이만큼 일찍 찍은 날만 묻기 (산성과 같음)
+export async function outDone(store, me, date, back) {
+  const uid = api.auth.currentUser.uid;
+  const [pin, pout, rules, sch, ms] = await Promise.all([api.punchDoc(store.id, date, uid, 'in'), api.punchDoc(store.id, date, uid, 'out'), api.rulesOf(store.id),
+    api.getSchedule(store.id, api.mondayOf(date)), api.members(store.id).catch(() => [])]);
+  const plan = sched.todayPlan(sch, rules.current, { ...me, id: uid }, date), inHm = pin && api.hmOf(pin.at);
+  const er = pin && pin.earlyReq;
+  const ask = me.type !== '정' && inHm && !plan.early && (!er || er.status === 'wait') && toMin(plan.start) - toMin(inHm) >= EARLY_MIN;
+  const others = ms.filter(m => m.id !== uid && api.isActive(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
+  show(`${top(store.name)}
+    <div class="card hero" style="margin-top:16px"><b style="font-size:19px">${esc(me.name)}님 퇴근 ${esc(pout ? api.hmOf(pout.at) : '')}</b>
+      <p>${inHm ? `근무 ${esc(plan.early || (inHm > plan.start ? inHm : plan.start))} ~ ${esc(pout ? api.hmOf(pout.at) : '')}` : '출근 기록 없음 · 정시부터 계산'}</p><p>수고하셨어요!</p></div>
+    ${ask ? `<div class="card" id="eCard"><b>오늘 출근, 어떤 경우인가요?</b>
+      <p class="small">정시는 ${esc(plan.start)}인데 ${esc(inHm)}에 찍었어요.</p>
+      ${er && er.status === 'wait' ? `<p class="small" style="color:var(--warn)">⏳ ${esc(er.hm)} 출근으로 사장님·매니저 승인 기다리는 중</p>` : ''}
+      <button class="ghost" id="eSelf" style="margin-top:8px">평소대로 출근했어요 (${esc(plan.start)}부터)</button>
+      <label style="margin-top:12px">매장 요청으로 일찍 나왔어요 — 몇 시 출근하라고 했나요?</label>
+      <div class="row" style="gap:8px"><input type="time" id="eHm" step="300" value="${esc(er && er.hm ? er.hm : inHm)}"><button class="sm" id="eReq">승인 요청</button></div>
+      <p class="small">사장님·매니저가 승인하면 그 시각부터 계산돼요. 답 안 하면 정시부터예요.</p></div>` : ''}
+    <div class="card"><b>오늘 근무가 스케줄과 달랐나요?</b> <span class="small">지금: ${esc(SHIFT_TXT(pout))}</span>
+      <button class="ghost" data-sh="normal" style="margin-top:8px">스케줄대로</button>
+      <button class="ghost" data-sh="sub" style="margin-top:8px">대타였어요</button>
+      <div id="subBox" style="display:none"><label>누구 대신?</label><select id="subFor"><option value="">이름 고르기</option>${others.map(m => `<option>${esc(m.name)}</option>`).join('')}</select>
+        <button class="sm" id="subOk" style="margin-top:8px">저장</button></div>
+      <button class="ghost" data-sh="extra" style="margin-top:8px">추가 출근 (사장님·매니저 요청)</button></div>
+    <button class="ghost sm" id="oClose" style="margin-top:6px">닫기</button>`);
+  wireTop();
+  const again = () => outDone(store, me, date, back);
+  $('oClose').onclick = () => back();
+  if (!pout) { document.querySelectorAll('[data-sh]').forEach(b => { b.disabled = true; }); }
+  document.querySelectorAll('[data-sh]').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.sh === 'sub') { $('subBox').style.display = ''; return; }
+      busy(b, async () => { await api.setShift(store.id, pout.id, b.dataset.sh, ''); toast('저장했어요'); await again(); });
+    };
+  });
+  $('subOk').onclick = e => busy(e.target, async () => {
+    const n = $('subFor').value; if (!n) throw new Error('누구 대신인지 골라 주세요');
+    await api.setShift(store.id, pout.id, 'sub', n); toast('대타로 저장했어요'); await again();
+  });
+  if ($('eSelf')) $('eSelf').onclick = e => busy(e.target, async () => { await api.answerEarly(store.id, pin.id, 'self', ''); toast('정시부터 계산돼요'); await again(); });
+  if ($('eReq')) $('eReq').onclick = e => busy(e.target, async () => {
+    const hm = $('eHm').value; if (!hm) throw new Error('시각을 넣어 주세요');
+    if (toMin(hm) >= toMin(plan.start)) throw new Error('정시보다 이른 시각을 넣어 주세요');
+    await api.answerEarly(store.id, pin.id, 'wait', hm); toast('승인 요청을 보냈어요'); await again();
+  });
 }
 
 // 이번 주 내 근무 (7칸)

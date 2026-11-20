@@ -1,15 +1,15 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=13';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=13';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=13';
-import * as attend from './attend.js?v=13';
-import * as sched from './sched.js?v=13';
-import * as records from './records.js?v=13';
-import * as pay from './pay.js?v=13';
-import * as sales from './sales.js?v=13';
-import * as dash from './dash.js?v=13';
-import * as staff from './staff.js?v=13';
-import * as info from './info.js?v=13';
+import * as api from './fb.js?v=14';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=14';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=14';
+import * as attend from './attend.js?v=14';
+import * as sched from './sched.js?v=14';
+import * as records from './records.js?v=14';
+import * as pay from './pay.js?v=14';
+import * as sales from './sales.js?v=14';
+import * as dash from './dash.js?v=14';
+import * as staff from './staff.js?v=14';
+import * as info from './info.js?v=14';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -210,7 +210,7 @@ async function todayTab(ctx, again) {
 // 승인 탭: 가입 신청 (사장님·매니저) + ⚠ 확인 필요
 async function approvalTab(ctx, again) {
   const s = ctx.store;
-  const [ms, hires] = await Promise.all([api.members(s.id), api.hiresOf(s.id)]);
+  const [ms, hires, early] = await Promise.all([api.members(s.id), api.hiresOf(s.id), api.earlyWaiting(s.id).catch(() => [])]);
   const pending = ms.filter(m => m.status === 'pending'), H = Object.fromEntries(hires.map(h => [h.id, h]));
   const hireOf = m => H[api.nameKey(m.name)] || null;
   const html = `<h2>가입 신청${pending.length ? ` <span class="small">· ${pending.length}명</span>` : ''}</h2>
@@ -220,12 +220,18 @@ async function approvalTab(ctx, again) {
       <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>`
       : '<div class="card"><p class="small">새 가입 신청이 없어요.</p></div>'}`;
   const inf = ctx.owner ? await info.infoApprovals(s, ms) : { html: '', wire() {} };
+  const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
+  const earlyHtml = early.length ? `<h2>조기 출근 승인 <span class="small">· ${early.length}건</span></h2>${early.sort((a, b) => (a.date < b.date ? 1 : -1)).map(p => `<div class="card">
+      <div class="row between"><b>${esc(p.name)}</b><span class="small">${md(p.date)}</span></div>
+      <p>매장 요청으로 <b style="color:var(--text)">${esc(p.earlyReq.hm)}</b> 출근 (찍은 시각 ${esc(api.hmOf(p.at))})</p>
+      <div class="row" style="gap:8px"><button class="sm" data-eok="${p.id}">승인</button><button class="sm ghost" data-eno="${p.id}">거절 (정시부터)</button></div></div>`).join('')}` : '';
   const wire = () => {
     inf.wire(again);
+    document.querySelectorAll('[data-eok],[data-eno]').forEach(b => { b.onclick = () => busy(b, async () => { const ok = !!b.dataset.eok, p = early.find(x => x.id === (b.dataset.eok || b.dataset.eno)); await api.decideEarly(s.id, p, ok); toast(ok ? '승인했어요' : '거절했어요'); await again(); }); });
     document.querySelectorAll('[data-jok]').forEach(b => { b.onclick = () => busy(b, async () => { const m = pending.find(x => x.id === b.dataset.jok); await staff.approveWithHire(s, m, hireOf(m), !!ctx.owner); toast('승인했어요'); await again(); }); });
     document.querySelectorAll('[data-jno]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님 가입 신청을 거절할까요?')) busy(b, async () => { await api.removeMember(s.id, b.dataset.jno); await again(); }); }; });
   };
-  return attend.reviewScreen(s, null, { html: html + inf.html, wire, again });
+  return attend.reviewScreen(s, null, { html: html + earlyHtml + inf.html, wire, again });
 }
 
 // 더보기 (매니저): 근무표·휴무신청 현황·기록, 내 것

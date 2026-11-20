@@ -209,13 +209,23 @@ try {
   await park.locator('#pOut').click();
   await park.getByText('사장님이나 매니저').waitFor();
   await park.locator('#oYes').click();
+  // 퇴근 완료 화면: 근무 구분 = 대타(김알바 대신)
+  await park.getByText('오늘 근무가 스케줄과 달랐나요?').waitFor();
+  await shot(park, '퇴근완료');
+  await park.locator('[data-sh="sub"]').click();
+  await park.selectOption('#subFor', '김알바');
+  await park.locator('#subOk').click();
+  await park.getByText('지금: 대타 (김알바 대신)').waitFor();
+  await park.locator('#oClose').click();
   await park.getByText('⚠ 매장에서 3.7km').waitFor();
   await park.getByText('오늘 근무 끝').waitFor();
+  assert.match(await text(park), /근무 구분: 대타 \(김알바 대신\)/);
 
   // 7-4) 김알바: 와이파이 끊고(다른 회선) 매장 안에서 퇴근 → 반경 안이라 ✓
   await net(alba, '9.9.9.9');
   await alba.locator('#pOut').click();
   await alba.locator('#oYes').click();
+  await alba.locator('#oClose').click();
   await alba.getByText('✓ 매장 0m').first().waitFor();
 
   // 7-5) 사장님: 확인 필요 2건 → 1건 확인, 오늘 현황에서 박알바 출근 시각 고치기
@@ -252,6 +262,7 @@ try {
   const csv = await readFile(await dl.path(), 'utf8');
   assert.ok(csv.startsWith('\ufeff'), 'BOM 없음');
   assert.match(csv, /김알바,알바,1,/); assert.match(csv, /박알바,.*,18:05,/);
+  assert.match(csv, /대타 \(김알바 대신\)/);
   assert.equal(await boss.locator('#stat').count(), 0, '직영은 합계 보내기 없음');
   await boss.locator('#back').click();
   await boss.getByText('규칙 바꾸기').waitFor();

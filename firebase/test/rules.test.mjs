@@ -298,3 +298,21 @@ test('매장 + 규칙 + 직원 초대 코드를 한 번에 만든다', async () 
 test('남의 매장 초대 코드는 못 만든다', async () => {
   await assertFails(setDoc(doc(as('kim', G), 'joinCodes/FAKE'), { storeId: 'sansung', storeName: '산성' }));
 });
+
+// ---------- 근무 구분 · 일찍 온 날 ----------
+test('본인은 자기 퇴근에 근무 구분, 출근에 일찍 온 날 답만. 승인·거절은 매니저 이상', async () => {
+  await env.withSecurityRulesDisabled(async c => {
+    const db = c.firestore(), at = Timestamp.now();
+    await setDoc(doc(db, 'stores/sansung/punches/2026-11-20_alba_out'), { uid: 'alba', name: '알바', date: '2026-11-20', kind: 'out', at, via: 'app', by: 'alba' });
+    await setDoc(doc(db, 'stores/sansung/punches/2026-11-20_alba_in'), { uid: 'alba', name: '알바', date: '2026-11-20', kind: 'in', at, via: 'app', by: 'alba' });
+  });
+  const out = 'stores/sansung/punches/2026-11-20_alba_out', inn = 'stores/sansung/punches/2026-11-20_alba_in';
+  await assertSucceeds(updateDoc(doc(as('alba', P), out), { shift: 'sub', subFor: '김알바', shiftAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(as('alba', P), out), { shift: 'boss', subFor: '', shiftAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(as('alba', P), out), { at: Timestamp.now() }));                                   // 시각은 못 고침
+  await assertFails(updateDoc(doc(as('alba', P), inn), { shift: 'sub', subFor: '', shiftAt: serverTimestamp() }));     // 출근엔 근무 구분 없음
+  await assertSucceeds(updateDoc(doc(as('alba', P), inn), { earlyReq: { status: 'wait', hm: '17:00', at: serverTimestamp() } }));
+  await assertFails(updateDoc(doc(as('alba', P), inn), { earlyReq: { status: 'ok', hm: '17:00', at: serverTimestamp() } }));    // 스스로 승인 못 함
+  await assertSucceeds(updateDoc(doc(as('mgr', P), inn), { earlyReq: { status: 'ok', hm: '17:00', at: serverTimestamp(), by: 'mgr' } }));
+  await assertFails(updateDoc(doc(as('alba', P), inn), { earlyReq: { status: 'wait', hm: '16:00', at: serverTimestamp() } }));  // 승인 뒤엔 못 바꿈
+});

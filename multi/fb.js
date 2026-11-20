@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=13';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=13';
+import * as F from './vendor/firebase.js?v=14';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=14';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -241,6 +241,15 @@ export const punchDoc = (storeId, date, uid, kind) => F.getDoc(ref(`stores/${sto
 export const myPunches = (storeId, from, to) => list(F.query(col(`stores/${storeId}/punches`), F.where('uid', '==', auth.currentUser.uid), F.where('date', '>=', from), F.where('date', '<=', to)));
 export const punchesBetween = (storeId, from, to) => list(F.query(col(`stores/${storeId}/punches`), F.where('date', '>=', from), F.where('date', '<=', to)));
 export const flaggedSince = (storeId, from) => list(F.query(col(`stores/${storeId}/punches`), F.where('flag', '==', true), F.where('date', '>=', from)));
+// 근무 구분 (퇴근 기록에): shift = normal 스케줄대로 · sub 대타(subFor = 누구 대신) · extra 추가 출근(사장님·매니저 요청)
+export const setShift = (storeId, id, shift, subFor) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { shift, subFor: subFor || '', shiftAt: F.serverTimestamp() });
+// 일찍 온 날 (출근 기록에): earlyReq = { status: 'self' 평소대로 | 'wait' 매장 요청 승인 대기 | 'ok' 승인 | 'no' 거절, hm, at, by }
+export const answerEarly = (storeId, id, status, hm) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { earlyReq: { status, hm: hm || '', at: F.serverTimestamp() } });
+export const earlyWaiting = storeId => list(F.query(col(`stores/${storeId}/punches`), F.where('earlyReq.status', '==', 'wait')));
+export async function decideEarly(storeId, p, ok) {
+  if (ok) await setEarly(storeId, p.date, p.uid, p.earlyReq.hm);
+  await F.updateDoc(ref(`stores/${storeId}/punches/${p.id}`), { earlyReq: { ...p.earlyReq, status: ok ? 'ok' : 'no', by: auth.currentUser.uid, at: F.serverTimestamp() } });
+}
 export const reviewPunch = (storeId, id) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { reviewed: true, reviewedBy: auth.currentUser.uid, reviewedAt: F.serverTimestamp() });
 export const editPunch = (storeId, id, at) => F.updateDoc(ref(`stores/${storeId}/punches/${id}`), { at, editedBy: auth.currentUser.uid, editedAt: F.serverTimestamp() });
 export const addPunch = (storeId, { uid, name, date, kind, at }) =>

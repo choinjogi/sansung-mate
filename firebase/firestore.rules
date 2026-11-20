@@ -179,7 +179,18 @@ service cloud.firestore {
           (changedOnly(['at', 'note', 'editedBy', 'editedAt']) && d().at is timestamp
             && d().editedBy == uid() && d().editedAt == request.time)
           || (changedOnly(['reviewed', 'reviewedBy', 'reviewedAt']) && d().reviewed is bool
-            && d().reviewedBy == uid() && d().reviewedAt == request.time));
+            && d().reviewedBy == uid() && d().reviewedAt == request.time)
+          || (changedOnly(['shift', 'subFor', 'shiftAt']) && d().shift in ['normal', 'sub', 'extra'] && d().shiftAt == request.time)
+          || (changedOnly(['earlyReq']) && d().earlyReq.status in ['ok', 'no'] && d().earlyReq.by == uid() && d().earlyReq.at == request.time));
+        // 본인: 퇴근 기록에 근무 구분, 출근 기록에 "일찍 온 날" 답 (찍은 뒤 36시간 안, 승인·거절된 뒤엔 못 바꿈)
+        allow update: if active(s) && resource.data.uid == uid() && request.time < resource.data.at + duration.value(36, 'h') && (
+          (resource.data.kind == 'out' && changedOnly(['shift', 'subFor', 'shiftAt'])
+            && d().shift in ['normal', 'sub', 'extra'] && d().subFor is string && d().subFor.size() <= 20 && d().shiftAt == request.time)
+          || (resource.data.kind == 'in' && changedOnly(['earlyReq'])
+            && (!('earlyReq' in resource.data) || resource.data.earlyReq.status in ['self', 'wait'])
+            && d().earlyReq.keys().hasOnly(['status', 'hm', 'at']) && d().earlyReq.status in ['self', 'wait']
+            && d().earlyReq.at == request.time
+            && (d().earlyReq.status == 'self' || d().earlyReq.hm.matches('^[0-2][0-9]:[0-5][0-9]$'))));
         allow delete: if manager(s);
       }
 
