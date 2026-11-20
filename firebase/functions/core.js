@@ -62,8 +62,8 @@ export async function registerWifiCore(db, { uid, storeId, reset, ip }) {
   return { count: ips.length, added: !has, ip };
 }
 
-// 직원 번호(6자리) 다시 정하기: 매장 사장님만. 임시 번호 6자리를 만들어 그 직원 계정 비밀번호로 바꾸고,
-// members 문서에 pinReset=true 를 남긴다 → 직원이 임시 번호로 로그인하면 앱이 새 번호를 정하게 함.
+// 직원 번호(6자리) 다시 정하기: 매장 사장님만. 임시 비밀번호 6자리를 만들어 그 직원 계정 비밀번호로 바꾸고,
+// members 문서에 pinReset=true 를 남긴다 → 직원이 임시 비밀번호로 로그인하면 앱이 새 번호를 정하게 함.
 // authApi.setPassword(uid, pw) 는 바깥에서 넣어 준다 (Cloudflare = Identity Toolkit REST, Firebase = admin SDK)
 // db.patch(path, obj) = 문서의 그 칸들만 바꿈
 export async function resetPinCore(db, authApi, { uid, storeId, target, pin }) {
@@ -71,8 +71,8 @@ export async function resetPinCore(db, authApi, { uid, storeId, target, pin }) {
   need(okStore(storeId), 'invalid-argument', '매장 정보가 없어요');
   need(typeof target === 'string' && /^[A-Za-z0-9]{1,128}$/.test(target), 'invalid-argument', '직원을 골라 주세요');
   const s = await db.get(`stores/${storeId}`);
-  need(s && (s.ownerUids || []).includes(uid), 'permission-denied', '매장 사장님만 번호를 다시 정할 수 있어요');
-  need(target !== uid && !(s.ownerUids || []).includes(target), 'permission-denied', '사장님 계정은 구글 로그인이라 번호가 없어요');
+  need(s && (s.ownerUids || []).includes(uid), 'permission-denied', '매장 사장님만 비밀번호를 재설정할 수 있어요');
+  need(target !== uid && !(s.ownerUids || []).includes(target), 'permission-denied', '사장님 계정은 구글 로그인이라 비밀번호가 없어요');
   const mem = await db.get(`stores/${storeId}/members/${target}`);
   need(mem, 'failed-precondition', '이 매장 직원이 아니에요');
   if (!pin) { const a = crypto.getRandomValues(new Uint32Array(1)); pin = String(a[0] % 1000000).padStart(6, '0'); }

@@ -134,7 +134,7 @@ export function authAdmin(env) {
       });
       if (r.ok) return;
       const t = await r.text();
-      if (r.status === 403) throw new Fail('failed-precondition', '서버에 번호 바꾸기 권한이 아직 없어요 (운영자 설정 필요)');
+      if (r.status === 403) throw new Fail('failed-precondition', '서버에 비밀번호 재설정 권한이 아직 없어요 (운영자 설정 필요)');
       throw new Error('계정 번호 바꾸기 실패 ' + r.status + ' ' + t.slice(0, 200));
     },
   };

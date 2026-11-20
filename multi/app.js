@@ -40,8 +40,26 @@ function landing(mode) {
     <div class="t2">MATE</div><p class="t1">매장 근무 앱</p>
     ${mode === 'invite' ? '<div class="card hero" style="width:100%"><b>매장 만들기 초대를 받으셨어요</b><p class="small">구글 계정으로 로그인하면 매장을 만들 수 있어요.</p></div>' : ''}
     <div style="width:100%;margin-top:18px"><button id="g">사장님 · 구글로 로그인</button>
-    <p class="small" style="margin-top:14px">직원은 사장님이 보낸 <b>초대 링크</b>로 들어와 주세요.<br>이미 가입했다면 그 링크로 열면 로그인 화면이 나와요.</p></div></div>`);
+    <button class="ghost" id="st" style="margin-top:10px">직원 로그인</button>
+    <p class="small" style="margin-top:14px">처음 가입은 사장님이 보낸 <b>초대 링크</b>로 해 주세요.</p></div></div>`);
   $('g').onclick = e => busy(e.target, () => api.googleLogin());
+  $('st').onclick = () => (ls.get('mate_store') ? staffLoginScreen() : storeCodeScreen());
+}
+
+// 직원 로그인인데 이 폰이 매장을 모를 때: 초대 링크(또는 코드)를 붙여 넣으면 그 매장 로그인 화면으로
+function storeCodeScreen() {
+  show(`${top('직원 로그인', true)}<div class="card">
+      <label>초대 링크 또는 매장 코드</label><input id="sc" autocapitalize="characters" placeholder="사장님이 보낸 링크를 붙여 넣기">
+      <button id="scGo" style="margin-top:16px">다음</button>
+      <p class="small">단톡방에 올라온 초대 링크를 길게 눌러 복사해서 붙여 넣으면 돼요. 그 링크를 바로 눌러 열어도 돼요.</p></div>`);
+  wireTop(() => landing());
+  $('scGo').onclick = e => busy(e.target, async () => {
+    const v = $('sc').value.trim(), m = v.match(/[?&]join=([A-Za-z0-9]+)/);
+    const code = (m ? m[1] : v).toUpperCase();
+    if (!/^[A-Z0-9]{6,12}$/.test(code)) throw new Error('초대 링크나 매장 코드를 넣어 주세요');
+    if (!(await api.joinInfo(code).catch(() => null))) throw new Error('없는 코드예요. 사장님께 새 초대 링크를 받아 주세요');
+    return joinScreen(code, 'login');
+  });
 }
 
 // ---------- 직원: 초대 링크로 가입 / 로그인 ----------
@@ -59,7 +77,7 @@ async function joinScreen(code, tab = 'join') {
     <div class="row" style="margin:10px 0"><button class="sm ${isJoin ? '' : 'ghost'}" id="tj">처음 가입</button><button class="sm ${isJoin ? 'ghost' : ''}" id="tl">이미 가입했어요</button></div>
     <div class="card">
       <label>이름 (실명)</label><input id="nm" autocomplete="name" maxlength="20" placeholder="홍길동">
-      <label>내 번호 6자리 ${isJoin ? '<span class="small">(로그인할 때 써요. 잊지 마세요)</span>' : ''}</label>
+      <label>비밀번호 (숫자 6자리) ${isJoin ? '<span class="small">(로그인할 때 써요. 잊지 마세요)</span>' : ''}</label>
       <input id="pw" type="password" inputmode="numeric" maxlength="6" autocomplete="${isJoin ? 'new-password' : 'current-password'}" placeholder="●●●●●●">
       ${isJoin ? '<label>한 번 더</label><input id="pw2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="●●●●●●">' : ''}
       <button id="go" style="margin-top:16px">${isJoin ? '가입 신청' : '로그인'}</button>
@@ -70,9 +88,9 @@ async function joinScreen(code, tab = 'join') {
   $('go').onclick = e => busy(e.target, async () => {
     const name = $('nm').value.trim(), pw = $('pw').value;
     if (!name) throw new Error('이름을 넣어 주세요');
-    if (!/^\d{6}$/.test(pw)) throw new Error('번호는 숫자 6자리예요');
+    if (!/^\d{6}$/.test(pw)) throw new Error('비밀번호는 숫자 6자리예요');
     if (isJoin) {
-      if (pw !== $('pw2').value) throw new Error('두 번호가 달라요');
+      if (pw !== $('pw2').value) throw new Error('두 비밀번호가 달라요');
       hold = true;
       try { await api.staffSignup(j.storeId, code, name, pw); }
       catch (err) { if (api.auth.currentUser) await api.logout(); throw err; }
@@ -91,12 +109,12 @@ function staffLoginScreen() {
   show(`<div class="top"><div class="brand"><span>MATE</span></div></div>
     <div class="card hero"><div class="small">매장</div><div class="big">${esc(storeName || '내 매장')}</div></div>
     <div class="card"><label>이름</label><input id="nm" autocomplete="name" maxlength="20">
-      <label>내 번호 6자리</label><input id="pw" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
+      <label>비밀번호 (숫자 6자리)</label><input id="pw" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password">
       <button id="go" style="margin-top:16px">로그인</button></div>
     <p class="small" style="text-align:center">처음이면 사장님이 보낸 초대 링크로 가입해 주세요.<br><a href="#" id="own" style="color:var(--sub)">사장님 로그인</a></p>`);
   $('go').onclick = e => busy(e.target, async () => {
     const name = $('nm').value.trim(), pw = $('pw').value;
-    if (!name || !/^\d{6}$/.test(pw)) throw new Error('이름과 번호 6자리를 넣어 주세요');
+    if (!name || !/^\d{6}$/.test(pw)) throw new Error('이름과 비밀번호(숫자 6자리)를 넣어 주세요');
     await api.staffLogin(storeId, name, pw);
   });
   $('own').onclick = ev => { ev.preventDefault(); landing(); };
@@ -126,20 +144,20 @@ async function staffHome(storeId) {
   return attend.staffHome(storeId, m, s, () => staffHome(storeId));
 }
 
-// 사장님이 번호를 다시 정해 준 뒤 임시 번호로 로그인하면: 새 번호 정하기
+// 사장님이 번호를 다시 정해 준 뒤 임시 비밀번호로 로그인하면: 새 비밀번호 정하기
 function newPinScreen(storeId, m) {
-  show(`${top('MATE')}<div class="card hero"><div class="big">새 번호 정하기</div>
-      <p>${esc(m.name)}님, 임시 번호로 들어왔어요. 앞으로 쓸 내 번호 6자리를 정해 주세요.</p></div>
-    <div class="card"><label>새 번호 6자리</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+  show(`${top('MATE')}<div class="card hero"><div class="big">새 비밀번호 정하기</div>
+      <p>${esc(m.name)}님, 임시 비밀번호로 들어왔어요. 앞으로 쓸 비밀번호 (숫자 6자리)를 정해 주세요.</p></div>
+    <div class="card"><label>새 비밀번호 (숫자 6자리)</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
       <label>한 번 더</label><input id="np2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
-      <button id="npGo" style="margin-top:16px">이 번호로 정하기</button></div>`);
+      <button id="npGo" style="margin-top:16px">이 비밀번호로 정하기</button></div>`);
   wireTop();
   $('npGo').onclick = e => busy(e.target, async () => {
     const pw = $('np').value;
-    if (!/^\d{6}$/.test(pw)) throw new Error('번호는 숫자 6자리예요');
-    if (pw !== $('np2').value) throw new Error('두 번호가 달라요');
+    if (!/^\d{6}$/.test(pw)) throw new Error('비밀번호는 숫자 6자리예요');
+    if (pw !== $('np2').value) throw new Error('두 비밀번호가 달라요');
     await api.changePin(storeId, pw);
-    toast('새 번호로 바꿨어요'); staffHome(storeId);
+    toast('새 비밀번호로 바꿨어요'); staffHome(storeId);
   });
 }
 
@@ -266,7 +284,7 @@ async function storeScreen(id) {
       <div class="item"><span><b>${esc(m.name)}</b></span><span class="row" style="gap:6px">
         <button class="sm" data-ok="${m.id}">승인</button><button class="sm ghost" data-no="${m.id}" data-name="${esc(m.name)}">거절</button></span></div>`).join('')}</div>
       <p class="small">본인이 맞는지 확인하고 승인해 주세요. 거절하면 가입 신청이 지워져요.</p></div>` : ''}
-    ${linkCard({ title: '직원 초대', desc: '단톡방에 이 링크나 QR을 올려 주세요. 직원이 이름과 번호 6자리로 가입하면 위에 승인 요청이 떠요.',
+    ${linkCard({ title: '직원 초대', desc: '단톡방에 이 링크나 QR을 올려 주세요. 직원이 이름과 비밀번호(숫자 6자리)로 가입하면 위에 승인 요청이 떠요.',
       url: `${BASE}?join=${s.joinCode}`, qr: true, extra: '<button class="sm ghost" id="regen">새 링크로 바꾸기</button>' })}
     <h2>직원 ${act.length}명</h2>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
@@ -305,18 +323,18 @@ async function storeScreen(id) {
         <label>역할</label><select id="mr"><option value="staff" ${m.role !== 'manager' ? 'selected' : ''}>직원</option><option value="manager" ${m.role === 'manager' ? 'selected' : ''}>매니저</option></select>
         <label>개인 정시 출근 <span class="small">(비우면 매장 정시 ${esc(r ? r.open.startTime : '18:00')})</span></label><input type="time" id="mst" step="300" value="${esc(m.startTime || '')}">
         <button id="msv" style="margin-top:12px">저장</button>
-        <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">번호 다시 정하기</button><button class="sm ghost" id="mleft">퇴사 처리</button></div>
+        <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">비밀번호 임의 재설정</button><button class="sm ghost" id="mleft">퇴사 처리</button></div>
         <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
         await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null });
         toast('저장했어요'); storeScreen(id);
       });
       $('mpin').onclick = e => {
-        if (!confirm(m.name + '님 번호를 잊었나요? 임시 번호를 만들면 지금 번호는 더 이상 안 돼요.')) return;
+        if (!confirm(m.name + '님이 비밀번호를 잊었나요? 임시 비밀번호를 만들면 지금 비밀번호는 더 이상 안 돼요.')) return;
         busy(e.target, async () => {
           const { pin } = await api.resetPin(id, m.id);
-          const msg = `${m.name}님, MATE 임시 번호는 ${pin} 이에요. 앱에서 이름과 이 번호로 로그인하면 새 번호를 정할 수 있어요.`;
-          $('mpinOut').innerHTML = `<div class="card hero" style="margin:10px 0 0"><div class="small">임시 번호 (본인에게만 알려 주세요)</div>
+          const msg = `${m.name}님, MATE 임시 비밀번호는 ${pin} 이에요. 앱에서 이름과 이 비밀번호로 로그인하면 새 비밀번호를 정할 수 있어요.`;
+          $('mpinOut').innerHTML = `<div class="card hero" style="margin:10px 0 0"><div class="small">임시 비밀번호 (본인에게만 알려 주세요)</div>
             <div class="big" style="letter-spacing:4px">${pin}</div><button class="sm" id="mpinCp" style="margin-top:8px">카톡 문구 복사</button></div>`;
           $('mpinCp').onclick = () => copy(msg);
         });

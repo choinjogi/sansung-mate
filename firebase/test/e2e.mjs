@@ -118,7 +118,7 @@ try {
   assert.match(await text(alba), /산성/);
   await alba.fill('#nm', '김알바'); await alba.fill('#pw', '123456'); await alba.fill('#pw2', '123457');
   await alba.getByText('가입 신청').click();
-  await alba.getByText('두 번호가 달라요').waitFor();
+  await alba.getByText('두 비밀번호가 달라요').waitFor();
   await alba.fill('#pw2', '123456');
   await shot(alba, '직원가입');
   await alba.getByText('가입 신청', { exact: true }).click();
@@ -339,7 +339,7 @@ try {
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
 
-  // 11) 박알바가 번호를 잊음 → 사장님 [번호 다시 정하기] → 임시 번호로 로그인 → 새 번호 정하기
+  // 11) 박알바가 번호를 잊음 → 사장님 [비밀번호 임의 재설정] → 임시 비밀번호로 로그인 → 새 비밀번호 정하기
   await park.reload();
   await park.getByText('로그아웃').click();
   await park.locator('#nm').waitFor();
@@ -355,10 +355,10 @@ try {
   await shot(boss, '임시번호');
   await park.fill('#nm', '박알바'); await park.fill('#pw', '222222');           // 옛 번호는 이제 안 됨
   await park.getByText('로그인', { exact: true }).click();
-  await park.getByText('번호 다시 정하기').waitFor();
+  await park.getByText('비밀번호 임의 재설정').waitFor();
   await park.fill('#pw', pin);
   await park.getByText('로그인', { exact: true }).click();
-  await park.getByText('새 번호 정하기').waitFor();
+  await park.getByText('새 비밀번호 정하기').waitFor();
   await shot(park, '새번호');
   await park.fill('#np', '333333'); await park.fill('#np2', '333333');
   await park.locator('#npGo').click();
@@ -385,7 +385,7 @@ try {
   await park.reload();
   await park.getByText('박알바님').waitFor();
 
-  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·번호 다시 정하기·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
+  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·비밀번호 임의 재설정·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;
