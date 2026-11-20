@@ -10,7 +10,8 @@
     "deploy:server": "wrangler deploy",
     "deploy:functions": "firebase deploy --only functions",
     "e2e:functions": "E2E_SERVER=functions firebase emulators:exec --only auth,firestore,functions --project demo-mate \"node test/e2e.mjs\"",
-    "bump": "node bump-version.mjs"
+    "bump": "node bump-version.mjs",
+    "e2e2": "firebase emulators:exec --only auth,firestore --project demo-mate \"node test/e2e2.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
