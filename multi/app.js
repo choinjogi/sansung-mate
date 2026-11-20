@@ -1,9 +1,9 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=5';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=5';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js?v=5';
-import * as attend from './attend.js?v=5';
-import * as sched from './sched.js?v=5';
+import * as api from './fb.js?v=6';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=6';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js?v=6';
+import * as attend from './attend.js?v=6';
+import * as sched from './sched.js?v=6';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -13,6 +13,7 @@ if ([...params.keys()].length) history.replaceState(null, '', location.pathname)
 
 // ---------- 시작 ----------
 let hold = false; // 가입 중에는 로그인 알림으로 화면이 먼저 바뀌지 않게
+let lastPw = null; // 방금 로그인에 쓴 비밀번호 (임시 비밀번호를 새 비밀번호로 또 넣는 것 막기)
 if (!api.configured) {
   show(`<div class="splash"><div class="t2">MATE</div><p>서버 설정 전이에요.<br><code>multi/config.js</code>에 Firebase 값을 넣어 주세요.</p></div>`);
 } else {
@@ -109,6 +110,7 @@ function staffAuthScreen(st, tab = 'join') {
       ls.del('mate_join');
       await route(api.auth.currentUser);
     } else {
+      lastPw = pw;
       await api.staffLogin(st.storeId, name, pw);
       ls.del('mate_join');
     }
@@ -143,14 +145,15 @@ async function staffHome(storeId) {
 function newPinScreen(storeId, m) {
   show(`${top('MATE')}<div class="card hero"><div class="small">로그인 됐어요</div><div class="big">새 비밀번호 정하기</div>
       <p>${esc(m.name)}님, 사장님이 만든 <b>임시 비밀번호</b>로 들어왔어요.<br>임시 비밀번호는 한 번만 써요. 앞으로 쓸 <b>내 비밀번호</b>(숫자 6자리)를 새로 정해 주세요.</p></div>
-    <div class="card"><label>새 비밀번호 (숫자 6자리)</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
-      <label>한 번 더</label><input id="np2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+    <div class="card"><label>앞으로 쓸 새 비밀번호 (임시 비밀번호와 다르게)</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+      <label>새 비밀번호 한 번 더</label><input id="np2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
       <button id="npGo" style="margin-top:16px">이 비밀번호로 정하기</button></div>`);
   wireTop();
   $('npGo').onclick = e => busy(e.target, async () => {
     const pw = $('np').value;
     if (!/^\d{6}$/.test(pw)) throw new Error('비밀번호는 숫자 6자리예요');
     if (pw !== $('np2').value) throw new Error('두 비밀번호가 달라요');
+    if (pw === lastPw) throw new Error('임시 비밀번호와 다른, 앞으로 쓸 새 비밀번호를 넣어 주세요');
     await api.changePin(storeId, pw);
     toast('새 비밀번호로 바꿨어요'); staffHome(storeId);
   });
