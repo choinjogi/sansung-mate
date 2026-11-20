@@ -110,6 +110,15 @@ test('승인은 그 매장 사장님·매니저만, 매니저는 역할을 못 �
   await assertFails(updateDoc(doc(as('kim', G), 'stores/sansung/members/newbie'), { status: 'active' }));
   await assertFails(updateDoc(doc(as('newbie', P), 'stores/sansung/members/newbie'), { status: 'active' }));
 });
+test('스케줄용 직원 설정(표시이름·고정휴무·최소출근일·우선배정·반직원)은 사장님만, 형식이 맞아야', async () => {
+  const ok = { disp: '가람', offDays: ['화'], minDays: 4, priority: true, half: false, noJuhu: false };
+  await assertSucceeds(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), ok));
+  await assertFails(updateDoc(doc(as('mgr', P), 'stores/sansung/members/alba'), { minDays: 3 }));
+  await assertFails(updateDoc(doc(as('alba', P), 'stores/sansung/members/alba'), { priority: true }));
+  await assertFails(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), { minDays: 9 }));
+  await assertFails(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), { priority: 'yes' }));
+  await assertFails(updateDoc(doc(as('boss', G), 'stores/sansung/members/alba'), { disp: '아주아주긴표시이름입니다요' }));
+});
 test('승인 대기 중에는 매장 정보와 스케줄을 못 본다', async () => {
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung')));
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung/schedules/2026-11-23')));

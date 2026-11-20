@@ -1,11 +1,11 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=27';
-import * as sched from '../multi/sched.js?v=27';
-import * as pay from '../multi/pay.js?v=27';
-import * as dash from '../multi/dash.js?v=27';
-import * as staff from '../multi/staff.js?v=27';
-import { wageOf } from '../multi/paycalc.js?v=27';
+import * as api from '../multi/fb.js?v=28';
+import * as sched from '../multi/sched.js?v=28';
+import * as pay from '../multi/pay.js?v=28';
+import * as dash from '../multi/dash.js?v=28';
+import * as staff from '../multi/staff.js?v=28';
+import { wageOf } from '../multi/paycalc.js?v=28';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -154,6 +154,25 @@ A.issueCode = async name => {
 };
 A.issueAll = async () => ({ list: [], hours: 0 });
 
+// ---------- 직원 설정 (스케줄·급여용, 산성 직원명부 K~Q와 같은 칸) ----------
+const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+A.staffCfg = async () => {
+  const c = await owner(), ms = await staffList(c);
+  return ms.map(m => ({ name: m.name, disp: m.disp || '', kind: m.type === '정' ? (m.half ? '반직원' : '정직원') : '알바', start: m.startTime || '',
+    offDays: (m.offDays || []).filter(x => DAYS.includes(x)), minDays: m.minDays == null ? null : m.minDays, priority: !!m.priority, noJuhu: !!m.noJuhu, manager: m.role === 'manager' }));
+};
+A.saveStaffCfg = async (name, o) => {
+  const c = await owner(), m = await byName(c, name);
+  const disp = String(o.disp || '').trim(), min = o.minDays === '' || o.minDays == null ? null : Math.round(+o.minDays);
+  if (disp.length > 10) return { saved: false, msg: '표시이름은 10글자까지예요' };
+  if (min != null && !(min >= 0 && min <= 7)) return { saved: false, msg: '최소출근일은 0~7일이에요' };
+  if (o.start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(o.start)) return { saved: false, msg: '정시 출근은 18:00처럼 넣어 주세요' };
+  const patch = { disp: disp || null, type: o.kind === '알바' ? '알' : '정', half: o.kind === '반직원', startTime: o.start || null,
+    offDays: DAYS.filter(x => (o.offDays || []).includes(x)), minDays: min, priority: !!o.priority, noJuhu: !!o.noJuhu };
+  await api.setMember(c.store.id, m.id, patch);
+  return { saved: true, msg: `${name}님 설정을 저장했어요` };
+};
+
 // ---------- 입사 · 퇴사 ----------
 A.addStaff = async o => {
   const c = await admin(), ms = await api.members(c.store.id);
@@ -175,7 +194,7 @@ A.wages = async () => {
   const W = Object.fromEntries(ws.map(w => [w.id, w]));
   const list = ms.filter(m => m.type !== '정').map(m => {
     const cur = wageOf(W[m.id], now, rules, false), nx = ((W[m.id] || {}).history || []).find(h => h.from === next);
-    return { name: m.name, disp: m.name, wage: cur || 0, next: nx ? { wage: nx.wage, ym: next, reserved: true } : null };
+    return { name: m.name, disp: m.disp || m.name, wage: cur || 0, next: nx ? { wage: nx.wage, ym: next, reserved: true } : null };
   });
   return { list, month: +now.slice(5), nextMonth: +next.slice(5) };
 };

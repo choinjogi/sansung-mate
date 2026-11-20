@@ -188,6 +188,19 @@ try {
   await boss2.locator('[data-go="awage"]').click();
   await boss2.getByText('알바 시급').waitFor();
   assert.match(await text(boss2), /김알바\s+10,030원/);
+  // 직원 설정: 표시이름·고정휴무·최소출근일·우선배정 저장 → 목록·시급 화면에 표시이름
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="acfg"]').click();
+  await boss2.getByText('직원 설정').first().waitFor();
+  await boss2.locator('.item', { hasText: '김알바' }).first().click();
+  await boss2.fill('#cd', '알바킴'); await boss2.locator('[data-d="화"]').check(); await boss2.fill('#cm', '4'); await boss2.locator('#cp').check();
+  await boss2.locator('#csv').click();
+  await boss2.getByText(/화 고정휴무 · 최소 4일 · 우선배정/).waitFor();
+  assert.match(await text(boss2), /알바킴\s+\(김알바\)/);
+  await tab(boss2, '더보기');
+  await boss2.locator('[data-go="awage"]').click();
+  await boss2.getByText('알바 시급').waitFor();
+  assert.match(await text(boss2), /알바킴/);
   // 직원 계정 → 임시 비밀번호
   await tab(boss2, '더보기');
   await boss2.locator('[data-go="aacc"]').click();

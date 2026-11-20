@@ -1,11 +1,11 @@
 // 새 앱(여러 매장용) = 산성 앱 화면(app.js) 그대로 + 데이터만 Firebase.
 // 산성 앱의 data-live.js(구글 시트 서버)와 같은 window.API 43개를 여기서 Firebase·Cloudflare 서버로 대신 만든다.
 // 화면(app.js)은 산성 앱 것을 거의 그대로 쓰고, 매장 고르기·사장님 구글 로그인만 조금 붙였다.
-import * as api from '../multi/fb.js?v=27';
-import * as records from '../multi/records.js?v=27';
-import * as sched from '../multi/sched.js?v=27';
-import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=27';
-import { PUSH_KEY } from '../multi/config.js?v=27';
+import * as api from '../multi/fb.js?v=28';
+import * as records from '../multi/records.js?v=28';
+import * as sched from '../multi/sched.js?v=28';
+import { albaPay, wageOf, weekNo } from '../multi/paycalc.js?v=28';
+import { PUSH_KEY } from '../multi/config.js?v=28';
 
 const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }, del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -40,7 +40,7 @@ async function ctx() {
   CUR = { store: s, uid: u.uid, role: m.role === 'manager' ? '매니저' : '', owner: false, member: m };
   return CUR;
 }
-const dispOf = m => m.name;
+const dispOf = m => m.disp || m.name;   // 산성 직원명부 L "표시이름" (홍길동 → 길동)
 
 // ---------- 직원: 오늘 · 이번 주 ----------
 async function weekInfo(c, date) {
@@ -249,7 +249,7 @@ if (qs.get('owner')) ls.set('mate_owner', qs.get('owner').toUpperCase());   // �
 if ([...qs.keys()].length) history.replaceState(null, '', location.pathname);
 
 // 사장님·매니저 화면 데이터 + 화면 스크립트는 로그인 상태를 안 뒤에 불러옴
-await import('./admin.js?v=27');
-await import('./extra.js?v=27');
+await import('./admin.js?v=28');
+await import('./extra.js?v=28');
 await new Promise(res => { const off = api.onUser(() => { off(); res(); }); });
-const s = document.createElement('script'); s.src = new URL('app.js?v=27', import.meta.url).href; document.body.appendChild(s);
+const s = document.createElement('script'); s.src = new URL('app.js?v=28', import.meta.url).href; document.body.appendChild(s);
