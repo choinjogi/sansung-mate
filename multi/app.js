@@ -1,16 +1,16 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=17';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=17';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=17';
-import * as attend from './attend.js?v=17';
-import * as sched from './sched.js?v=17';
-import * as records from './records.js?v=17';
-import * as pay from './pay.js?v=17';
-import * as sales from './sales.js?v=17';
-import * as dash from './dash.js?v=17';
-import * as staff from './staff.js?v=17';
-import * as info from './info.js?v=17';
-import * as notify from './notify.js?v=17';
+import * as api from './fb.js?v=18';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=18';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=18';
+import * as attend from './attend.js?v=18';
+import * as sched from './sched.js?v=18';
+import * as records from './records.js?v=18';
+import * as pay from './pay.js?v=18';
+import * as sales from './sales.js?v=18';
+import * as dash from './dash.js?v=18';
+import * as staff from './staff.js?v=18';
+import * as info from './info.js?v=18';
+import * as notify from './notify.js?v=18';
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {}); // 폰 알림 받기용
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
@@ -189,7 +189,8 @@ async function todayTab(ctx, again) {
   let pre;
   if (ctx.owner) {
     const wk = api.mondayOf(api.kst().date);
-    const [ms, att, schNow, schNext] = await Promise.all([api.members(s.id), attend.ownerSection(s), api.getSchedule(s.id, wk), api.getSchedule(s.id, api.addDays(wk, 7))]);
+    const [ms, att, schNow, schNext, mo] = await Promise.all([api.members(s.id), attend.ownerSection(s), api.getSchedule(s.id, wk), api.getSchedule(s.id, api.addDays(wk, 7)),
+      pay.todayMoney(s).catch(e => { console.error('오늘 인건비', e); return null; })]);
     const act = ms.filter(m => api.isActive(m));
     const steps = [
       ['매장 와이파이 등록', '매장 안에서 폰을 매장 와이파이에 연결하고, ☰ 더보기 → 출퇴근 확인의 등록 버튼', att.wifiN > 0],
@@ -201,7 +202,7 @@ async function todayTab(ctx, again) {
     const left = steps.filter(x => !x[2]).length;
     pre = { html: (left ? `<div class="card" id="steps"><div class="row between"><b>처음 할 일</b><span class="pill">${steps.length - left}/${steps.length}</span></div>
       <div class="list">${steps.map(([t, d, ok]) => `<div class="item" style="display:block"><b style="color:${ok ? 'var(--ok)' : 'var(--text)'}">${ok ? '✓' : '○'} ${t}</b>${ok ? '' : `<div class="small">${esc(d)}</div>`}</div>`).join('')}</div>
-      <p class="small"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p></div>` : '') + att.head, wire() {}, again };
+      <p class="small"><a href="guide.html" target="_blank" style="color:var(--sub)">사장님 안내서 보기 ›</a></p></div>` : '') + att.head + (mo ? pay.moneyCard(mo) : ''), wire() {}, again };
   } else {
     const pc = await attend.punchCard(s, ctx.me, again);
     pre = { html: `<div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(ctx.me.name)}님</h1><span class="pill on">매니저</span></div>${pc.html}`, wire: pc.wire, again };

@@ -513,6 +513,14 @@ try {
   await tab(boss, '더보기');
   await boss.getByText('규칙 바꾸기').waitFor();
 
+  // 12-0-1) 사장님 오늘 탭: 오늘 매출 1,300,000원 · 알바 인건비 · 매출 대비 %
+  await tab(boss, '오늘');
+  await boss.getByText('오늘 매출 · 알바 인건비').waitFor();
+  assert.match(await text(boss), /1,300,000원/);
+  assert.match(await text(boss), /\d+(\.\d)?%/);
+  await tab(boss, '더보기');
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 12-1) 급여: 김알바 시급 11,000 → 정산표 (김알바·박알바), 가감 넣고 저장, 엑셀. 박알바는 내 기록 탭에 내 급여
   await boss.locator('.item', { hasText: '김알바' }).first().locator('[data-mset]').click();
   await boss.fill('#mw', '11000');

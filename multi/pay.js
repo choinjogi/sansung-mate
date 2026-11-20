@@ -6,11 +6,12 @@
 //          급여 = 시급분 + 주휴 (원 단위 반올림은 맨 끝에 한 번)
 //  · 정직원: 월급. 그 달 중간에 들어오거나 나가면 일한 날짜 수만큼 (월급 ÷ 그 달 일수 × 날짜 수)
 //  · 가감(보너스·공제 등)은 사장님이 정산표에서 직접 넣음
-import * as api from './fb.js?v=17';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=17';
-import * as records from './records.js?v=17';
+import * as api from './fb.js?v=18';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=18';
+import * as records from './records.js?v=18';
+import * as sched from './sched.js?v=18';
 
-import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=17';
+import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=18';
 export { weekNo, wageOf, albaPay, fullPay };
 
 const ymd = ts => (ts && ts.toDate ? api.kst(ts.toDate()).date : null);
@@ -111,6 +112,35 @@ export async function payrollScreen(store, back, month) {
     toast(store.direct ? '정산표를 저장했어요' : '저장하고 대표님께 합계를 보냈어요');
     await again();
   });
+}
+
+// ---------- 오늘 매출 · 알바 인건비 · 매출 대비 % (사장님 오늘 탭, 산성 앱과 같음) ----------
+// 알바마다 (퇴근 또는 지금) − 계산 시작 × 시급. 주휴는 빼고(월말 정산표에서). 출근만 찍고 일하는 중이면 지금까지
+export async function todayMoney(store) {
+  const t = api.kst(), d = t.date, mon = api.mondayOf(d);
+  const [ms, ps, wages, rules, sch, sales] = await Promise.all([api.members(store.id), api.punchesBetween(store.id, d, d), api.wagesAll(store.id),
+    api.rulesFor(store.id, d.slice(0, 7)), api.getSchedule(store.id, mon), api.salesBetween(store.id, d, d)]);
+  const W = Object.fromEntries(wages.map(w => [w.id, w])), P = {};
+  ps.forEach(p => { (P[p.uid] = P[p.uid] || {})[p.kind] = p; });
+  let cost = 0, done = 0, working = 0;
+  for (const [uid, x] of Object.entries(P)) {
+    const m = ms.find(y => y.id === uid); if (!m || m.type === '정') continue;
+    const wage = wageOf(W[uid], d.slice(0, 7), rules, false); if (!wage) continue;
+    const day = records.dayCalc({ date: d, inP: x.in, outP: x.out, plan: sched.todayPlan(sch, rules, m, d), rules });
+    let min = day.min;
+    if (!x.out) { const startAt = Date.parse(`${d}T${day.calcStart}:00+09:00`); min = Math.max(0, Math.floor((Date.now() - startAt) / 60000)); working++; } else done++;
+    cost += min / 60 * wage;
+  }
+  const amount = sales.length ? (+sales[0].amount || 0) : null;
+  return { sales: amount, cost: Math.round(cost), ratio: amount ? Math.round(cost / amount * 1000) / 10 : null, done, working };
+}
+export function moneyCard(mo) {
+  const w = n => Math.round(n).toLocaleString() + '원';
+  return `<div class="card"><b>💰 오늘 매출 · 알바 인건비</b><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;text-align:center">
+    <div><div class="small">매출</div><div style="font-size:18px;font-weight:800">${mo.sales != null ? w(mo.sales) : '<span class="small">아직 안 넣음</span>'}</div></div>
+    <div><div class="small">알바 인건비</div><div style="font-size:18px;font-weight:800">${w(mo.cost)}</div></div>
+    <div><div class="small">매출 대비</div><div style="font-size:18px;font-weight:800">${mo.ratio != null ? mo.ratio + '%' : '–'}</div></div></div>
+    <p class="small" style="margin-top:6px">퇴근 ${mo.done}명${mo.working ? ` · 근무 중 ${mo.working}명은 지금까지` : ''} · 시급 × 근무 시간(주휴 빼고)${mo.sales == null ? ' · 매출은 💰 매출 탭에서 넣으면 %가 나와요' : ''}</p></div>`;
 }
 
 // ---------- 직원 본인: 이번 달 내 급여 (알바만) ----------

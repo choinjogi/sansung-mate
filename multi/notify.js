@@ -1,9 +1,9 @@
 // 폰 알림 켜기·끄기 카드 (직원 홈, 사장님·매니저 더보기). 산성 앱 "🔔 폰 알림"과 같은 방식
 //  알림 2개: 휴무신청 열림(알바 전원) · 마감 1시간 전(안 낸 알바만) — 보내는 건 Cloudflare 서버(worker/push.js)
 //  구독 = stores/{매장}/push/{uid}_{주소 해시16} = { uid, endpoint, at }
-import * as api from './fb.js?v=17';
-import { $, toast, busy } from './ui.js?v=17';
-import { PUSH_KEY } from './config.js?v=17';
+import * as api from './fb.js?v=18';
+import { $, toast, busy } from './ui.js?v=18';
+import { PUSH_KEY } from './config.js?v=18';
 
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
