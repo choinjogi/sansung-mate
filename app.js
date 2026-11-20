@@ -212,7 +212,8 @@
     if (r.askEarly) return askEarly(r);
     const warn = [];
     if (r.alone) warn.push('⚠ 확인 없이 혼자 퇴근했어요');
-    if (r.wifi === false) warn.push('⚠ 매장 와이파이가 아니에요 (기록은 됐어요)');
+    if (r.wifi === false && !r.blocked) warn.push('⚠ 매장 와이파이가 아니에요 (기록은 됐어요)');
+    if (r.wifi === null && !r.blocked && r.kind !== 'warn') warn.push('⚠ 매장 와이파이인지 확인하지 못했어요 (기록은 됐어요)');
     let h = `<div>${header()}<div class="card" style="margin-top:16px"><b style="font-size:19px;color:var(${r.kind === 'warn' ? '--warn' : '--text'})">${esc(r.title || '완료')}</b>
       <p style="white-space:pre-line;margin-top:6px">${esc(r.text || '')}</p>${warn.map(t => `<p class="small" style="color:var(--warn)">${esc(t)}</p>`).join('')}`;
     if (r.shiftButtons) {
@@ -453,14 +454,16 @@
     } catch (e) {}
     const pill = s => s === '출근' || s === '퇴근' ? 'ok' : s === '미출근' ? 'bad' : /지각|스케줄 없음/.test(s) ? 'warn' : '';
     const cnt = re => d.rows.filter(r => re.test(r.state)).length;
+    // 11/20 와이파이 표시: ✓ 매장 와이파이 / ⚠ 와이파이 아님 / ⚠ 확인 못 함 (예전 기록·폼·직접 넣은 기록은 표시 없음)
+    const wf = v => v === 'ok' ? '<div class="small" style="color:var(--ok)">✓ 매장 와이파이</div>' : v === 'no' ? '<div class="small" style="color:var(--warn)">⚠ 와이파이 아님</div>' : v === '?' ? '<div class="small" style="color:var(--warn)">⚠ 와이파이 확인 못 함</div>' : '';
     render(`<div>${header()}<div id="clock"></div><h2>오늘 ${esc(d.label)} 출근 현황</h2>
       ${d.covered === false ? '<div class="card"><p style="color:var(--text)">이번 주 스케줄이 확정 전이라 출근 예정을 모르고, 찍은 사람만 보여요.</p></div>' : ''}
       <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${cnt(/^출근$|^퇴근$/)}</span><span class="pill warn">지각 ${cnt(/지각/)}</span><span class="pill bad">미출근 ${cnt(/^미출근$/)}</span><span class="pill">출근 전 ${cnt(/^출근 전/)}</span></div>
       <div class="card list">${d.rows.length ? d.rows.map(r => `<div class="item" style="display:block;padding:12px 0">
         <div class="row between"><div><b style="font-size:17px">${esc(r.disp)}</b> <span class="small">${r.group === '정' ? '정' : '알바'}${r.expect ? ' · 예정 ' + esc(r.expect) : ''}</span></div><span class="pill ${pill(r.state)}">${esc(r.state)}</span></div>
         <div style="display:grid;grid-template-columns:${r.group === '정' && !r.in ? '1fr' : '1fr 1fr'};gap:8px;margin-top:8px">
-          ${r.group === '정' && !r.in ? '' : `<div style="background:var(--card);border:1px solid ${r.late ? 'var(--warn)' : 'var(--line)'};border-radius:12px;padding:8px 12px"><div class="small">출근${r.late ? ' · <span style="color:var(--warn)">' + r.late + '분 늦음</span>' : ''}</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.in ? (r.late ? 'var(--warn)' : 'var(--text)') : 'var(--dim)'}">${esc(r.in || r.start || '--:--')}</div>${!r.in && r.start ? '<div class="small" style="color:var(--warn)">안 찍음 · 등록 시각으로 계산</div>' : ''}</div>`}
-          <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px"><div class="small">퇴근</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.out ? 'var(--ok)' : 'var(--dim)'}">${esc(r.out || '--:--')}</div></div>
+          ${r.group === '정' && !r.in ? '' : `<div style="background:var(--card);border:1px solid ${r.late ? 'var(--warn)' : 'var(--line)'};border-radius:12px;padding:8px 12px"><div class="small">출근${r.late ? ' · <span style="color:var(--warn)">' + r.late + '분 늦음</span>' : ''}</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.in ? (r.late ? 'var(--warn)' : 'var(--text)') : 'var(--dim)'}">${esc(r.in || r.start || '--:--')}</div>${!r.in && r.start ? '<div class="small" style="color:var(--warn)">안 찍음 · 등록 시각으로 계산</div>' : ''}${r.in ? wf(r.inW) : ''}${r.blocked ? `<div class="small" style="color:var(--bad)">출근 막힘 ${r.blocked}번 (와이파이 아님)</div>` : ''}</div>`}
+          <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px"><div class="small">퇴근</div><div style="font-size:26px;font-weight:800;letter-spacing:1px;color:${r.out ? 'var(--ok)' : 'var(--dim)'}">${esc(r.out || '--:--')}</div>${r.out ? wf(r.outW) : ''}</div>
         </div></div>`).join('') : '<p class="small">오늘 근무 예정인 사람이 없어요.</p>'}</div>
       <div class="card"><b>⏰ 일찍 부르기</b><p class="small">오늘 정시보다 일찍 나오라고 한 알바를 미리 적어 두면 그 시각부터 계산돼요. (늦게 오면 찍은 시각부터)</p>
         <label>누구</label><select id="en"><option value="">불러오는 중…</option></select>
@@ -741,7 +744,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 30;
+  const APP_VER = 31;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
