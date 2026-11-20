@@ -1,10 +1,11 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=7';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=7';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=7';
-import * as attend from './attend.js?v=7';
-import * as sched from './sched.js?v=7';
-import * as records from './records.js?v=7';
+import * as api from './fb.js?v=8';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=8';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=8';
+import * as attend from './attend.js?v=8';
+import * as sched from './sched.js?v=8';
+import * as records from './records.js?v=8';
+import * as pay from './pay.js?v=8';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -375,7 +376,8 @@ async function storeScreen(id, tab) {
 async function ownerMore(id, again) {
   const s = await api.getStore(id);
   CTX.store = s;
-  const [ms, rules, attendHtml] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s)]);
+  const [ms, rules, attendHtml, wages] = await Promise.all([api.members(id), api.rulesOf(id), attend.ownerSection(s), api.wagesAll(id)]);
+  const W = Object.fromEntries(wages.map(w => [w.id, w]));
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
   const gone = ms.filter(m => m.status === 'left').sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
@@ -385,7 +387,7 @@ async function ownerMore(id, again) {
     <h2>직원 ${act.length}명</h2>
     <div class="card">${act.length ? `<div class="list">${act.map(m => `
       <div class="item" style="display:block"><div class="row between"><span><b>${esc(m.name)}</b> <span class="pill">${m.type === '정' ? '정직원' : '알바'}</span>
-        ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}</span>
+        ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}${(() => { const w = pay.wageOf(W[m.id], api.month(), r, m.type === '정'); return w ? ` <span class="small">${m.type === '정' ? '월급' : '시급'} ${w.toLocaleString()}</span>` : ''; })()}${m.noJuhu ? ' <span class="small">주휴 없음</span>' : ''}</span>
         <button class="sm ghost" data-mset="${m.id}">설정</button></div><div id="ms_${m.id}"></div></div>`).join('')}</div>`
       : '<p class="small">아직 승인된 직원이 없어요.</p>'}
       <p class="small">매니저는 근무표·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요. 휴무신청은 알바만 내요.</p>
@@ -395,8 +397,9 @@ async function ownerMore(id, again) {
     <h2>근무표</h2>
     <div class="row" style="gap:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
     <button class="ghost" id="goSched" style="margin-top:8px">확정된 근무표 보기</button>
-    <h2>기록</h2>
-    <button class="ghost" id="goMonth">월 근무 기록 · 엑셀</button>
+    <h2>기록 · 급여</h2>
+    <button id="goPay">💰 급여 · 정산표</button>
+    <button class="ghost" id="goMonth" style="margin-top:8px">월 근무 기록 · 엑셀</button>
     <h2>매장 규칙</h2>
     <div class="card">${r ? `<table class="kv">
       <tr><td>영업 요일</td><td>${DOW_ORDER.filter(d => r.open.days.includes(d)).map(d => DOW[d]).join(' ')}</td></tr>
@@ -414,6 +417,7 @@ async function ownerMore(id, again) {
   attend.wireOwnerSection(s, again);
   $('goStores').onclick = () => ownerHome();
   $('goMonth').onclick = () => records.monthScreen(s, again, null, true);
+  $('goPay').onclick = () => pay.payrollScreen(s, again);
   document.querySelectorAll('[data-mset]').forEach(b => {
     b.onclick = () => {
       const m = act.find(x => x.id === b.dataset.mset), host = $('ms_' + m.id);
@@ -422,11 +426,19 @@ async function ownerMore(id, again) {
         <label>구분</label><select id="mt"><option value="알" ${m.type !== '정' ? 'selected' : ''}>알바 (휴무신청 냄)</option><option value="정" ${m.type === '정' ? 'selected' : ''}>정직원</option></select>
         <label>역할</label><select id="mr"><option value="staff" ${m.role !== 'manager' ? 'selected' : ''}>직원</option><option value="manager" ${m.role === 'manager' ? 'selected' : ''}>매니저</option></select>
         <label>개인 정시 출근 <span class="small">(비우면 매장 정시 ${esc(r ? r.open.startTime : '18:00')})</span></label><input type="time" id="mst" step="300" value="${esc(m.startTime || '')}">
+        <label id="mwl">${m.type === '정' ? '월급(원)' : '시급(원)'} <span class="small">${m.type === '정' ? '' : `(비우면 매장 기본 ${r && r.pay.baseWage ? r.pay.baseWage.toLocaleString() : '-'}원)`}</span></label>
+        <input type="number" id="mw" min="0" step="10" inputmode="numeric" value="${(() => { const h = ((W[m.id] || {}).history || []).filter(x => x.from <= api.month()).pop(); return h ? h.wage : ''; })()}">
+        <div class="row" style="gap:6px;margin-top:6px"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="mwf" value="now" checked style="width:auto">이번 달부터</label>
+          <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="mwf" value="next" style="width:auto">다음 달부터</label></div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="mnj" ${m.noJuhu ? 'checked' : ''} style="width:auto">주휴수당 없음 <span class="small">(계약상 주휴 미포함인 알바)</span></label>
         <button id="msv" style="margin-top:12px">저장</button>
         <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">비밀번호 임의 재설정</button><button class="sm ghost" id="mleft">퇴사 처리</button></div>
         <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
-        await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null });
+        await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null, noJuhu: $('mnj').checked });
+        const curW = (((W[m.id] || {}).history || []).filter(x => x.from <= api.month()).pop() || {}).wage || '';
+        const nw = $('mw').value ? Math.round(+$('mw').value) : '', from = document.querySelector('input[name=mwf]:checked').value === 'next' ? api.month(new Date(), 1) : api.month();
+        if (String(nw) !== String(curW) || from !== api.month()) await api.setWage(id, m.id, from, nw || null);
         toast('저장했어요'); again();
       });
       $('mpin').onclick = e => {

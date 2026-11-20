@@ -1,9 +1,10 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=7';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=7';
-import * as sched from './sched.js?v=7';
-import * as records from './records.js?v=7';
+import * as api from './fb.js?v=8';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=8';
+import * as sched from './sched.js?v=8';
+import * as records from './records.js?v=8';
+import * as pay from './pay.js?v=8';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
@@ -120,7 +121,7 @@ const prevMonth = m => { const [y, mo] = m.split('-').map(Number); return mo ===
 export async function myRecords(store, me, back, month) {
   const now = api.month(), t = api.kst(); month = month || now;
   const from = month + '-01', to = month === now ? t.date : api.addDays(nextMonth(month) + '-01', -1);
-  const [r, mine] = await Promise.all([api.rulesFor(store.id, month), api.myPunches(store.id, from, to)]);
+  const [r, mine, myPay] = await Promise.all([api.rulesFor(store.id, month), api.myPunches(store.id, from, to), pay.myPay(store, me, month).catch(e => { console.error(e); return null; })]);
   const start = startOf(me, r), grace = r ? r.open.lateGraceMin : 0;
   const byDay = {};
   mine.forEach(p => { (byDay[p.date] = byDay[p.date] || {})[p.kind] = p; });
@@ -135,6 +136,8 @@ export async function myRecords(store, me, back, month) {
   show(`${top('내 기록', true)}
     <div class="row between"><h2 style="margin:12px 0">${esc(month.replace('-', '년 '))}월 내 출퇴근</h2>
       <span class="row" style="gap:6px"><button class="sm ghost" id="mPrev">‹ 지난달</button>${month < now ? '<button class="sm ghost" id="mNext">다음 ›</button>' : ''}</span></div>
+    ${myPay ? `<div class="card hero"><div class="small">${month === now ? '오늘까지 ' : ''}내 급여</div><div class="big">${Math.round(myPay.pay).toLocaleString()}원</div>
+      <p class="small">시급 ${myPay.wage.toLocaleString()}원 × ${records.hmText(myPay.totalMin)} = ${Math.round(myPay.base).toLocaleString()}원 · 주휴 ${Math.round(myPay.juhu).toLocaleString()}원</p></div>` : ''}
     <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill ok">출근 ${days.length}일</span><span class="pill warn">지각 ${lateN}번</span><span class="pill warn">⚠ ${flagN}번</span></div>
     <div class="card">${days.length ? `<table class="kv"><tr><th>날짜</th><th>출근</th><th>퇴근</th></tr>${rows}</table>` : '<p class="small">이 달 기록이 아직 없어요.</p>'}</div>
     <p class="small">지각은 정시(${esc(start)}) 기준이에요. 일찍 부른 날은 그 시각 기준으로 계산돼요. 틀린 기록은 사장님·매니저에게 말해 주세요.</p>`);

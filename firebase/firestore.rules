@@ -111,7 +111,7 @@ service cloud.firestore {
           && (!('joinCode' in d()) || doc(/databases/$(database)/documents/joinCodes/$(d().joinCode)).storeId == s);
         // 승인·역할 변경·퇴사: 매장 사장님만
         allow update: if owner(s)
-          && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type'])
+          && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type', 'noJuhu', 'startDate'])
           && d().role in ['staff', 'manager'] && d().status in ['pending', 'active', 'left']
           && (!('type' in d()) || d().type in ['정', '알']);
         // 번호 다시 정하기(서버가 pinReset=true) 뒤 본인이 새 번호를 정하면 표시만 지움

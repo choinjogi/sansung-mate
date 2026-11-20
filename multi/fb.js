@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=7';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=7';
+import * as F from './vendor/firebase.js?v=8';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=8';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -127,6 +127,22 @@ export async function newJoinCode(store) {
 }
 // 월 합계 (총괄이 보는 숫자). 매출·인건비는 급여 단계에서 같이 채움 → merge
 export const saveStats = (storeId, m, v) => F.setDoc(ref(`stores/${storeId}/stats/${m}`), { month: m, ...v, updatedAt: F.serverTimestamp() }, { merge: true });
+// 시급(알바)·월급(정직원) 이력 { history: [{ from:'YYYY-MM', wage }] } — 사장님·본인만
+export const wagesAll = storeId => list(col(`stores/${storeId}/wages`));
+export const myWage = storeId => F.getDoc(ref(`stores/${storeId}/wages/${auth.currentUser.uid}`)).then(data);
+export async function setWage(storeId, uid, from, wage) {
+  const cur = await F.getDoc(ref(`stores/${storeId}/wages/${uid}`)).then(data);
+  const history = ((cur && cur.history) || []).filter(x => x.from !== from).concat(wage ? [{ from, wage }] : []).sort((a, b) => (a.from < b.from ? -1 : 1));
+  await F.setDoc(ref(`stores/${storeId}/wages/${uid}`), { history });
+}
+// 월 정산표 (사장님만)
+export const getPayroll = (storeId, m) => F.getDoc(ref(`stores/${storeId}/payroll/${m}`)).then(data);
+export const savePayroll = (storeId, m, v) => F.setDoc(ref(`stores/${storeId}/payroll/${m}`), { ...v, savedAt: F.serverTimestamp(), savedBy: auth.currentUser.uid });
+// 매출 { date, amount } — 그 달 합계 (없으면 0)
+export async function monthSales(storeId, m) {
+  const rows = await list(F.query(col(`stores/${storeId}/sales`), F.where('date', '>=', m + '-01'), F.where('date', '<=', m + '-31')));
+  return rows.reduce((a, r) => a + (+r.amount || 0), 0);
+}
 export const setMember = (storeId, uid, patch) => F.updateDoc(ref(`stores/${storeId}/members/${uid}`), patch);
 export const removeMember = (storeId, uid) => F.deleteDoc(ref(`stores/${storeId}/members/${uid}`));
 export async function saveRules(storeId, from, rules) {

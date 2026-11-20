@@ -415,6 +415,27 @@ try {
   await park.reload();
   await park.getByText('박알바님').waitFor();
 
+  // 12-1) 급여: 김알바 시급 11,000 → 정산표 (김알바·박알바), 가감 넣고 저장, 엑셀. 박알바는 내 기록 탭에 내 급여
+  await boss.locator('.item', { hasText: '김알바' }).first().locator('[data-mset]').click();
+  await boss.fill('#mw', '11000');
+  await boss.locator('#msv').click();
+  await boss.getByText('시급 11,000').waitFor();
+  await boss.locator('#goPay').click();
+  await boss.getByText('지급 합계').waitFor();
+  assert.match(await text(boss), /김알바/); assert.match(await text(boss), /박알바/);
+  await boss.locator('.adj').first().fill('5000');
+  await shot(boss, '정산표');
+  await boss.locator('#save').click();
+  await boss.getByText('정산표 저장됨').waitFor();
+  assert.equal(await boss.locator('.adj').first().inputValue(), '5000');
+  const [pdl] = await Promise.all([boss.waitForEvent('download'), boss.locator('#csv').click()]);
+  assert.match(pdl.suggestedFilename(), /^산성_\d{4}-\d{2}_정산표\.csv$/);
+  assert.match(await readFile(await pdl.path(), 'utf8'), /김알바,알바,1,.*,11000,/);
+  await tab(park, '내 기록');
+  await park.getByText('내 급여').waitFor();
+  assert.match(await text(park), /시급 10,030원/);
+  await tab(park, '홈');
+
   // 13) 아래 탭: 직원 4개, 매니저·사장님 3개. 내 기록 탭
   assert.equal(await park.locator('#nav a').count(), 4);
   await tab(park, '내 기록');

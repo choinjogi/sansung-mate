@@ -1,8 +1,8 @@
 // 월 근무 기록: 직원별 일한 날·시간·지각·⚠ 합계, 날짜별 상세, 엑셀(CSV) 내려받기 (사장님·매니저)
 // 급여 기능 전까지 사장님이 이 표로 급여를 계산. 대표님께는 합계(근무 시간·인원)만 보낼 수 있음
-import * as api from './fb.js?v=7';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=7';
-import * as sched from './sched.js?v=7';
+import * as api from './fb.js?v=8';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=8';
+import * as sched from './sched.js?v=8';
 
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };
 export const hmText = min => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
@@ -63,6 +63,16 @@ export async function monthData(store, month) {
   return { month, people, rules, byWeekday, totalMin: people.reduce((a, p) => a + p.min, 0) };
 }
 
+// 직원 본인: 그 달 내 날짜별 계산 (급여 카드용, 내 출퇴근만 읽음)
+export async function myDays(store, me, month) {
+  const from = month + '-01', to = lastDay(month);
+  const weeks = []; for (let w = api.mondayOf(from); w <= to; w = api.addDays(w, 7)) weeks.push(w);
+  const [ps, rules, schs] = await Promise.all([api.myPunches(store.id, from, to), api.rulesFor(store.id, month), Promise.all(weeks.map(w => api.getSchedule(store.id, w)))]);
+  const S = Object.fromEntries(weeks.map((w, i) => [w, schs[i]])), D = {};
+  ps.forEach(p => { (D[p.date] = D[p.date] || {})[p.kind] = p; });
+  return Object.keys(D).sort().map(date => dayCalc({ date, inP: D[date].in, outP: D[date].out, plan: sched.todayPlan(S[api.mondayOf(date)], rules, { ...me, id: api.auth.currentUser.uid }, date), rules }));
+}
+
 // 엑셀에서 바로 열리는 CSV (한글 깨지지 않게 BOM)
 export function toCsv(store, data) {
   const q = v => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -73,7 +83,7 @@ export function toCsv(store, data) {
   data.people.forEach(p => p.days.forEach(d => rows.push([p.name, d.date, DOW[api.dowOf(d.date)], d.in, d.out, d.calcStart, hmText(d.min), hours(d.min), d.notes.join(' · ')])));
   return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
 }
-function download(name, text) {
+export function download(name, text) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
   a.download = name; document.body.appendChild(a); a.click();
