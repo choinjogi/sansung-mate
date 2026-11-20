@@ -1,11 +1,12 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=8';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=8';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=8';
-import * as attend from './attend.js?v=8';
-import * as sched from './sched.js?v=8';
-import * as records from './records.js?v=8';
-import * as pay from './pay.js?v=8';
+import * as api from './fb.js?v=9';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=9';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=9';
+import * as attend from './attend.js?v=9';
+import * as sched from './sched.js?v=9';
+import * as records from './records.js?v=9';
+import * as pay from './pay.js?v=9';
+import * as sales from './sales.js?v=9';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -145,9 +146,9 @@ async function staffHome(storeId) {
 }
 
 // ---------- 아래 탭 (산성 앱과 같은 구성) ----------
-// 직원: 홈 · 근무표 · 휴무신청 · 내 기록 / 사장님·매니저: 오늘 · 승인 · 더보기
+// 직원: 홈 · 근무표 · 휴무신청 · 내 기록 / 사장님·매니저: 오늘 · 승인 · 매출 · 더보기
 const STAFF_TABS = [['home', '🏠', '홈'], ['sched', '📅', '근무표'], ['leave', '📝', '휴무신청'], ['rec', '⏱️', '내 기록']];
-const ADMIN_TABS = [['today', '👀', '오늘'], ['ok', '✅', '승인'], ['more', '☰', '더보기']];
+const ADMIN_TABS = [['today', '👀', '오늘'], ['ok', '✅', '승인'], ['sales', '💰', '매출'], ['more', '☰', '더보기']];
 let CTX = null;
 function startTabs(ctx, tab) {
   CTX = ctx;
@@ -166,6 +167,7 @@ async function goTab(k) {
     if (k === 'rec') return await attend.myRecords(s, me, null);
     if (k === 'today') return await todayTab(ctx, again);
     if (k === 'ok') return await approvalTab(ctx, again);
+    if (k === 'sales') return await sales.salesScreen(s, null);
     if (k === 'more') return ctx.owner ? await ownerMore(s.id, again) : await managerMore(ctx, again);
   } catch (e) {
     console.error(e);

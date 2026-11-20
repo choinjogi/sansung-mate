@@ -192,7 +192,10 @@ service cloud.firestore {
 
       // 매출: 매니저 이상
       match /sales/{date} {
-        allow read, write: if manager(s);
+        allow read, delete: if manager(s);
+        allow write: if manager(s) && isDate(date) && d().keys().hasOnly(['date', 'amount', 'by', 'at'])
+          && d().date == date && d().amount is int && d().amount >= 0 && d().amount < 1000000000
+          && d().by == uid() && d().at == request.time;
       }
 
       // 월 정산표: 사장님만

@@ -93,7 +93,7 @@
 ## 새 앱 올릴 때
 - 시험 (메인 노트북 윈도우, 11/20부터 됨): 자바 = `C:/Users/samsung/tools/jdk-21.0.13+9` (설치 없이 풀어 둠), 시험 브라우저 = playwright(`npm i --no-save playwright` + `npx playwright install chromium`, 끝남)
   Git Bash: `export JAVA_HOME="$(cygpath -w /c/Users/samsung/tools/jdk-21.0.13+9)" PATH="/c/Users/samsung/tools/jdk-21.0.13+9/bin:$PATH" LANG=C.UTF-8` 후 `npm.cmd test`, `npm.cmd run e2e`
-- 아래 탭(11/20): 직원 🏠홈·📅근무표·📝휴무신청·⏱️내 기록 / 사장님·매니저 👀오늘·✅승인·☰더보기 (app.js startTabs·goTab, ui.js setNav). 매니저도 가입 승인·거절
+- 아래 탭(11/20): 직원 🏠홈·📅근무표·📝휴무신청·⏱️내 기록 / 사장님·매니저 👀오늘·✅승인·💰매출·☰더보기. 급여·정산표 = paycalc.js(시트와 같은 계산, pay.test.mjs) + pay.js(사장님 더보기) (app.js startTabs·goTab, ui.js setNav). 매니저도 가입 승인·거절
 - `cd firebase && npm run bump` 먼저 (multi/ 파일끼리 부르는 주소의 ?v= 번호를 올림. 안 하면 폰이 예전 파일을 10분까지 씀)
 - 직원 가입(11/20 사용자 결정): 초대 링크 없이 앱 첫 화면 → 매장 이름 정확히 검색(storeNames, 목록 불가) → 이름·비밀번호 → 사장님 승인. 초대 링크도 계속 됨
 - 다음(11/20 사용자 결정): 화면 **구성**을 지금 산성 앱과 같게(탭·화면 순서·용어). **기능 먼저, 디자인은 나중**.

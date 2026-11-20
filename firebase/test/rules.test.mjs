@@ -265,7 +265,9 @@ test('근무표는 매니저 이상이 짜고, 직원은 본다', async () => {
 
 // ---------- 매출·정산·규칙 ----------
 test('매출은 매니저 이상, 정산표는 사장님만', async () => {
-  await assertSucceeds(setDoc(doc(as('mgr', P), 'stores/sansung/sales/2026-11-19'), { amount: 1500000 }));
+  await assertSucceeds(setDoc(doc(as('mgr', P), 'stores/sansung/sales/2026-11-19'), { date: '2026-11-19', amount: 1500000, by: 'mgr', at: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/sales/2026-11-19'), { date: '2026-11-18', amount: 1500000, by: 'mgr', at: serverTimestamp() })); // 날짜 다름
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/sales/2026-11-19'), { date: '2026-11-19', amount: -1, by: 'mgr', at: serverTimestamp() }));     // 음수
   await assertFails(getDoc(doc(as('alba', P), 'stores/sansung/sales/2026-11-19')));
   await assertFails(getDoc(doc(as('mgr', P), 'stores/sansung/payroll/2026-11')));
   await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/payroll/2026-11'), { rows: [] }));

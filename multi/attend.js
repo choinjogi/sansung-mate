@@ -1,10 +1,10 @@
 // 출퇴근 화면: 직원 출근·퇴근 버튼, 오늘 출근 현황(매니저·사장님), 확인 필요 목록, 매장 와이파이·위치 설정
 // 출근 ✓ = 매장 와이파이에서 찍음. 퇴근 ✓ = 매장 와이파이이거나 매장 반경 안. 나머지는 막지 않고 ⚠ (서버 함수가 판정)
-import * as api from './fb.js?v=8';
-import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=8';
-import * as sched from './sched.js?v=8';
-import * as records from './records.js?v=8';
-import * as pay from './pay.js?v=8';
+import * as api from './fb.js?v=9';
+import { $, esc, DOW, toast, show, top, wireTop, busy } from './ui.js?v=9';
+import * as sched from './sched.js?v=9';
+import * as records from './records.js?v=9';
+import * as pay from './pay.js?v=9';
 
 const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 const dayLabel = d => { const t = new Date(d + 'T12:00:00Z'); return `${t.getUTCMonth() + 1}/${t.getUTCDate()}(${DOW[t.getUTCDay()]})`; };

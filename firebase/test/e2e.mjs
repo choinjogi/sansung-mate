@@ -415,6 +415,21 @@ try {
   await park.reload();
   await park.getByText('박알바님').waitFor();
 
+  // 12-0) 매출: 김알바(매니저)가 오늘 매출 넣기 → 바꾸기(확인 창) → 사장님도 보임
+  await tab(alba, '매출');
+  await alba.getByText('매출 넣기').waitFor();
+  await alba.fill('#sa', '1234000');
+  await alba.locator('#sv').click();
+  await alba.getByText('1,234,000원').first().waitFor();
+  await alba.fill('#sa', '1300000');
+  await alba.locator('#sv').click();
+  await alba.getByText('1,300,000원').first().waitFor();
+  await tab(boss, '매출');
+  await boss.getByText('1,300,000원').first().waitFor();
+  await shot(boss, '매출');
+  await tab(boss, '더보기');
+  await boss.getByText('규칙 바꾸기').waitFor();
+
   // 12-1) 급여: 김알바 시급 11,000 → 정산표 (김알바·박알바), 가감 넣고 저장, 엑셀. 박알바는 내 기록 탭에 내 급여
   await boss.locator('.item', { hasText: '김알바' }).first().locator('[data-mset]').click();
   await boss.fill('#mw', '11000');
@@ -440,10 +455,10 @@ try {
   assert.equal(await park.locator('#nav a').count(), 4);
   await tab(park, '내 기록');
   await park.getByText('내 출퇴근').waitFor();
-  assert.equal(await boss.locator('#nav a').count(), 3);
+  assert.equal(await boss.locator('#nav a').count(), 4);
   await alba.reload();
-  await alba.getByText('김알바님').waitFor();
-  assert.equal(await alba.locator('#nav a').count(), 3);
+  await alba.locator('#nav a').first().waitFor();
+  assert.equal(await alba.locator('#nav a').count(), 4);
 
   console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·비밀번호 임의 재설정·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {

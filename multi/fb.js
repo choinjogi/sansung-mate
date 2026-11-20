@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=8';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=8';
+import * as F from './vendor/firebase.js?v=9';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=9';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -138,7 +138,10 @@ export async function setWage(storeId, uid, from, wage) {
 // 월 정산표 (사장님만)
 export const getPayroll = (storeId, m) => F.getDoc(ref(`stores/${storeId}/payroll/${m}`)).then(data);
 export const savePayroll = (storeId, m, v) => F.setDoc(ref(`stores/${storeId}/payroll/${m}`), { ...v, savedAt: F.serverTimestamp(), savedBy: auth.currentUser.uid });
-// 매출 { date, amount } — 그 달 합계 (없으면 0)
+// 매출 { date, amount, by, at } (사장님·매니저)
+export const salesBetween = (storeId, from, to) => list(F.query(col(`stores/${storeId}/sales`), F.where('date', '>=', from), F.where('date', '<=', to)));
+export const setSales = (storeId, date, amount) => F.setDoc(ref(`stores/${storeId}/sales/${date}`), { date, amount, by: auth.currentUser.uid, at: F.serverTimestamp() });
+// 매출 그 달 합계 (없으면 0)
 export async function monthSales(storeId, m) {
   const rows = await list(F.query(col(`stores/${storeId}/sales`), F.where('date', '>=', m + '-01'), F.where('date', '<=', m + '-31')));
   return rows.reduce((a, r) => a + (+r.amount || 0), 0);
