@@ -1,8 +1,8 @@
 // 근무표·휴무신청 화면
 // 직원: 근무표 보기, 휴무신청(알바만). 매니저·사장님: 근무표 짜기(휴무신청 반영·자동 채우기 초안·확정), 휴무신청 현황
-import * as api from './fb.js?v=11';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=11';
-import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=11';
+import * as api from './fb.js?v=12';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=12';
+import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=12';
 
 const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
 export const isAlba = m => m.type !== '정';
@@ -11,6 +11,35 @@ const hasAm = c => c === '오전' || c === 'O+오전';
 const short = d => `${+d.slice(8)} ${DOW[api.dowOf(d)]}`;
 const label = d => `${+d.slice(5, 7)}/${+d.slice(8)}(${DOW[api.dowOf(d)]})`;
 const staffing = r => (r && r.staffing) || STORE_RULES_DEFAULT.staffing;
+// 요일별 인원 (사장님·매니저가 정함): settings/staffing { need: 알바 [일~토], needFull: 정직원 [일~토] }. 없으면 매장 규칙의 알바 수
+async function needOf(store, rules) {
+  const d = await api.getSetting(store.id, 'staffing').catch(() => null);
+  return { alba: (d && d.need) || staffing(rules).need, full: (d && d.needFull) || null };
+}
+
+// ---------- 요일별 인원 (사장님·매니저): 정직원 + 알바 = 하루 총 인원 ----------
+export async function staffingScreen(store, back) {
+  const rules = (await api.rulesOf(store.id)).current, n = await needOf(store, rules);
+  const full = n.full || [0, 0, 0, 0, 0, 0, 0], alba = n.alba;
+  const ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const inp = (name, d, v) => `<input type="number" min="0" max="50" inputmode="numeric" name="${name}" data-d="${d}" value="${v}" style="padding:8px 2px;text-align:center">`;
+  show(`${top('요일별 인원', true)}
+    <p class="small">요일마다 정직원 몇 명, 알바 몇 명을 쓸지 정해요. 근무표 짜기·휴무신청 현황에서 이 숫자보다 적으면 빨갛게 보이고, [빈칸 자동 채우기]는 알바 수만큼 채워요.</p>
+    <div class="card scroll"><table>
+      <tr><th class="name"></th>${ORDER.map(d => `<th>${DOW[d]}</th>`).join('')}</tr>
+      <tr><td class="name">정직원</td>${ORDER.map(d => `<td>${inp('nf', d, full[d] || 0)}</td>`).join('')}</tr>
+      <tr><td class="name">알바</td>${ORDER.map(d => `<td>${inp('na', d, alba[d] || 0)}</td>`).join('')}</tr>
+      <tr class="sum"><td class="name">합계</td>${ORDER.map(d => `<td id="nt${d}"><b>${(full[d] || 0) + (alba[d] || 0)}</b></td>`).join('')}</tr></table></div>
+    <button id="nsv">저장</button>
+    <p class="small">주말 오전(${esc(staffing(rules).amStart)}~${esc(staffing(rules).amEnd)}) 근무는 따로 세요.</p>`);
+  wireTop(back);
+  const read = name => { const a = [0, 0, 0, 0, 0, 0, 0]; document.querySelectorAll(`input[name=${name}]`).forEach(i => { a[+i.dataset.d] = Math.max(0, Math.min(50, Math.round(+i.value || 0))); }); return a; };
+  document.querySelectorAll('input[name=nf],input[name=na]').forEach(i => { i.oninput = () => { const f = read('nf'), a = read('na'); ORDER.forEach(d => { $('nt' + d).innerHTML = `<b>${f[d] + a[d]}</b>`; }); }; });
+  $('nsv').onclick = e => busy(e.target, async () => {
+    await api.saveStaffing(store.id, { need: read('na'), needFull: read('nf') });
+    toast('요일별 인원을 저장했어요'); await back();
+  });
+}
 // 정직원 먼저, 그다음 알바 (이름순)
 const order = ms => [...ms.filter(m => !isAlba(m)), ...ms.filter(isAlba)];
 const byName = (a, b) => (a.name < b.name ? -1 : 1);
@@ -34,7 +63,7 @@ function cellHtml(m, c, color, today, extra = '') {
   if (c === 'X') return `<td class="sc x${t}" ${extra}>✕</td>`;
   return `<td class="sc${t}" ${extra}></td>`;
 }
-function grid(act, cells, dates, { me, editable, need } = {}) {
+function grid(act, cells, dates, { me, editable, need, needFull } = {}) {
   const today = api.kst().date, color = {};
   act.filter(isAlba).forEach((m, k) => { color[m.id] = PAL[k % PAL.length]; });
   const row = m => {
@@ -47,8 +76,8 @@ function grid(act, cells, dates, { me, editable, need } = {}) {
     <tr><th class="name">이름</th>${dates.map(d => `<th class="${d === today ? 'today' : ''}">${short(d)}</th>`).join('')}<th>총</th></tr>
     ${act.filter(m => !isAlba(m)).map(row).join('')}${act.some(m => !isAlba(m)) ? '<tr class="gap"><td colspan="9"></td></tr>' : ''}
     ${act.filter(isAlba).map(row).join('')}
-    <tr class="sum"><td class="name">정+알</td>${cnt.map((c, i) => `<td class="${dates[i] === today ? 'today' : ''}" style="${need && c.a < need[api.dowOf(dates[i])] ? 'color:var(--bad)' : ''}">${c.text}</td>`).join('')}<td></td></tr>
-    ${need ? `<tr class="sum"><td class="name">필요</td>${dates.map(d => `<td>알${need[api.dowOf(d)]}</td>`).join('')}<td></td></tr>` : ''}</table></div>`;
+    <tr class="sum"><td class="name">정+알</td>${cnt.map((c, i) => { const w = api.dowOf(dates[i]), low = (need && c.a < need[w]) || (needFull && c.j < needFull[w]); return `<td class="${dates[i] === today ? 'today' : ''}" style="${low ? 'color:var(--bad)' : ''}">${c.text}</td>`; }).join('')}<td></td></tr>
+    ${need ? `<tr class="sum"><td class="name">필요</td>${dates.map(d => { const w = api.dowOf(d); return `<td>${needFull ? `${needFull[w]}+${need[w]}` : `알${need[w]}`}</td>`; }).join('')}<td></td></tr>` : ''}</table></div>`;
 }
 const weekTitle = w => `${label(w)} – ${label(api.addDays(w, 6))}`;
 
@@ -110,7 +139,7 @@ export async function leaveForm(store, me, back) {
 export async function leaveAdmin(store, back, week) {
   week = week || api.addDays(api.mondayOf(api.kst().date), 7);
   const [{ act, rules }, lvs, setting] = await Promise.all([loadWeek(store, week), api.leavesOf(store.id, week), api.leaveSetting(store.id)]);
-  const albas = act.filter(isAlba), dates = api.weekDates(week), need = staffing(rules).need;
+  const albas = act.filter(isAlba), dates = api.weekDates(week), need = (await needOf(store, rules)).alba;
   const L = Object.fromEntries(lvs.map(l => [l.uid, l]));
   const rows = albas.map(m => ({ m, l: L[m.id] || null }));
   const avail = dates.map(d => rows.filter(r => !(r.l && r.l.off.includes(d))).length);
@@ -149,7 +178,8 @@ const CYCLE = (weekend) => (weekend ? ['', 'O', '오전', 'O+오전', 'X'] : [''
 export async function scheduleEditor(store, back, week) {
   week = week || api.addDays(api.mondayOf(api.kst().date), 7);
   const [{ act, sch, rules }, lvs] = await Promise.all([loadWeek(store, week), api.leavesOf(store.id, week)]);
-  const dates = api.weekDates(week), need = staffing(rules).need, openDays = (rules && rules.open.days) || [0, 1, 2, 3, 4, 5, 6];
+  const nd = await needOf(store, rules);
+  const dates = api.weekDates(week), need = nd.alba, needFull = nd.full, openDays = (rules && rules.open.days) || [0, 1, 2, 3, 4, 5, 6];
   const cells = {}; act.forEach(m => { cells[m.id] = [...((sch.cells || {})[m.id] || ['', '', '', '', '', '', ''])]; });
   let dirty = false;
   const draw = () => {
@@ -158,7 +188,7 @@ export async function scheduleEditor(store, back, week) {
         <span class="row" style="gap:6px"><button class="sm ghost" id="wPrev">‹</button><button class="sm ghost" id="wNext">›</button></span></div>
       <div class="row" style="gap:6px;flex-wrap:wrap">${sch.published ? '<span class="pill ok">확정됨 (직원에게 보임)</span>' : '<span class="pill warn">초안 (직원에게 안 보임)</span>'}
         <span class="pill">휴무신청 ${lvs.length}명</span>${dirty ? '<span class="pill warn">저장 안 함</span>' : ''}</div>
-      ${grid(act, cells, dates, { editable: true, need })}
+      ${grid(act, cells, dates, { editable: true, need, needFull })}
       <p class="small">칸을 누르면 바뀌어요: 빈칸 → 근무 → ${'(주말: 오전 → 근무+오전 →)'} ✕ → 빈칸</p>
       <div class="row" style="gap:8px"><button class="ghost" id="fLeave">휴무신청 반영</button><button class="ghost" id="fAuto">빈칸 자동 채우기</button></div>
       <p class="small">휴무신청 반영 = 알바가 못 나온다고 한 날을 ✕로. 자동 채우기 = 알바 빈칸을 그날 필요 인원만큼, 이번 주 근무가 적은 사람부터 채워요(초안). 정직원 칸은 직접 정해 주세요.</p>

@@ -177,8 +177,11 @@ service cloud.firestore {
       // 매장 설정: wifi(등록한 회선 주소, 서버 함수만 씀), place(매장 위치·반경)
       // leave(휴무신청 받는 시간: 그 주 월요일 0시 기준 몇 분 전에 열고 닫는지. 매장 규칙을 저장할 때 같이 씀)
       match /settings/{k} {
-        allow read: if owner(s) || (k == 'leave' && inStore(s));
-        allow write: if (owner(s) && k == 'place'
+        allow read: if owner(s) || (k in ['leave', 'staffing'] && inStore(s));
+        allow write: if (manager(s) && k == 'staffing'
+            && d().keys().hasOnly(['need', 'needFull'])
+            && d().need is list && d().need.size() == 7 && d().needFull is list && d().needFull.size() == 7)
+          || (owner(s) && k == 'place'
             && d().keys().hasOnly(['lat', 'lng', 'radius'])
             && d().lat is number && d().lng is number && d().radius is int && d().radius >= 20 && d().radius <= 1000)
           || (ownerAfter(s) && k == 'leave'

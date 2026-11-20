@@ -272,6 +272,15 @@ try {
   await park.getByText('내가 낸 신청').waitFor();
   assert.match(await text(park), /토/);
   await shot(park, '휴무신청');
+  // 김알바(매니저): 요일별 인원 — 월 정1+알2 → 합계 3
+  await tab(alba, '더보기');
+  await alba.locator('#goNeed').click();
+  await alba.locator('input[name=nf][data-d="1"]').fill('1');
+  await alba.locator('input[name=na][data-d="1"]').fill('2');
+  await alba.getByText('3', { exact: true }).first().waitFor();
+  assert.equal(await alba.locator('#nt1').innerText(), '3');
+  await alba.locator('#nsv').click();
+  await alba.getByText('요일별 인원을 저장했어요').waitFor();
   // 사장님: 휴무신청 현황 → 근무표 짜기 (반영 → 자동 채우기 → 확정)
   await boss.getByText('휴무신청 현황').click();
   await boss.getByText('1명 신청').waitFor();
@@ -279,6 +288,7 @@ try {
   await shot(boss, '휴무신청현황');
   await boss.getByText('이 주 근무표 짜기').click();
   await boss.getByText('초안 (직원에게 안 보임)').waitFor();
+  assert.match(await text(boss), /필요\s+1\+2/); // 월요일 정1+알2
   await boss.locator('#fLeave').click();
   await boss.getByText('2칸을 ✕로 바꿨어요').waitFor();
   await boss.locator('#fAuto').click();

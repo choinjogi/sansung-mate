@@ -1,6 +1,6 @@
 // 화면 공용 도구 (app.js, attend.js가 같이 씀)
-import { qrcode } from './vendor/firebase.js?v=11';
-import * as api from './fb.js?v=11';
+import { qrcode } from './vendor/firebase.js?v=12';
+import * as api from './fb.js?v=12';
 
 export const $ = id => document.getElementById(id);
 export const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

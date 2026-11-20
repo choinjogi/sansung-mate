@@ -1,14 +1,14 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
-import * as api from './fb.js?v=11';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=11';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=11';
-import * as attend from './attend.js?v=11';
-import * as sched from './sched.js?v=11';
-import * as records from './records.js?v=11';
-import * as pay from './pay.js?v=11';
-import * as sales from './sales.js?v=11';
-import * as dash from './dash.js?v=11';
-import * as staff from './staff.js?v=11';
+import * as api from './fb.js?v=12';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=12';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy, setNav } from './ui.js?v=12';
+import * as attend from './attend.js?v=12';
+import * as sched from './sched.js?v=12';
+import * as records from './records.js?v=12';
+import * as pay from './pay.js?v=12';
+import * as sales from './sales.js?v=12';
+import * as dash from './dash.js?v=12';
+import * as staff from './staff.js?v=12';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
 const params = new URLSearchParams(location.search);
 if (params.get('join')) ls.set('mate_join', params.get('join').toUpperCase());
@@ -232,6 +232,7 @@ async function managerMore(ctx, again) {
     <div class="row between" style="margin-top:6px"><h1 style="margin:0">${esc(me.name)}님</h1><span class="pill on">매니저</span></div>
     <h2>근무표</h2>
     <div class="card list">
+      <a href="#" class="item" id="goNeed">👥 요일별 인원<span class="small">›</span></a>
       <a href="#" class="item" id="goEdit">📅 근무표 짜기<span class="small">›</span></a>
       <a href="#" class="item" id="goLvAdm">📝 휴무신청 현황<span class="small">›</span></a>
       <a href="#" class="item" id="goSched">🗓️ 확정된 근무표 보기<span class="small">›</span></a></div>
@@ -246,6 +247,7 @@ async function managerMore(ctx, again) {
       ${sched.isAlba(me) ? '<a href="#" class="item" id="goMyLeave">📝 내 휴무신청<span class="small">›</span></a>' : ''}</div>`);
   wireTop();
   const on = (id, fn) => { if ($(id)) $(id).onclick = ev => { ev.preventDefault(); fn(); }; };
+  on('goNeed', () => sched.staffingScreen(s, again));
   on('goEdit', () => sched.scheduleEditor(s, again));
   on('goLvAdm', () => sched.leaveAdmin(s, again));
   on('goSched', () => sched.scheduleView(s, me.id, again));
@@ -335,8 +337,7 @@ function rulesFields(r) {
     <label class="row" style="gap:8px;margin-top:14px"><input type="checkbox" id="jh" style="width:auto" ${r.pay.juhu.on ? 'checked' : ''}> 주휴수당 줌 (한 주 ${r.pay.juhu.minWeekHours}시간 이상)</label>
     <label>휴무신청 열림</label><div class="row">${dowSel('lo', r.leave.opensDow)}<input id="lot" type="time" step="1800" value="${esc(r.leave.opensTime)}"></div>
     <label>휴무신청 마감</label><div class="row">${dowSel('lc', r.leave.closesDow)}<input id="lct" type="time" step="1800" value="${esc(r.leave.closesTime)}"></div>
-    <label>요일별 필요한 알바 수 (저녁)</label>
-    <div class="chk7 needs">${DOW_ORDER.map(d => `<label class="needc"><span class="small">${DOW[d]}</span><input type="number" min="0" max="50" inputmode="numeric" name="need" data-d="${d}" value="${((r.staffing || STORE_RULES_DEFAULT.staffing).need)[d]}"></label>`).join('')}</div>
+    <p class="small" style="margin-top:12px">요일별 정직원·알바 인원은 ☰ 더보기 → 👥 요일별 인원에서 정해요.</p>
     <p class="small">야간·휴일 수당, 시간 올림/내림은 급여 단계에서 더 바꿀 수 있게 이어서 만들 예정이에요.</p>`;
 }
 function readRules(base) {
@@ -406,6 +407,7 @@ async function ownerMore(id, again) {
         <div class="item"><span>${esc(m.name)}</span><button class="sm ghost" data-back="${m.id}" data-name="${esc(m.name)}">다시 일함</button></div>`).join('')}</div>
         <p class="small">퇴사해도 지난 출퇴근 기록은 그대로 남아요.</p></details>` : ''}</div>
     <h2>근무표</h2>
+    <button class="ghost" id="goNeed" style="margin-bottom:8px">👥 요일별 인원 (정직원·알바)</button>
     <div class="row" style="gap:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
     <button class="ghost" id="goSched" style="margin-top:8px">확정된 근무표 보기</button>
     <h2>기록 · 급여</h2>
@@ -466,6 +468,7 @@ async function ownerMore(id, again) {
   });
   document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active', leaveDate: null }); toast('다시 직원이 됐어요'); again(); }); }; });
   $('goStaff').onclick = () => staff.staffScreen(s, again, true);
+  $('goNeed').onclick = () => sched.staffingScreen(s, again);
   $('goEdit').onclick = () => sched.scheduleEditor(s, again);
   $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => again());
   $('goSched').onclick = () => sched.scheduleView(s, null, () => again());
