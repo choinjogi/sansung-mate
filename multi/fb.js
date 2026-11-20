@@ -165,6 +165,13 @@ export async function punch(storeId, kind, alone) {
   const geo = await getGeo();
   return { ...(await server('punch', { storeId, kind, geo, alone: !!alone, _testIp: testIp() })), geo: !!geo };
 }
+// 직원 번호 다시 정하기 (사장님만, 서버가 임시 번호 6자리를 만들어 돌려줌)
+export const resetPin = (storeId, target) => server('resetPin', { storeId, target });
+// 임시 번호로 로그인한 직원이 새 번호를 정함 → 표시 지움
+export async function changePin(storeId, pw) {
+  await F.updatePassword(auth.currentUser, pw);
+  await F.updateDoc(ref(`stores/${storeId}/members/${auth.currentUser.uid}`), { pinReset: false });
+}
 export const registerWifi = (storeId, reset) => server('registerWifi', { storeId, reset: !!reset, _testIp: testIp() });
 export const getSetting = (storeId, k) => F.getDoc(ref(`stores/${storeId}/settings/${k}`)).then(data);
 export const savePlace = (storeId, place) => F.setDoc(ref(`stores/${storeId}/settings/place`), place);

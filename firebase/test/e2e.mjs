@@ -23,7 +23,7 @@ const APP = 'http://localhost:5173/multi/';
 // 출퇴근 서버: 기본은 Cloudflare 판(worker)을 이 컴퓨터에서 띄움. E2E_SERVER=functions 이면 Firebase 서버 함수 판
 const USE_FUNCTIONS = process.env.E2E_SERVER === 'functions';
 const { default: worker } = await import('../worker/index.js');
-const WENV = { PROJECT_ID: 'demo-mate', EMULATOR: '1', FIRESTORE_EMULATOR: 'http://127.0.0.1:8080' };
+const WENV = { PROJECT_ID: 'demo-mate', EMULATOR: '1', FIRESTORE_EMULATOR: 'http://127.0.0.1:8080', AUTH_EMULATOR: '127.0.0.1:9099' };
 const wserver = http.createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);
   const r = await worker.fetch(new Request('http://127.0.0.1:8787' + req.url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), WENV);
@@ -339,7 +339,53 @@ try {
   await kim.getByText('두번째').waitFor();
   assert.doesNotMatch(await text(kim), /산성/);
 
-  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
+  // 11) 박알바가 번호를 잊음 → 사장님 [번호 다시 정하기] → 임시 번호로 로그인 → 새 번호 정하기
+  await park.reload();
+  await park.getByText('로그아웃').click();
+  await park.locator('#nm').waitFor();
+  await boss.locator('#back').click();
+  await boss.locator('[data-store]', { hasText: '산성' }).click();
+  await boss.getByText('직원 2명').waitFor();
+  const parkRow = () => boss.locator('.item', { hasText: '박알바' }).first();
+  await parkRow().locator('[data-mset]').click();
+  await boss.locator('#mpin').click();
+  await boss.locator('#mpinOut .big').waitFor();
+  const pin = (await boss.locator('#mpinOut .big').innerText()).trim();
+  assert.match(pin, /^\d{6}$/);
+  await shot(boss, '임시번호');
+  await park.fill('#nm', '박알바'); await park.fill('#pw', '222222');           // 옛 번호는 이제 안 됨
+  await park.getByText('로그인', { exact: true }).click();
+  await park.getByText('번호 다시 정하기').waitFor();
+  await park.fill('#pw', pin);
+  await park.getByText('로그인', { exact: true }).click();
+  await park.getByText('새 번호 정하기').waitFor();
+  await shot(park, '새번호');
+  await park.fill('#np', '333333'); await park.fill('#np2', '333333');
+  await park.locator('#npGo').click();
+  await park.getByText('박알바님').waitFor();
+  await park.getByText('로그아웃').click();
+  await park.locator('#nm').waitFor();
+  await park.fill('#nm', '박알바'); await park.fill('#pw', '333333');
+  await park.getByText('로그인', { exact: true }).click();
+  await park.getByText('박알바님').waitFor();
+
+  // 12) 사장님: 박알바 퇴사 처리 → 직원 목록·로그인에서 빠짐, 다시 일함으로 되돌리기
+  await boss.reload();
+  await boss.locator('[data-store]', { hasText: '산성' }).click();
+  await boss.getByText('직원 2명').waitFor();
+  await parkRow().locator('[data-mset]').click();
+  await boss.locator('#mleft').click();
+  await boss.getByText('퇴사한 직원 1명').waitFor();
+  await boss.getByText('직원 1명').waitFor();
+  await park.reload();
+  await park.getByText('퇴사 처리된 계정이에요').waitFor();
+  await boss.getByText('퇴사한 직원 1명').click();
+  await boss.locator('[data-back]').click();
+  await boss.getByText('직원 2명').waitFor();
+  await park.reload();
+  await park.getByText('박알바님').waitFor();
+
+  console.log(`✔ 화면 시험 통과 (가입·승인·출퇴근·휴무신청·근무표·번호 다시 정하기·퇴사, 서버: ${USE_FUNCTIONS ? 'Firebase 함수' : 'Cloudflare'})`);
 } catch (e) {
   console.error('✘ 실패:', e.message);
   process.exitCode = 1;

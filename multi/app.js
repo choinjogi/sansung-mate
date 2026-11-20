@@ -1,7 +1,7 @@
 // 산성 MATE 여러 매장용 화면: 로그인, 매장 만들기, 초대 가입, 승인, 매장 규칙 (출퇴근은 attend.js)
 import * as api from './fb.js';
 import { STORE_RULES_DEFAULT } from './defaults.js';
-import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks } from './ui.js';
+import { $, esc, DOW, DOW_ORDER, BASE, ls, clone, toast, show, top, wireTop, busy, niceErr, linkCard, wireLinks, copy } from './ui.js';
 import * as attend from './attend.js';
 import * as sched from './sched.js';
 // ---------- 주소로 들어온 정보 (초대 링크) ----------
@@ -116,6 +116,7 @@ async function staffHome(storeId) {
     $('rf').onclick = e => busy(e.target, () => staffHome(storeId));
     return;
   }
+  if (m.pinReset && m.status !== 'left') return newPinScreen(storeId, m);
   if (m.status === 'left') {
     show(`${top('MATE')}<div class="card"><b>퇴사 처리된 계정이에요</b><p>다시 일하게 되면 사장님께 말해 주세요.</p></div>`);
     return wireTop();
@@ -123,6 +124,23 @@ async function staffHome(storeId) {
   const s = await api.getStore(storeId);
   ls.set('mate_store_name', s.name);
   return attend.staffHome(storeId, m, s, () => staffHome(storeId));
+}
+
+// 사장님이 번호를 다시 정해 준 뒤 임시 번호로 로그인하면: 새 번호 정하기
+function newPinScreen(storeId, m) {
+  show(`${top('MATE')}<div class="card hero"><div class="big">새 번호 정하기</div>
+      <p>${esc(m.name)}님, 임시 번호로 들어왔어요. 앞으로 쓸 내 번호 6자리를 정해 주세요.</p></div>
+    <div class="card"><label>새 번호 6자리</label><input id="np" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+      <label>한 번 더</label><input id="np2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+      <button id="npGo" style="margin-top:16px">이 번호로 정하기</button></div>`);
+  wireTop();
+  $('npGo').onclick = e => busy(e.target, async () => {
+    const pw = $('np').value;
+    if (!/^\d{6}$/.test(pw)) throw new Error('번호는 숫자 6자리예요');
+    if (pw !== $('np2').value) throw new Error('두 번호가 달라요');
+    await api.changePin(storeId, pw);
+    toast('새 번호로 바꿨어요'); staffHome(storeId);
+  });
 }
 
 // ---------- 사장님·총괄 홈 ----------
@@ -229,6 +247,7 @@ async function storeScreen(id) {
     api.getSchedule(id, wk), api.getSchedule(id, api.addDays(wk, 7))]);
   const pending = ms.filter(m => m.status === 'pending');
   const act = ms.filter(m => m.status === 'active').sort((a, b) => (a.name < b.name ? -1 : 1));
+  const gone = ms.filter(m => m.status === 'left').sort((a, b) => (a.name < b.name ? -1 : 1));
   const r = rules.current;
   // 새 매장 처음 할 일 (다 하면 사라짐)
   const steps = [
@@ -255,7 +274,10 @@ async function storeScreen(id) {
         ${m.role === 'manager' ? '<span class="pill on">매니저</span>' : ''}${m.startTime ? ` <span class="small">정시 ${esc(m.startTime)}</span>` : ''}</span>
         <button class="sm ghost" data-mset="${m.id}">설정</button></div><div id="ms_${m.id}"></div></div>`).join('')}</div>`
       : '<p class="small">아직 승인된 직원이 없어요.</p>'}
-      <p class="small">매니저는 근무표·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요. 휴무신청은 알바만 내요.</p></div>
+      <p class="small">매니저는 근무표·출퇴근 고치기·휴무신청·매출을 다뤄요. 시급·계좌·정산표는 사장님만 봐요. 휴무신청은 알바만 내요.</p>
+      ${gone.length ? `<details style="margin-top:10px"><summary class="small">퇴사한 직원 ${gone.length}명</summary><div class="list">${gone.map(m => `
+        <div class="item"><span>${esc(m.name)}</span><button class="sm ghost" data-back="${m.id}" data-name="${esc(m.name)}">다시 일함</button></div>`).join('')}</div>
+        <p class="small">퇴사해도 지난 출퇴근 기록은 그대로 남아요.</p></details>` : ''}</div>
     <h2>근무표</h2>
     <div class="row" style="gap:8px"><button class="ghost" id="goEdit">근무표 짜기</button><button class="ghost" id="goLvAdm">휴무신청 현황</button></div>
     <button class="ghost" id="goSched" style="margin-top:8px">확정된 근무표 보기</button>
@@ -282,13 +304,30 @@ async function storeScreen(id) {
         <label>구분</label><select id="mt"><option value="알" ${m.type !== '정' ? 'selected' : ''}>알바 (휴무신청 냄)</option><option value="정" ${m.type === '정' ? 'selected' : ''}>정직원</option></select>
         <label>역할</label><select id="mr"><option value="staff" ${m.role !== 'manager' ? 'selected' : ''}>직원</option><option value="manager" ${m.role === 'manager' ? 'selected' : ''}>매니저</option></select>
         <label>개인 정시 출근 <span class="small">(비우면 매장 정시 ${esc(r ? r.open.startTime : '18:00')})</span></label><input type="time" id="mst" step="300" value="${esc(m.startTime || '')}">
-        <button id="msv" style="margin-top:12px">저장</button></div>`;
+        <button id="msv" style="margin-top:12px">저장</button>
+        <div class="row" style="gap:8px;margin-top:12px"><button class="sm ghost" id="mpin">번호 다시 정하기</button><button class="sm ghost" id="mleft">퇴사 처리</button></div>
+        <div id="mpinOut"></div></div>`;
       $('msv').onclick = e => busy(e.target, async () => {
         await api.setMember(id, m.id, { type: $('mt').value, role: $('mr').value, startTime: $('mst').value || null });
         toast('저장했어요'); storeScreen(id);
       });
+      $('mpin').onclick = e => {
+        if (!confirm(m.name + '님 번호를 잊었나요? 임시 번호를 만들면 지금 번호는 더 이상 안 돼요.')) return;
+        busy(e.target, async () => {
+          const { pin } = await api.resetPin(id, m.id);
+          const msg = `${m.name}님, MATE 임시 번호는 ${pin} 이에요. 앱에서 이름과 이 번호로 로그인하면 새 번호를 정할 수 있어요.`;
+          $('mpinOut').innerHTML = `<div class="card hero" style="margin:10px 0 0"><div class="small">임시 번호 (본인에게만 알려 주세요)</div>
+            <div class="big" style="letter-spacing:4px">${pin}</div><button class="sm" id="mpinCp" style="margin-top:8px">카톡 문구 복사</button></div>`;
+          $('mpinCp').onclick = () => copy(msg);
+        });
+      };
+      $('mleft').onclick = e => {
+        if (!confirm(m.name + '님을 퇴사 처리할까요? 로그인·출퇴근·근무표에서 빠지고, 지난 기록은 그대로 남아요.')) return;
+        busy(e.target, async () => { await api.setMember(id, m.id, { status: 'left', leftAt: api.F.serverTimestamp() }); toast('퇴사 처리했어요'); storeScreen(id); });
+      };
     };
   });
+  document.querySelectorAll('[data-back]').forEach(b => { b.onclick = () => { if (confirm(b.dataset.name + '님을 다시 직원으로 돌릴까요?')) busy(b, async () => { await api.setMember(id, b.dataset.back, { status: 'active' }); toast('다시 직원이 됐어요'); storeScreen(id); }); }; });
   $('goEdit').onclick = () => sched.scheduleEditor(s, () => storeScreen(id));
   $('goLvAdm').onclick = () => sched.leaveAdmin(s, () => storeScreen(id));
   $('goSched').onclick = () => sched.scheduleView(s, null, () => storeScreen(id));

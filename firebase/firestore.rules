@@ -100,6 +100,8 @@ service cloud.firestore {
           && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type'])
           && d().role in ['staff', 'manager'] && d().status in ['pending', 'active', 'left']
           && (!('type' in d()) || d().type in ['정', '알']);
+        // 번호 다시 정하기(서버가 pinReset=true) 뒤 본인이 새 번호를 정하면 표시만 지움
+        allow update: if signedIn() && uid() == m && changedOnly(['pinReset']) && d().pinReset == false;
         // 가입 거절은 사장님, 승인 전 본인 취소
         allow delete: if owner(s) || (signedIn() && uid() == m && resource.data.status == 'pending');
       }

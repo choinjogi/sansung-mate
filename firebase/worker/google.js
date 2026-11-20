@@ -55,7 +55,7 @@ export async function signJwt(sa, claims) {
 async function accessToken(sa) {
   if (TOKEN && Date.now() < TOKEN_UNTIL) return TOKEN;
   const iat = Math.floor(Date.now() / 1000);
-  const assertion = await signJwt(sa, { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/datastore', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 });
+  const assertion = await signJwt(sa, { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/identitytoolkit', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 });
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + assertion,
@@ -94,11 +94,13 @@ export function firestore(env) {
   const root = `projects/${P}/databases/(default)/documents`;
   const base = (emu || 'https://firestore.googleapis.com') + '/v1/' + root;
   const auth = async () => ({ Authorization: 'Bearer ' + (emu ? 'owner' : await accessToken(JSON.parse(env.SERVICE_ACCOUNT))) });
-  async function commit(path, obj, mustBeNew) {
-    const fields = {}, transforms = [];
+  // mode: 'new' = 없을 때만 만듦 / 'set' = 통째로 덮어씀 / 'patch' = 있는 문서의 그 칸들만 바꿈
+  async function commit(path, obj, mode) {
+    const mustBeNew = mode === 'new', fields = {}, transforms = [];
     for (const [k, v] of Object.entries(obj)) { if (v === NOW) transforms.push({ fieldPath: k, setToServerValue: 'REQUEST_TIME' }); else fields[k] = toValue(v); }
     const write = { update: { name: `${root}/${path}`, fields }, updateTransforms: transforms };
     if (mustBeNew) write.currentDocument = { exists: false };
+    if (mode === 'patch') { write.updateMask = { fieldPaths: Object.keys(fields) }; write.currentDocument = { exists: true }; }
     const r = await fetch(base + ':commit', { method: 'POST', headers: { ...(await auth()), 'Content-Type': 'application/json' }, body: JSON.stringify({ writes: [write] }) });
     if (r.ok) return;
     const t = await r.text();
@@ -112,7 +114,28 @@ export function firestore(env) {
       if (!r.ok) throw new Error('Firestore 읽기 실패 ' + r.status);
       return fromValue({ mapValue: { fields: (await r.json()).fields || {} } });
     },
-    create: (path, obj) => commit(path, obj, true),
-    set: (path, obj) => commit(path, obj, false),
+    create: (path, obj) => commit(path, obj, 'new'),
+    set: (path, obj) => commit(path, obj, 'set'),
+    patch: (path, obj) => commit(path, obj, 'patch'),
+  };
+}
+
+// ---------- 4) 로그인 계정 관리 (직원 번호 다시 정하기) ----------
+// 서비스 계정에 "Firebase 인증 관리자"(roles/firebaseauth.admin) 역할이 있어야 함. 연습용: AUTH_EMULATOR('127.0.0.1:9099')
+export function authAdmin(env) {
+  const P = env.PROJECT_ID, emu = env.AUTH_EMULATOR;
+  const base = emu ? `http://${emu}/identitytoolkit.googleapis.com` : 'https://identitytoolkit.googleapis.com';
+  return {
+    async setPassword(uid, password) {
+      const token = emu ? 'owner' : await accessToken(JSON.parse(env.SERVICE_ACCOUNT));
+      const r = await fetch(`${base}/v1/projects/${P}/accounts:update`, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localId: uid, password }),
+      });
+      if (r.ok) return;
+      const t = await r.text();
+      if (r.status === 403) throw new Fail('failed-precondition', '서버에 번호 바꾸기 권한이 아직 없어요 (운영자 설정 필요)');
+      throw new Error('계정 번호 바꾸기 실패 ' + r.status + ' ' + t.slice(0, 200));
+    },
   };
 }

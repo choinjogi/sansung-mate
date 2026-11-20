@@ -33,7 +33,8 @@ export function niceErr(e) {
   const c = e && e.code || '';
   if (c === 'taken') return e.message;
   if (c.startsWith('functions/') && e.message && !/^(internal|INTERNAL)$/.test(e.message)) return e.message; // 서버 함수가 보낸 한국어 안내
-  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return '이름이나 번호가 맞지 않아요';
+  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return '이름이나 번호가 맞지 않아요. 번호를 잊었으면 사장님께 "번호 다시 정하기"를 부탁해 주세요';
+  if (/requires-recent-login/.test(c)) return '로그아웃한 뒤 사장님이 알려 준 임시 번호로 다시 로그인해 주세요';
   if (/too-many-requests/.test(c)) return '여러 번 틀려서 잠시 막혔어요. 조금 뒤에 다시 해 주세요';
   if (/permission-denied/.test(c)) return '권한이 없어요';
   if (/network|unavailable/.test(c)) return '인터넷 연결을 확인해 주세요';
