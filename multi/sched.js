@@ -1,9 +1,9 @@
 // 근무표·휴무신청 화면
 // 직원: 근무표 보기, 휴무신청(알바만). 매니저·사장님: 근무표 짜기(휴무신청 반영·자동 채우기 초안·확정), 휴무신청 현황
-import * as api from './fb.js?v=30';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=30';
-import * as auto from './autosched.js?v=30';
-import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=30';
+import * as api from './fb.js?v=31';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=31';
+import * as auto from './autosched.js?v=31';
+import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=31';
 
 const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
 export const isAlba = m => api.groupOf(m) === '알';   // 근무표·휴무신청 기준 (급여 구분은 m.type)

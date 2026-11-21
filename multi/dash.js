@@ -5,11 +5,11 @@
 //  근태:   ⚠ 확인 안 한 것 · 이번 달 지각 · 지각 많은 사람
 // 정직원 인건비는 하루치(월급 ÷ 그 달 일수)를 23시가 지나야 하루로 셈 (시트와 같음). 예상 = 현재 ÷ 지난 날 × 그 달 일수
 // 인건비·비율은 시급·월급을 보는 사장님만. 매니저는 매출·근태만
-import * as api from './fb.js?v=30';
-import { esc, show, top, wireTop } from './ui.js?v=30';
-import * as records from './records.js?v=30';
-import * as pay from './pay.js?v=30';
-import { addMonth, lastDay } from './paycalc.js?v=30';
+import * as api from './fb.js?v=31';
+import { esc, show, top, wireTop } from './ui.js?v=31';
+import * as records from './records.js?v=31';
+import * as pay from './pay.js?v=31';
+import { addMonth, lastDay } from './paycalc.js?v=31';
 
 const W = n => (n == null ? '–' : '₩' + Math.round(n).toLocaleString());
 const pct = n => (n == null || !isFinite(n) ? '–' : (Math.round(n * 1000) / 10).toFixed(1) + '%');

@@ -56,7 +56,8 @@ export async function pushTo(env, db, storeId, uids, msg) {
   return { sent: ok, subs: subs.length };
 }
 
-const isActiveAlba = (m, today) => m.status === 'active' && m.type !== '정' && !(m.leaveDate && m.leaveDate < today);
+// 휴무신청 대상 = 근무표 알 그룹 (고정 근무 알바 sgroup '정'·근무표 전용 직원은 빼기)
+const isActiveAlba = (m, today) => m.status === 'active' && !m.noLogin && (m.sgroup || (m.type === '정' ? '정' : '알')) === '알' && !(m.leaveDate && m.leaveDate < today);
 
 // cron: 매장마다 지금 보낼 알림이 있으면 보냄
 export async function runCron(env, db, now = Date.now()) {

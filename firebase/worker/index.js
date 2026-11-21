@@ -6,13 +6,14 @@
 //   GET  /myIp          주소 확인 페이지
 //   GET  /pushMsg?s=매장  폰 알림 글 (폰이 빈 알림을 받으면 여기서 글을 받아 띄움)
 //   POST /pushTest      { storeId }  내 폰에 시험 알림 (사장님·매니저)
-//   cron 10분마다       휴무신청 열림·마감 1시간 전 알림 (push.js)
+//   cron 10분마다       휴무신청 열림·마감 1시간 전 알림 (push.js) + 당일 미출근·매일 10시 요약 (attend.js)
 //   GET  /ipSig         { ip, t, sig }  예전 NFC 출퇴근용 (sig = HMAC-SHA256(IP_SECRET, ip|t))
 // 회선 주소는 Cloudflare가 붙여 주는 CF-Connecting-IP (보내는 쪽이 위조할 수 없음)
 import { punchCore, registerWifiCore, resetPinCore, myIpPage, Fail } from '../functions/core.js';
 import { normIp } from '../functions/lib.js';
 import { verifyIdToken, firestore, authAdmin } from './google.js';
 import { runCron, pushTo, MSG } from './push.js';
+import { runAttend } from './attend.js';
 
 const CODES = { unauthenticated: 401, 'permission-denied': 403, 'invalid-argument': 400, 'failed-precondition': 400, 'already-exists': 409 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Max-Age': '86400' };
@@ -26,7 +27,9 @@ export async function hmacHex(secret, msg) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runCron(env, firestore(env)).then(r => { if (r.length) console.log('알림', JSON.stringify(r)); }).catch(e => console.error('알림 실패', e)));
+    const db = firestore(env);
+    ctx.waitUntil(runCron(env, db).then(r => { if (r.length) console.log('알림', JSON.stringify(r)); }).catch(e => console.error('알림 실패', e)));
+    ctx.waitUntil(runAttend(env, db).then(r => { if (r.length) console.log('근태 알림', JSON.stringify(r)); }).catch(e => console.error('근태 알림 실패', e)));
   },
   async fetch(request, env) {
     const url = new URL(request.url), emu = env.EMULATOR === '1';

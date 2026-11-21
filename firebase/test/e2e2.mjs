@@ -233,6 +233,10 @@ try {
   assert.match(await text(boss2), /정\+알: 월 0\+1/);  // 조사장 월 고정휴무, 월요일 알바 고정 1명
   await boss2.locator('#save').click(); await boss2.getByText('초안을 저장했어요').waitFor();
   await backMore();
+  // 스케줄과 비교 (이번 주 · 지난주 · 이번 달)
+  await tab(boss2, '더보기'); await boss2.locator('[data-go="acmp"]').click(); await boss2.getByText(/확인할 것 \d+건/).waitFor();
+  await boss2.locator('[data-rg="month"]').click(); await boss2.getByText(/이번 달|확인할 것/).first().waitFor();
+  assert.doesNotMatch(await text(boss2), /조사장/);
   await tab(boss2, '오늘'); await boss2.locator('#app').getByText('김알바').first().waitFor(); assert.doesNotMatch(await text(boss2), /조사장/);   // 출퇴근 현황엔 안 나옴
   await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
   await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();

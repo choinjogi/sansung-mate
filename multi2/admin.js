@@ -1,12 +1,13 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=30';
-import * as sched from '../multi/sched.js?v=30';
-import * as pay from '../multi/pay.js?v=30';
-import * as dash from '../multi/dash.js?v=30';
-import * as staff from '../multi/staff.js?v=30';
-import { wageOf } from '../multi/paycalc.js?v=30';
-import * as auto from '../multi/autosched.js?v=30';
+import * as api from '../multi/fb.js?v=31';
+import * as sched from '../multi/sched.js?v=31';
+import * as pay from '../multi/pay.js?v=31';
+import * as dash from '../multi/dash.js?v=31';
+import * as staff from '../multi/staff.js?v=31';
+import { wageOf } from '../multi/paycalc.js?v=31';
+import * as auto from '../multi/autosched.js?v=31';
+import * as att from '../multi/attcheck.js?v=31';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -209,6 +210,23 @@ A.saveSchedCfg = async o => {
   const defMin = num(o.defMin, 0, 7); if (defMin == null) return { saved: false, msg: '최소출근일 기본은 0~7이에요' };
   await api.saveSchedCfg(c.store.id, { min, max, alba, pairs, overflow: [...new Set(overflow)].slice(0, 9), defMin });
   return { saved: true, msg: '스케줄 규칙을 저장했어요' };
+};
+
+// ---------- 스케줄과 비교 (산성 NFC 관리 화면 "스케줄과 비교" — 이번 주/지난주/이번 달) ----------
+const atMs = p => (p.at && p.at.toDate ? p.at.toDate().getTime() : typeof p.at === 'string' ? Date.parse(p.at) : null);
+export async function compareRange(c, from, to) {
+  const today = api.kst().date, weeks = [];
+  for (let w = api.mondayOf(from); w <= to; w = api.addDays(w, 7)) weeks.push(w);
+  const [ms, ps, rules, schs] = await Promise.all([api.members(c.store.id), api.punchesBetween(c.store.id, from, to), api.rulesFor(c.store.id, from.slice(0, 7)),
+    Promise.all(weeks.map(w => api.getSchedule(c.store.id, w).catch(() => null)))]);
+  const punches = ps.map(p => ({ ...p, atMs: atMs(p) })).filter(p => p.atMs);
+  return att.compare({ members: ms.filter(m => m.status === 'active' || m.status === 'left'), schedules: Object.fromEntries(weeks.map((w, i) => [w, schs[i]])), punches, rules, from, to, today });
+}
+A.compare = async range => {
+  const c = await admin(), t = api.kst().date, mon = api.mondayOf(t);
+  const [from, to, label] = range === 'last' ? [api.addDays(mon, -7), api.addDays(mon, -1), '지난주'] : range === 'month' ? [t.slice(0, 8) + '01', t, '이번 달'] : [mon, api.addDays(mon, 6), '이번 주'];
+  const r = await compareRange(c, from, to);
+  return { ...r, label, bad: att.BAD };
 };
 
 // ---------- 입사 · 퇴사 ----------

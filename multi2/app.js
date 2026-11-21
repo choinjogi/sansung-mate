@@ -782,6 +782,22 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     });
   };
 
+  // ---------- 관리: 스케줄과 비교 (새 앱: 산성 NFC 관리 화면과 같은 기준, 확정된 근무표만) ----------
+  VIEWS.acmp = async function (range) {
+    range = range || 'week'; loading(); const r = await API.compare(range), md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
+    const tabs = [['week', '이번 주'], ['last', '지난주'], ['month', '이번 달']].map(([k, t]) => `<button class="sm ${k === range ? '' : 'ghost'}" data-rg="${k}" style="width:auto;margin:0">${t}</button>`).join('');
+    const bad = r.rows.filter(x => r.bad.includes(x.kind)), ref = r.rows.filter(x => !r.bad.includes(x.kind));
+    const cell = (v, warn) => `<td${v && warn ? ' style="color:var(--warn)"' : ''}>${v || ''}</td>`;
+    render(`<div>${header()}<h2>스케줄과 비교</h2><div class="row" style="gap:6px">${tabs}</div>
+      <p class="small">${md(r.from)} ~ ${md(r.to)} · 오늘 전날까지 · 확정된 근무표만</p>
+      <div class="card scroll"><table><tr><th class="name"></th><th>스케줄</th><th>출근</th><th>지각</th><th>미출근</th><th>스케줄 외</th><th>퇴근 없음</th><th>대타</th><th>추가</th><th>일찍 부름</th></tr>
+        ${r.people.map(p => `<tr><td class="name">${esc(p.disp)}</td>${cell(p.sched)}${cell(p.came)}${cell(p.late ? p.late + '번 ' + p.lateMin + '분' : '', 1)}${cell(p.noShow, 1)}${cell(p.unsched, 1)}${cell(p.noOut, 1)}${cell(p.sub)}${cell(p.extra)}${cell(p.early)}</tr>`).join('') || '<tr><td colspan="10" class="small">기록이 없어요</td></tr>'}</table></div>
+      <div class="card"><b>⚠️ 확인할 것 ${bad.length}건</b>${bad.map(x => `<p class="small" style="margin:6px 0">${md(x.date)} <b>${esc(x.disp)}</b> ${esc(x.text)}</p>`).join('') || '<p class="small">없어요 👍</p>'}</div>
+      ${ref.length ? `<div class="card"><b>참고 ${ref.length}건</b>${ref.map(x => `<p class="small" style="margin:6px 0">${md(x.date)} ${esc(x.disp)} ${esc(x.text)}</p>`).join('')}</div>` : ''}
+      <p class="small">출근 기록이 틀렸으면 더보기 → 출퇴근 기록 넣기·고치기에서 고쳐요.</p></div>`);
+    $app.querySelectorAll('[data-rg]').forEach(b => b.onclick = () => VIEWS.acmp(b.dataset.rg));
+  };
+
   // ---------- 관리: 출퇴근 기록 넣기·고치기 (NFC "지난 기록 넣기"와 같음) ----------
   VIEWS.afix = async function () {
     loading(); const list = await people(), td = (ME.today && ME.today.date) || '';
@@ -827,6 +843,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
   VIEWS.amore = function () {
     render(`<div>${header()}<h2>더보기</h2>
       <div class="card list">
+        <a class="item" href="#" data-go="acmp" style="color:inherit;text-decoration:none"><span>📋 스케줄과 비교 (지각·미출근)</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
         ${ME.role === '사장님' ? '<a class="item" href="#" data-go="awage" style="color:inherit;text-decoration:none"><span>💰 알바 시급</span><span class="small">›</span></a>' : ''}
@@ -855,7 +872,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 30;
+  const APP_VER = 31;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';
