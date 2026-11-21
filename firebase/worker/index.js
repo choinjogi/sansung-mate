@@ -47,7 +47,7 @@ export default {
       return out(200, { ok: true, ip: realIp, t, sig: await hmacHex(env.IP_SECRET, realIp + '|' + t) });
     }
     if (url.pathname === '/sync' && request.method === 'POST') {
-      if (!env.SYNC_SECRET || !sameKey(request.headers.get('X-Sync-Key') || '', env.SYNC_SECRET)) return out(403, { ok: false, code: 'permission-denied', message: '열쇠가 틀려요' });
+      if (!env.SYNC_SECRET || !sameKey((request.headers.get('X-Sync-Key') || '').trim(), String(env.SYNC_SECRET).trim())) return out(403, { ok: false, code: 'permission-denied', message: '열쇠가 틀려요' });
       try { return out(200, { ok: true, data: await syncCore(firestore(env), await request.json()) }); }
       catch (e) { if (e instanceof Fail) return out(CODES[e.code] || 400, { ok: false, code: e.code, message: e.message }); console.error(e); return out(500, { ok: false, code: 'internal', message: String(e.message || e).slice(0, 200) }); }
     }
