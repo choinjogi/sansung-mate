@@ -102,7 +102,10 @@
 - 매장 이름 = 사장님이 매장 만들 때 넣은 이름이 그대로 직원 검색 이름(지금 실제 매장은 시험용 "산성시험"뿐). 이름 바꾸기 화면은 아직 없음
 
 ## 운영 원칙 (2026-11-21 사장님)
-- **지금 산성 앱(저장소 맨 위 index.html·app.js + Apps Script·시트)은 그대로 둔다.** 새 앱은 `/multi/`에 따로(매장 "산성 동래점"). 원래 주소에 덮어쓰는 전환은 하지 않음 — 둘 다 돌리다 새 앱이 안정되면 옮기고, 지금 앱은 비상용
+- **지금 산성 앱(저장소 맨 위 index.html·app.js + Apps Script·시트, 깃허브 주소)은 그대로 둔다.** 새 앱(매장 "산성 동래점")은 **따로 된 주소 https://sansung-sheets.web.app/multi/** (2026-11-21~, Firebase 무료 호스팅, `cd firebase && npm run deploy:hosting`). 깃허브 /sansung-mate/multi/ 는 새 주소로 자동 이동만
+  - 이유: 같은 뿌리(/sansung-mate/ 아래)면 폰이 한 앱으로 보고 아이콘·저장값(mate_tab·mate_last)·임시 파일이 섞임
+  - 새 앱 올리기 = `npm run bump` → 커밋 → `git push`(깃허브 이동용) + `npm run deploy:hosting`(실제 새 앱). 둘 다 해야 함
+- 원래 주소에 덮어쓰는 전환은 하지 않음 — 둘 다 돌리다 새 앱이 안정되면 옮기고, 지금 앱은 비상용
 - Cloudflare mate-server는 지금 앱 출퇴근(/ipSig)도 쓰므로 올릴 때 /ipSig 확인
 
 ## 작업 방식
