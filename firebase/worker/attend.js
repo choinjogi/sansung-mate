@@ -23,6 +23,7 @@ export async function runAttend(env, db, now = Date.now()) {
   const t = kstNow(now), out = [];
   if (t.h < 10) return out;
   for (const st of await db.list('stores')) {
+    if (st.mirror) continue;   // 병행 중(예전 시트에서 복사해 오는 매장): 기록이 퇴근 뒤에 들어와서 미출근 알림이 틀림
     const S = `stores/${st.id}`;
     const all = (await db.list(`${S}/members`)).filter(m => !m.noLogin);
     const active = all.filter(m => m.status === 'active' && !(m.leaveDate && m.leaveDate < t.date));

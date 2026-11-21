@@ -24,8 +24,8 @@ if (/github\.io$/.test(location.hostname)) location.replace('https://sansung-she
 <main id="app"><p class="empty">불러오는 중…</p></main>
 <script type="module">
 // 공개 근무표 (로그인 없이): pubSched/{매장}_{주} 의 이번 주·다음 주 (표시이름만). 근무표를 확정하면 바로 바뀜
-import * as api from './fb.js?v=36';
-import * as img from './schedimg.js?v=36';
+import * as api from './fb.js?v=37';
+import * as img from './schedimg.js?v=37';
 const $app = document.getElementById('app');
 const sid = new URLSearchParams(location.search).get('s') || '';
 async function draw() {

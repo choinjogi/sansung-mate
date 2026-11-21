@@ -63,6 +63,7 @@ const isActiveAlba = (m, today) => m.status === 'active' && !m.noLogin && (m.sgr
 export async function runCron(env, db, now = Date.now()) {
   const out = [], today = new Date(now + 9 * 3600e3).toISOString().slice(0, 10);
   for (const st of await db.list('stores')) {
+    if (st.mirror) continue;   // 병행 중: 휴무신청은 예전 폼으로 받음
     const S = `stores/${st.id}`;
     const [setting, log] = await Promise.all([db.get(`${S}/settings/leave`), db.get(`${S}/settings/pushLog`)]);
     const due = dueKind(now, setting, log || {});

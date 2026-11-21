@@ -1,13 +1,13 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=36';
-import * as sched from '../multi/sched.js?v=36';
-import * as pay from '../multi/pay.js?v=36';
-import * as dash from '../multi/dash.js?v=36';
-import * as staff from '../multi/staff.js?v=36';
-import { wageOf } from '../multi/paycalc.js?v=36';
-import * as auto from '../multi/autosched.js?v=36';
-import * as att from '../multi/attcheck.js?v=36';
+import * as api from '../multi/fb.js?v=37';
+import * as sched from '../multi/sched.js?v=37';
+import * as pay from '../multi/pay.js?v=37';
+import * as dash from '../multi/dash.js?v=37';
+import * as staff from '../multi/staff.js?v=37';
+import { wageOf } from '../multi/paycalc.js?v=37';
+import * as auto from '../multi/autosched.js?v=37';
+import * as att from '../multi/attcheck.js?v=37';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -148,7 +148,7 @@ A.manual = async o => {
 // ---------- 직원 계정 · 임시 비밀번호 ----------
 A.accounts = async () => {
   const c = await admin(), ms = (await api.members(c.store.id)).filter(m => !api.isGone(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
-  return ms.map(m => ({ name: m.name, role: m.role === 'manager' ? '매니저' : m.type === '정' ? '정직원' : '직원', joined: true, pend: m.status === 'pending', last: '' }));
+  return ms.map(m => ({ name: m.name, role: m.role === 'manager' ? '매니저' : m.type === '정' ? '정직원' : '직원', joined: !m.pre, pend: m.status === 'pending', last: '' }));   // pre = 예전 시트에서 복사해 온 가입 전 직원
 };
 A.issueCode = async name => {
   const c = await owner(), m = await byName(c, name), r = await api.resetPin(c.store.id, m.id);

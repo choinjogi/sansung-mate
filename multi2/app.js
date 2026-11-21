@@ -738,8 +738,8 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
   VIEWS.aacc = async function () {
     loading(); const list = await API.accounts();
     render(`<div>${header()}<h2>직원 계정</h2>
-      <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? (a.pend ? '<span style="color:var(--warn)">새 가입(확인 전)</span>' : '가입함') + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">미가입</span>'}</span></div>
-        <button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button></div>`).join('')}</div>
+      <div class="card list">${list.map(a => `<div class="item"><div><b>${esc(a.name)}</b> <span class="small">${a.role !== '직원' ? esc(a.role) + ' · ' : ''}${a.joined ? (a.pend ? '<span style="color:var(--warn)">새 가입(확인 전)</span>' : '가입함') + (a.last ? ' · 마지막 ' + esc(a.last.slice(5)) : '') : '<span style="color:var(--warn)">앱 가입 전</span>'}</span></div>
+        ${a.joined ? `<button class="sm ghost" data-n="${esc(a.name)}">임시 비번</button>` : ''}</div>`).join('')}</div>
       <p class="small">처음 가입은 직원이 앱에서 [처음 가입]으로 직접 해요(가입하면 승인 탭에 "새 가입"으로 떠요). [임시 비번]은 비밀번호를 잊은 직원용 — 나온 6자리를 1:1로 알려 주면 직원이 로그인 칸에 넣고 새 번호로 바꿔요(사장님도 직원 비밀번호는 몰라요). 임시 비밀번호는 사장님만 만들 수 있어요.</p></div>`);
     const all = document.getElementById('all');
     if (all) all.onclick = async () => {
@@ -948,7 +948,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 36;
+  const APP_VER = 37;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

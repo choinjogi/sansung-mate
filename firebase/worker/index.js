@@ -7,6 +7,7 @@
 //   GET  /pushMsg?s=매장  폰 알림 글 (폰이 빈 알림을 받으면 여기서 글을 받아 띄움)
 //   POST /pushTest      { storeId }  내 폰에 시험 알림 (사장님·매니저)
 //   cron 10분마다       휴무신청 열림·마감 1시간 전 알림 (push.js) + 당일 미출근·매일 10시 요약 (attend.js)
+//   POST /sync         병행 기간 자동 복사 (예전 시트 → 새 앱, 머리글 X-Sync-Key = 비밀값 SYNC_SECRET, sync.js)
 //   GET  /ipSig         { ip, t, sig }  예전 NFC 출퇴근용 (sig = HMAC-SHA256(IP_SECRET, ip|t))
 // 회선 주소는 Cloudflare가 붙여 주는 CF-Connecting-IP (보내는 쪽이 위조할 수 없음)
 import { punchCore, registerWifiCore, resetPinCore, myIpPage, Fail } from '../functions/core.js';
@@ -14,6 +15,7 @@ import { normIp } from '../functions/lib.js';
 import { verifyIdToken, firestore, authAdmin } from './google.js';
 import { runCron, pushTo, MSG } from './push.js';
 import { runAttend } from './attend.js';
+import { syncCore, sameKey } from './sync.js';
 
 const CODES = { unauthenticated: 401, 'permission-denied': 403, 'invalid-argument': 400, 'failed-precondition': 400, 'already-exists': 409 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Max-Age': '86400' };
@@ -43,6 +45,11 @@ export default {
       if (!env.IP_SECRET) return out(500, { ok: false, code: 'internal', message: '서명 열쇠 없음' });
       const t = Date.now();
       return out(200, { ok: true, ip: realIp, t, sig: await hmacHex(env.IP_SECRET, realIp + '|' + t) });
+    }
+    if (url.pathname === '/sync' && request.method === 'POST') {
+      if (!env.SYNC_SECRET || !sameKey(request.headers.get('X-Sync-Key') || '', env.SYNC_SECRET)) return out(403, { ok: false, code: 'permission-denied', message: '열쇠가 틀려요' });
+      try { return out(200, { ok: true, data: await syncCore(firestore(env), await request.json()) }); }
+      catch (e) { if (e instanceof Fail) return out(CODES[e.code] || 400, { ok: false, code: e.code, message: e.message }); console.error(e); return out(500, { ok: false, code: 'internal', message: String(e.message || e).slice(0, 200) }); }
     }
     if (url.pathname === '/pushMsg') {
       const sid = url.searchParams.get('s') || '';

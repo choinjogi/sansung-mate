@@ -72,6 +72,7 @@ export function toValue(v) {
   if (typeof v === 'boolean') return { booleanValue: v };
   if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
   if (typeof v === 'string') return { stringValue: v };
+  if (v instanceof Date) return { timestampValue: v.toISOString() };
   if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } };
   if (typeof v === 'object') return { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, toValue(x)])) } };
   throw new Error('저장할 수 없는 값');
@@ -134,6 +135,21 @@ export function firestore(env) {
     create: (path, obj) => commit(path, obj, 'new'),
     set: (path, obj) => commit(path, obj, 'set'),
     patch: (path, obj) => commit(path, obj, 'patch'),
+    // 여러 건 한 번에 (요청 1번 = 최대 500건). w = { set|update|del: 경로, obj, mask }
+    async batch(ws) {
+      for (let i = 0; i < ws.length; i += 450) {
+        const writes = ws.slice(i, i + 450).map(w => w.del ? { delete: `${root}/${w.del}` }
+          : { update: { name: `${root}/${w.set || w.update}`, fields: toValue(w.obj).mapValue.fields }, ...(w.update ? { updateMask: { fieldPaths: w.mask } } : {}) });
+        const r = await fetch(base + ':commit', { method: 'POST', headers: { ...(await auth()), 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) });
+        if (!r.ok) throw new Error('Firestore 기록 실패 ' + r.status + ' ' + (await r.text()).slice(0, 200));
+      }
+    },
+    // 문서가 없어도 됨: mask에 적은 칸만 바꿈 (obj에 없는 칸은 지움). 칸 이름에 '-' 같은 글자가 있으면 `...`로 감쌈 (예: early.`2026-11-03`.uid)
+    async update(path, obj, mask) {
+      const r = await fetch(base + ':commit', { method: 'POST', headers: { ...(await auth()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ writes: [{ update: { name: `${root}/${path}`, fields: toValue(obj).mapValue.fields }, updateMask: { fieldPaths: mask } }] }) });
+      if (!r.ok) throw new Error('Firestore 기록 실패 ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    },
   };
 }
 
