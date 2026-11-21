@@ -11,7 +11,7 @@
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
   let NAV = 0, SILENT_NAV = -1;   // 새 앱: 뒤에서 다시 그리는 사이에 다른 탭으로 옮겼으면 늦게 온 옛 화면은 안 그림
   function render(html) { if (SILENT && NAV !== SILENT_NAV) return; const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
-  const header = () => `<div class="top"><div class="brand"><img src="../icons/emblem.png" alt=""><div>${esc(API.storeName() || 'MATE')}<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
+  const header = () => `<div class="top"><div class="brand"${ME.role === '사장님' && API.isGoogle && API.isGoogle() ? ' id="chstore" style="cursor:pointer" title="매장 바꾸기"' : ''}><img src="../icons/emblem.png" alt=""><div>${esc(API.storeName() || 'MATE')}${ME.role === '사장님' && API.isGoogle && API.isGoogle() ? ' <span class="small" style="color:var(--sub)">▾</span>' : ''}<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
     <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 ${APP_VER}</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   window.MATE_HEADER = () => (ME ? header() : '');   // 새 앱: 더보기에 붙인 화면(근무표 짜기·정산표 등)도 이 머리글을 씀 (multi/ui.js top)
   const loading = () => { if (!SILENT) render('<div class="splash"><p>불러오는 중…</p></div>'); };
@@ -48,16 +48,43 @@
   const pin = id => `<input id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="숫자 6자리" style="letter-spacing:6px;font-size:22px;font-weight:800">`;
   const loginTop = () => `<div class="row" style="width:100%;justify-content:space-between;align-items:flex-end">
         <div class="hello">NICE TO<br><span>MEAT</span> YOU.</div>${bear('grill', 'sm')}</div>`;
+  // 새 앱: 로그인 맨 위 두 칸 — 직원(이름+번호) / 사장님(구글). 누가 어디를 누를지 바로 보이게
+  const who = cur => `<div class="row" style="width:100%;gap:8px;margin-top:18px">
+      <button id="wStaff" class="${cur === 'staff' ? '' : 'ghost'}" style="flex:1;margin:0">👤 직원 로그인</button>
+      <button id="wOwn" class="${cur === 'own' ? '' : 'ghost'}" style="flex:1;margin:0">🔑 사장님 · 구글</button></div>`;
+  function wireWho() {
+    const s = document.getElementById('wStaff'), o = document.getElementById('wOwn');
+    if (s) s.onclick = () => (API.storeName() ? login() : findStore());
+    if (o) o.onclick = () => ownerLogin();
+  }
+  // 사장님 구글 로그인 화면
+  function ownerLogin(msg) {
+    $nav.hidden = true; ME = null;
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}${who('own')}
+      <div class="card" style="width:100%;text-align:left;margin-top:12px"><b>사장님 로그인</b>
+        <p class="small" style="margin-top:6px">매장을 만든 구글 계정으로 들어가요. 매장이 여러 개면 로그인한 뒤 고르는 화면이 나와요.</p>
+        <p class="small" id="lm" style="margin-top:10px;color:var(--bad)">${esc(msg || '')}</p>
+        <button id="own" style="margin-top:8px">구글 계정으로 로그인</button></div>
+      <p class="small" style="margin-top:14px;text-align:center">직원은 [👤 직원 로그인]에서 이름과 숫자 6자리로 들어와요.</p></div>`);
+    wireWho();
+    document.getElementById('own').onclick = e => busy(e.target, afterGoogle);
+  }
+  // 구글 로그인 뒤: 매장이 2개 이상이면 매번 고르기 (지난번 매장이 맨 위)
+  async function afterGoogle() {
+    await API.googleLogin();
+    const list = await API.ownerStores().catch(() => []);
+    if (list.length > 1) return pickStore(list);
+    start();
+  }
   // 새 앱: 일하는 매장 찾기 (매장 이름을 정확히, 띄어쓰기 상관없음)
   function findStore(msg) {
     $nav.hidden = true; ME = null;
-    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
-      <div class="card" style="width:100%;text-align:left;margin-top:18px"><b>내 매장 찾기</b>
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}${who('staff')}
+      <div class="card" style="width:100%;text-align:left;margin-top:12px"><b>내 매장 찾기</b>
         <label>일하는 매장 이름</label><input id="sn" placeholder="사장님께 받은 매장 이름">
         <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '매장 이름을 정확히 넣어 주세요. 초대 링크를 받았으면 그 링크로 열어도 돼요.')}</p>
-        <button id="go" style="margin-top:8px">찾기</button></div>
-      <button class="ghost" id="own" style="margin-top:14px;width:100%">사장님 · 구글로 로그인</button></div>`);
-    document.getElementById('own').onclick = e => busy(e.target, async () => { await API.googleLogin(); start(); });
+        <button id="go" style="margin-top:8px">찾기</button></div></div>`);
+    wireWho();
     document.getElementById('go').onclick = e => busy(e.target, async () => {
       const v = document.getElementById('sn').value.trim(); if (!v) return findStore('매장 이름을 넣어 주세요');
       const st = await API.findStore(v).catch(() => null);
@@ -65,29 +92,42 @@
       API.setStore(st.storeId, st.storeName); login();
     });
   }
-  // 새 앱: 사장님 매장이 여러 개면 고르기
-  function pickStore(list) {
+  // 새 앱: 사장님 매장이 여러 개면 고르기 (로그인할 때마다, 지난번 매장이 맨 위 "최근")
+  // back = 로그인한 채 [매장 바꾸기]로 왔을 때 돌아갈 곳
+  function pickStore(list, back) {
     $nav.hidden = true;
+    const line = s => `<a href="#" class="item" data-sid="${esc(s.id)}" data-sn="${esc(s.name)}" style="color:inherit;text-decoration:none;padding:14px 4px">
+        <span><b style="font-size:17px">${esc(s.name)}</b>${s.last ? ' <span class="pill ok">최근</span>' : ''}<br><span class="small">사장님${s.staff != null ? ' · 직원 ' + s.staff + '명' : ''}</span></span><span class="small">›</span></a>`;
     render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
-      <div class="card list" style="width:100%;margin-top:18px">${list.map(s => `<a href="#" class="item" data-sid="${esc(s.id)}" data-sn="${esc(s.name)}" style="color:inherit;text-decoration:none"><span>${esc(s.name)}</span><span class="small">›</span></a>`).join('')}</div></div>`);
-    $app.querySelectorAll('[data-sid]').forEach(a => a.onclick = e => { e.preventDefault(); API.setStore(a.dataset.sid, a.dataset.sn); start(); });
+      <div style="width:100%;text-align:left;margin-top:18px"><b style="font-size:18px">어느 매장으로 들어갈까요?</b></div>
+      <div class="card list" style="width:100%;margin-top:10px">${list.map(line).join('')}</div>
+      ${back ? '<button class="ghost" id="pcBack" style="margin-top:12px;width:100%">취소</button>' : '<button class="ghost" id="pcOut" style="margin-top:12px;width:100%">다른 구글 계정으로</button>'}</div>`);
+    $app.querySelectorAll('[data-sid]').forEach(a => a.onclick = e => { e.preventDefault(); API.setStore(a.dataset.sid, a.dataset.sn); store.del('mate_tab'); start(); });
+    const b = document.getElementById('pcBack'); if (b) b.onclick = () => { $nav.hidden = false; back(); };
+    const o = document.getElementById('pcOut'); if (o) o.onclick = async () => { await API.logout(); ownerLogin(); };
+  }
+  // 로그인한 채 매장 바꾸기 (머리글 매장 이름 · 더보기)
+  async function changeStore() {
+    const t = TAB; render('<div class="splash"><p>매장 목록 불러오는 중…</p></div>');
+    const list = await API.ownerStores().catch(() => []);
+    if (list.length < 2) { toast('다른 매장이 없어요'); return go(t); }
+    pickStore(list, () => go(t));
   }
   function login(msg) {
     $nav.hidden = true; ME = null;
     if (!API.storeName()) return findStore(msg);
-    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}
-      <div class="card" style="width:100%;text-align:left;margin-top:18px">
-        <div class="row between" style="margin-bottom:4px"><b>${esc(API.storeName())} 로그인</b><a href="#" id="chs" class="small" style="color:var(--sub)">다른 매장</a></div>
+    render(`<div class="splash" style="justify-content:flex-start;padding-top:7vh">${loginTop()}${who('staff')}
+      <div class="card" style="width:100%;text-align:left;margin-top:12px">
+        <div class="row between" style="margin-bottom:4px;align-items:center"><b>${esc(API.storeName())} 로그인</b><button class="ghost sm" id="chs" style="width:auto;margin:0">🏪 다른 매장</button></div>
         <label>이름 (성까지)</label><input id="nm" autocomplete="username" placeholder="예: 홍길동" value="${esc(store.get('mate_last') || '')}">
         <label>비밀번호</label>${pin('pw')}
         <p class="small" id="lm" style="margin-top:10px;color:${msg ? 'var(--bad)' : 'var(--dim)'}">${esc(msg || '처음이면 [처음 가입]을 눌러 내 비밀번호를 정하세요. 비밀번호를 잊었으면 사장님께 임시 비밀번호를 받아 여기 넣으면 돼요.')}</p>
         <button id="go" style="margin-top:8px">로그인</button>
-        <button class="ghost" id="join" style="margin-top:10px">처음 가입</button></div>
-      <button class="ghost" id="own" style="margin-top:14px;width:100%">사장님 · 구글로 로그인</button></div>`);
+        <button class="ghost" id="join" style="margin-top:10px">처음 가입</button></div></div>`);
+    wireWho();
     const $m = document.getElementById('lm'), say = t => { $m.textContent = t; $m.style.color = 'var(--bad)'; };
     document.getElementById('join').onclick = () => join();
     document.getElementById('chs').onclick = e => { e.preventDefault(); findStore(); };
-    document.getElementById('own').onclick = e => busy(e.target, async () => { await API.googleLogin(); start(); });
     document.getElementById('go').onclick = async e => {
       const name = document.getElementById('nm').value.trim(), pw = document.getElementById('pw').value.trim();
       if (!name) return say('이름을 써 주세요'); if (!/^\d{6}$/.test(pw)) return say('비밀번호는 숫자 6자리예요');
@@ -146,6 +186,7 @@
         if (window.EXTRA && (await EXTRA.tryInvite(out) || await EXTRA.tryOrg(out))) return;   // 초대받은 사장님·대표님 = 새 매장 만들기
         await API.logout(); return findStore('이 구글 계정에는 매장이 없어요. 대표님께 매장 만들기 초대를 받아 주세요');
       }
+      if (API.isGoogle && API.isGoogle()) { await API.logout(); return ownerLogin(e.message); }
       return login(API.hasToken && API.hasToken() ? e.message : '');
     }
     const t = store.get('mate_tab');
@@ -153,7 +194,8 @@
     if (API.prefetch) API.prefetch(ME.role ? ['adminToday', 'pending', 'dashboard', 'schedule'] : ['schedule', 'records']);
   }
   window.addEventListener('mate-logout', () => login('다시 로그인해 주세요'));
-  window.addEventListener('mate-out', () => { store.del('mate_tab'); login(); });   // 새 앱: 붙인 화면의 [로그아웃]
+  window.addEventListener('mate-out', () => { store.del('mate_tab'); login(); });
+  window.addEventListener('mate-store', () => changeStore());   // 붙인 화면에서 매장 바꾸기   // 새 앱: 붙인 화면의 [로그아웃]
   // 뒤에서 새 값이 왔고 지금 그 화면을 보고 있으면 조용히 다시 그림 (입력 중이면 건드리지 않음)
   const VIEW_FN = { home: ['me'], sched: ['schedule'], rec: ['records'], atoday: ['adminToday', 'leaveAll'], aok: ['pending'], adash: ['dashboard'], aleave: ['leaveAll'], astaff: ['people'] };
   window.addEventListener('mate-fresh', e => {
@@ -165,7 +207,8 @@
       if (NAV !== SILENT_NAV && VIEWS[TAB]) Promise.resolve().then(() => VIEWS[TAB]()).catch(() => {});   // 그사이 옮긴 탭을 다시 그림
     });
   });
-  document.addEventListener('click', async e => { if (e.target.id === 'logout') { if (!confirm('로그아웃할까요?')) return; await API.logout(); store.del('mate_tab'); login(); } });
+  document.addEventListener('click', async e => { if (e.target.id === 'logout') { const g = API.isGoogle && API.isGoogle(); if (!confirm(`${API.storeName() || '이 매장'}에서 로그아웃할까요?`)) return; await API.logout(); store.del('mate_tab'); g ? ownerLogin() : login(); }
+    if (e.target.closest && e.target.closest('#chstore')) changeStore(); });
 
   const VIEWS = {};
 
@@ -874,6 +917,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
   VIEWS.amore = function () {
     render(`<div>${header()}<h2>더보기</h2>
       <div class="card list">
+        ${ME.role === '사장님' && API.isGoogle && API.isGoogle() ? '<a class="item" href="#" id="chstore2" style="color:inherit;text-decoration:none"><span>🏪 매장 바꾸기 <span class="small">(' + esc(API.storeName()) + ' → 다른 매장)</span></span><span class="small">›</span></a>' : ''}
         <a class="item" href="#" data-go="acmp" style="color:inherit;text-decoration:none"><span>📋 스케줄과 비교 (지각·미출근)</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
@@ -889,6 +933,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
       <div class="card row between" id="pushcard" style="display:flex"><div><b>🔔 폰 알림</b><div class="small" id="pushst">휴무신청 열림 · 마감 1시간 전 알림</div></div><button class="sm" id="pushbtn" style="width:auto;margin:0">알림 받기</button></div>
       ${backup()}</div>`);
     $app.querySelectorAll('[data-go]').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+    const cs = document.getElementById('chstore2'); if (cs) cs.onclick = e => { e.preventDefault(); changeStore(); };
     if (window.EXTRA) EXTRA.wire(ME, () => go('amore'));  // 새 앱: 산성에 없던 화면
     pushCard();
   };
@@ -903,7 +948,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 35;
+  const APP_VER = 36;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

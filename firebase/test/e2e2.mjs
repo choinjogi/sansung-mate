@@ -305,6 +305,19 @@ try {
   await boss3.locator('#save').click();
   await boss3.getByText(/출근 현황/).first().waitFor();
   assert.match(await boss3.locator('.brand').first().innerText(), /해운대점/);
+  // 매장이 2개면: 더보기 [매장 바꾸기] → 고르기(지난번 매장 "최근") → 다른 매장으로, 로그아웃하면 사장님 로그인 화면
+  const r4 = await fetch('http://127.0.0.1:8080/v1/projects/demo-mate/databases/(default)/documents/stores/st2', { method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { name: { stringValue: '광안점' }, orgId: { stringValue: 'org3' }, ownerUids: { arrayValue: { values: [{ stringValue: b3 }] } } } }) });
+  assert.ok(r4.ok);
+  await tab(boss3, '더보기'); await boss3.locator('#chstore2').click();
+  await boss3.getByText('어느 매장으로 들어갈까요?').waitFor();
+  assert.equal(await boss3.locator('[data-sid]').count(), 2);
+  assert.match(await boss3.locator('[data-sid]').first().innerText(), /해운대점\s*최근/);
+  await boss3.locator('[data-sn="광안점"]').click();
+  await boss3.waitForFunction(() => /광안점/.test((document.querySelector('.brand') || {}).innerText || ''));
+  await boss3.locator('#logout').click();
+  await boss3.getByText('사장님 로그인').waitFor();
+  assert.ok(await boss3.locator('#wStaff').count());
 
   console.log('✔ 산성 화면(multi2) 직원·사장님·새 화면 시험 통과');
 } catch (e) {

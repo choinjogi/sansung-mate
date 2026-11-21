@@ -1,13 +1,13 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=35';
-import * as sched from '../multi/sched.js?v=35';
-import * as pay from '../multi/pay.js?v=35';
-import * as dash from '../multi/dash.js?v=35';
-import * as staff from '../multi/staff.js?v=35';
-import { wageOf } from '../multi/paycalc.js?v=35';
-import * as auto from '../multi/autosched.js?v=35';
-import * as att from '../multi/attcheck.js?v=35';
+import * as api from '../multi/fb.js?v=36';
+import * as sched from '../multi/sched.js?v=36';
+import * as pay from '../multi/pay.js?v=36';
+import * as dash from '../multi/dash.js?v=36';
+import * as staff from '../multi/staff.js?v=36';
+import { wageOf } from '../multi/paycalc.js?v=36';
+import * as auto from '../multi/autosched.js?v=36';
+import * as att from '../multi/attcheck.js?v=36';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
