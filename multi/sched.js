@@ -1,13 +1,13 @@
 // 근무표·휴무신청 화면
 // 직원: 근무표 보기, 휴무신청(알바만). 매니저·사장님: 근무표 짜기(휴무신청 반영·자동 채우기 초안·확정), 휴무신청 현황
-import * as api from './fb.js?v=32';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=32';
-import * as auto from './autosched.js?v=32';
-import * as img from './schedimg.js?v=32';
+import * as api from './fb.js?v=33';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=33';
+import * as auto from './autosched.js?v=33';
+import * as img from './schedimg.js?v=33';
 // 단톡용 표 줄 (표시이름만): 정 그룹 먼저. 고정 근무 알바(정 그룹인데 급여 알바)는 휴무를 ✕로
 export const pubRows = (act, cells) => act.map(m => ({ disp: m.disp || m.name, g: api.groupOf(m), fixed: api.groupOf(m) === '정' && m.type !== '정', c: [...(cells[m.id] || ['', '', '', '', '', '', ''])] }));
 export const pubLink = storeId => new URL('./week.html?s=' + storeId, import.meta.url).href;
-import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=32';
+import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=33';
 
 const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
 export const isAlba = m => api.groupOf(m) === '알';   // 근무표·휴무신청 기준 (급여 구분은 m.type)

@@ -246,6 +246,21 @@ try {
   await tab(boss2, '더보기'); await boss2.locator('[data-go="acmp"]').click(); await boss2.getByText(/확인할 것 \d+건/).waitFor();
   await boss2.locator('[data-rg="month"]').click(); await boss2.getByText(/이번 달|확인할 것/).first().waitFor();
   assert.doesNotMatch(await text(boss2), /조사장/);
+  // 산성 데이터 가져오기: 1단계(입사 등록·규칙·매출) → 2단계(가입한 사람 기록·근무표·계좌)
+  const J = { staff: [
+      { name: '김알바', kind: '알바', start: '18:00', wage: 10030, bank: '시험은행', account: '000-1', email: '', disp: '알바킴', group: '알', offDays: [], minDays: 4, priority: true, noJuhu: false },
+      { name: '최가져', kind: '알바', start: '18:00', wage: 10500, bank: '', account: '', email: '', disp: '가져', group: '정', offDays: ['목'], minDays: null, priority: false, noJuhu: true },
+      { name: '조사장', kind: '정직원', start: '11:30', wage: 0, bank: '', account: '', email: '', disp: '조사장', group: '정', offDays: ['월'], owner: true }],
+    cfg: { min: [7, 7, 7, 7, 9, 9, 7], max: [7, 7, 7, 7, 10, 10, 8], alba: [4, 4, 4, 4, null, null, null], pairs: [], overflow: ['토', '금'], defMin: 3 },
+    schedules: { '2026-11-02': { 김알바: ['O', '', '', '', '', '', ''], 최가져: ['', 'O', '', '', '', '', ''] } },
+    sales: { '2026-11-02': 1234000 }, punches: [{ name: '김알바', date: '2026-11-02', full: false, in: '18:00', out: '22:30', shift: { kind: 'extra' } }, { name: '최가져', date: '2026-11-03', full: false, in: '18:00', out: '22:00' }] };
+  await tab(boss2, '더보기'); await boss2.locator('[data-go="aimport"]').click();
+  await boss2.locator('#jf').setInputFiles({ name: 'sansung.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(J)) });
+  await boss2.locator('#j1').waitFor(); assert.match(await text(boss2), /최가져\s+알바\s+아직 없음/);
+  await boss2.locator('#j1').click(); await boss2.getByText(/입사 등록됨 \(가입 대기\)/).waitFor();
+  await boss2.locator('#j2').click(); await boss2.getByText(/근무표 1주 · 출퇴근 2줄 넣었어요/).first().waitFor();
+  assert.match(await text(boss2), /아직 가입 안 함 \(기록 못 넣음\): 최가져/);
+  await boss2.locator('#j2').click(); await boss2.getByText(/출퇴근 0줄 넣었어요/).first().waitFor();   // 두 번 눌러도 중복 없음
   await tab(boss2, '오늘'); await boss2.locator('#app').getByText('김알바').first().waitFor(); assert.doesNotMatch(await text(boss2), /조사장/);   // 출퇴근 현황엔 안 나옴
   await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
   await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();

@@ -3,8 +3,8 @@
 //        승인하면 구분·정시·입사일이 자동으로 들어감 (시급은 사장님이 승인하거나 사장님 화면을 열 때 들어감)
 //  퇴사: 이름 + 퇴사일(마지막 근무일). 그날까지는 그대로 일하고(퇴근 찍기 됨), 다음 날부터 로그인·근무표·출퇴근에서 빠짐.
 //        정산은 퇴사일까지. 지난 출퇴근 기록은 그대로
-import * as api from './fb.js?v=32';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=32';
+import * as api from './fb.js?v=33';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=33';
 
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
 const since = d => (d ? md(d) + ' 입사' : '기존 직원');
@@ -116,7 +116,9 @@ export async function staffScreen(store, back, owner) {
 // 승인할 때: 그 이름으로 입사 등록이 있으면 구분·정시·입사일(+사장님이면 시급)을 넣고 등록을 지움
 export async function approveWithHire(store, m, hire, owner) {
   const patch = { status: 'active' };
-  if (hire) Object.assign(patch, { type: hire.type || '알', startTime: hire.startTime || null, ...(hire.startDate ? { startDate: hire.startDate } : {}) });
+  if (hire) Object.assign(patch, { type: hire.type || '알', startTime: hire.startTime || null, ...(hire.startDate ? { startDate: hire.startDate } : {}) },
+    // 직원 설정 (산성 시트에서 옮긴 입사 등록에 들어 있음): 표시이름·고정휴무·최소출근일·우선배정·반직원·근무표 그룹·주휴 없음
+    Object.fromEntries(['disp', 'offDays', 'minDays', 'priority', 'half', 'sgroup', 'noJuhu'].filter(k => k in hire).map(k => [k, hire[k]])));
   await api.setMember(store.id, m.id, patch);
   if (hire && owner && hire.wage) await api.setWage(store.id, m.id, (hire.startDate || api.kst().date).slice(0, 7), hire.wage);
   if (hire && (owner || !hire.wage)) await api.removeHire(store.id, hire.id);

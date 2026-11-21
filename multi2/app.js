@@ -798,6 +798,31 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     $app.querySelectorAll('[data-rg]').forEach(b => b.onclick = () => VIEWS.acmp(b.dataset.rg));
   };
 
+  // ---------- 관리: 산성 데이터 가져오기 (새 앱: 지금 시트 → 새 앱, 사장님만) ----------
+  VIEWS.aimport = function () {
+    render(`<div>${header()}<h2>산성 데이터 가져오기</h2>
+      <div class="card"><p class="small">지금 구글 시트에서 뽑은 파일(.json)을 골라요. 주민번호는 들어 있지 않아요.</p><input type="file" id="jf" accept=".json,application/json"></div>
+      <div id="jout"></div></div>`);
+    let J = null;
+    const show = async () => {
+      const r = await API.importCheck(J);
+      document.getElementById('jout').innerHTML = `<div class="card"><b>${esc(r.store)}</b> 매장에 넣어요<table class="kv" style="margin-top:8px">${r.people.map(p => `<tr><td>${esc(p.name)}</td><td class="small">${esc(p.kind)}</td><td class="small"${p.state === '아직 없음' ? ' style="color:var(--warn)"' : ''}>${esc(p.state)}</td></tr>`).join('')}</table>
+        <p class="small">확정 근무표 ${r.weeks.length}주 · 매출 ${r.sales}일 · 출퇴근 ${r.punches}줄</p></div>
+        <div class="card"><b>1단계 (직원 가입 전)</b><p class="small">스케줄 규칙, 직원 입사 등록(시급·표시이름·고정휴무 등), 사장님(근무표 전용), 매출을 넣어요. 이미 있는 사람은 건너뛰어요.</p><button id="j1">1단계 넣기</button></div>
+        <div class="card"><b>2단계 (직원이 가입하고 승인한 뒤)</b><p class="small">이름이 같은 직원에게 계좌·이메일, 매니저, 지난 확정 근무표, 출퇴근 기록을 넣어요. 늦게 가입한 사람이 있으면 다시 눌러도 돼요(이미 있는 기록은 건너뜀).</p><button class="ghost" id="j2">2단계 넣기</button><div id="j2out"></div></div>`;
+      document.getElementById('j1').onclick = e => busy(e.target, async () => { if (!confirm('1단계를 넣을까요?')) return; toast((await API.import1(J)).msg); await show(); });
+      document.getElementById('j2').onclick = e => busy(e.target, async () => {
+        if (!confirm('2단계를 넣을까요?')) return; const x = await API.import2(J); toast(x.msg);
+        document.getElementById('j2out').innerHTML = `<p class="small">${esc(x.msg)}</p>${x.missing.length ? `<p class="small" style="color:var(--warn)">아직 가입 안 함 (기록 못 넣음): ${esc(x.missing.join(', '))}</p>` : ''}`;
+      });
+    };
+    document.getElementById('jf').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { J = JSON.parse(await f.text()); if (!J.staff) throw new Error(); } catch (x) { return toast('파일 모양이 달라요'); }
+      show().catch(x => toast(x.message));
+    };
+  };
+
   // ---------- 관리: 출퇴근 기록 넣기·고치기 (NFC "지난 기록 넣기"와 같음) ----------
   VIEWS.afix = async function () {
     loading(); const list = await people(), td = (ME.today && ME.today.date) || '';
@@ -847,7 +872,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
         <a class="item" href="#" data-go="afix" style="color:inherit;text-decoration:none"><span>✏️ 출퇴근 기록 넣기·고치기</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="astaff" style="color:inherit;text-decoration:none"><span>👥 입사 · 퇴사</span><span class="small">›</span></a>
         ${ME.role === '사장님' ? '<a class="item" href="#" data-go="awage" style="color:inherit;text-decoration:none"><span>💰 알바 시급</span><span class="small">›</span></a>' : ''}
-        ${ME.role === '사장님' && API.staffCfg ? '<a class="item" href="#" data-go="acfg" style="color:inherit;text-decoration:none"><span>🗂️ 직원 설정 (표시이름·고정휴무·최소출근일)</span><span class="small">›</span></a><a class="item" href="#" data-go="asched" style="color:inherit;text-decoration:none"><span>📐 스케줄 규칙 (인원·동시휴무·과인원)</span><span class="small">›</span></a>' : ''}
+        ${ME.role === '사장님' && API.staffCfg ? '<a class="item" href="#" data-go="acfg" style="color:inherit;text-decoration:none"><span>🗂️ 직원 설정 (표시이름·고정휴무·최소출근일)</span><span class="small">›</span></a><a class="item" href="#" data-go="asched" style="color:inherit;text-decoration:none"><span>📐 스케줄 규칙 (인원·동시휴무·과인원)</span><span class="small">›</span></a><a class="item" href="#" data-go="aimport" style="color:inherit;text-decoration:none"><span>📥 산성 데이터 가져오기 (시트 → 새 앱)</span><span class="small">›</span></a>' : ''}
         <a class="item" href="#" data-go="aacc" style="color:inherit;text-decoration:none"><span>🔑 직원 계정 · 임시 비밀번호</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="aleave" style="color:inherit;text-decoration:none"><span>📝 휴무신청 현황</span><span class="small">›</span></a>
         <a class="item" href="#" data-go="sched" style="color:inherit;text-decoration:none"><span>📅 이번 주 근무표</span><span class="small">›</span></a>
@@ -872,7 +897,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 32;
+  const APP_VER = 33;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

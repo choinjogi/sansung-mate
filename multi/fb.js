@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=32';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=32';
+import * as F from './vendor/firebase.js?v=33';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=33';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -93,6 +93,9 @@ export const removeNoLogin = (storeId, id) => F.deleteDoc(ref(`stores/${storeId}
 // 공개 근무표 (단톡 링크): pubSched/{매장}_{주} = { storeId, storeName, week, rows: [{ disp, g, fixed, c[7] }], at }
 export const savePubSched = (store, week, rows) => F.setDoc(ref(`pubSched/${store.id}_${week}`), { storeId: store.id, storeName: store.name || '', week, rows, at: F.serverTimestamp() });
 export const getPubSched = (storeId, week) => F.getDoc(ref(`pubSched/${storeId}_${week}`)).then(data);
+// 사장님이 계좌·이메일 직접 넣기 (예전 시트에서 옮길 때)
+export const setPrivateByOwner = (storeId, uid, v) => F.setDoc(ref(`stores/${storeId}/private/${uid}`), { bank: v.bank || '', account: v.account || '', email: v.email || '', req: null, updatedAt: F.serverTimestamp() });
+export const punchGet = (storeId, id) => F.getDoc(ref(`stores/${storeId}/punches/${id}`)).then(data);
 export const schedCfg = storeId => F.getDoc(ref(`stores/${storeId}/settings/sched`)).then(data);
 export const saveSchedCfg = (storeId, v) => F.setDoc(ref(`stores/${storeId}/settings/sched`), v);
 export const stats = storeId => list(col(`stores/${storeId}/stats`));

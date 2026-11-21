@@ -1,13 +1,13 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=32';
-import * as sched from '../multi/sched.js?v=32';
-import * as pay from '../multi/pay.js?v=32';
-import * as dash from '../multi/dash.js?v=32';
-import * as staff from '../multi/staff.js?v=32';
-import { wageOf } from '../multi/paycalc.js?v=32';
-import * as auto from '../multi/autosched.js?v=32';
-import * as att from '../multi/attcheck.js?v=32';
+import * as api from '../multi/fb.js?v=33';
+import * as sched from '../multi/sched.js?v=33';
+import * as pay from '../multi/pay.js?v=33';
+import * as dash from '../multi/dash.js?v=33';
+import * as staff from '../multi/staff.js?v=33';
+import { wageOf } from '../multi/paycalc.js?v=33';
+import * as auto from '../multi/autosched.js?v=33';
+import * as att from '../multi/attcheck.js?v=33';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -227,6 +227,58 @@ A.compare = async range => {
   const [from, to, label] = range === 'last' ? [api.addDays(mon, -7), api.addDays(mon, -1), '지난주'] : range === 'month' ? [t.slice(0, 8) + '01', t, '이번 달'] : [mon, api.addDays(mon, 6), '이번 주'];
   const r = await compareRange(c, from, to);
   return { ...r, label, bad: att.BAD };
+};
+
+// ---------- 산성 데이터 가져오기 (사장님, 지금 시트 → 새 앱 한 번) ----------
+// 파일 = 결산·스케줄 시트에서 뽑은 JSON { staff, cfg, schedules{주:{이름:[7칸]}}, sales{날짜:금액}, punches[{name,date,full,in,out,shift}] } (주민번호 없음)
+//  1단계(가입 전): 스케줄 규칙 · 입사 등록(구분·정시·시급·표시이름·고정휴무·최소출근일·우선배정·근무표 그룹·주휴 없음) · 사장님 = 근무표 전용 · 매출
+//  2단계(직원이 가입·승인한 뒤, 몇 번 눌러도 됨): 이름이 같은 직원에게 계좌·이메일 · 매니저 · 지난 확정 근무표 · 그 달 출퇴근(+대타·추가 출근)
+const keyOf = n => api.nameKey(n);
+const hireOf = s => ({ name: s.name, type: s.kind === '알바' ? '알' : '정', startTime: s.start || null, startDate: null, ...(s.wage ? { wage: Math.round(s.wage) } : {}),
+  disp: s.disp && s.disp !== s.name ? s.disp : null, offDays: s.offDays || [], minDays: s.kind === '알바' && s.minDays != null ? s.minDays : null, priority: !!(s.kind === '알바' && s.priority),
+  half: s.kind === '반직원', sgroup: s.kind === '알바' && s.group === '정' ? '정' : null, noJuhu: !!s.noJuhu });
+A.importCheck = async j => {
+  const c = await owner(), [ms, hires] = await Promise.all([api.membersAll(c.store.id), api.hiresOf(c.store.id)]);
+  const act = ms.filter(m => api.isActive(m)), byName = n => act.find(m => keyOf(m.name) === keyOf(n));
+  const people = j.staff.map(s => { const m = byName(s.name), h = hires.find(x => x.id === keyOf(s.name));
+    return { name: s.name, kind: s.kind + (s.owner ? ' · 사장님' : s.manager ? ' · 매니저' : ''), state: m ? (m.noLogin ? '근무표 전용' : '가입함') : h ? '입사 등록됨 (가입 대기)' : '아직 없음' }; });
+  return { store: c.store.name, people, weeks: Object.keys(j.schedules || {}), sales: Object.keys(j.sales || {}).length, punches: (j.punches || []).length };
+};
+A.import1 = async j => {
+  const c = await owner(), S = c.store.id, ms = await api.membersAll(S), have = n => ms.some(m => api.isActive(m) && keyOf(m.name) === keyOf(n));
+  if (j.cfg) await api.saveSchedCfg(S, { ...auto.SCHED_DEFAULT, ...j.cfg, alba: (j.cfg.alba || []).map(v => (v == null ? null : v)) });
+  let hired = 0, nl = 0, sales = 0;
+  for (const s of j.staff) {
+    if (have(s.name)) continue;
+    if (s.owner) { await api.addNoLoginMember(S, { name: s.name, ...(s.disp && s.disp !== s.name ? { disp: s.disp } : {}), offDays: s.offDays || [], half: false, ...(s.start ? { startTime: s.start } : {}) }); nl++; }
+    else { await api.addHire(S, hireOf(s)); hired++; }
+  }
+  for (const [d, v] of Object.entries(j.sales || {})) { await api.setSales(S, d, Math.round(v)); sales++; }
+  return { msg: `스케줄 규칙 · 입사 등록 ${hired}명 · 근무표 전용 ${nl}명 · 매출 ${sales}일 넣었어요` };
+};
+A.import2 = async j => {
+  const c = await owner(), S = c.store.id, act = (await api.membersAll(S)).filter(m => api.isActive(m) || m.status === 'left');
+  const idOf = n => (act.find(m => keyOf(m.name) === keyOf(n)) || {}).id, St = Object.fromEntries(j.staff.map(s => [keyOf(s.name), s]));
+  let priv = 0, mgr = 0, weeks = 0, ps = 0; const missing = new Set();
+  for (const m of act.filter(m => !m.noLogin && m.status === 'active')) {
+    const s = St[keyOf(m.name)]; if (!s) continue;
+    if (s.bank || s.account || s.email) { await api.setPrivateByOwner(S, m.id, s); priv++; }
+    if (s.manager && m.role !== 'manager') { await api.setMember(S, m.id, { role: 'manager' }); mgr++; }
+  }
+  for (const [w, rows] of Object.entries(j.schedules || {})) {
+    const cells = {}; Object.entries(rows).forEach(([n, cs]) => { const id = idOf(n); if (id) cells[id] = cs; else missing.add(n); });
+    await api.saveSchedule(S, w, cells, true); weeks++;
+  }
+  for (const p of j.punches || []) {
+    const id = idOf(p.name); if (!id) { missing.add(p.name); continue; }
+    if (!p.full && p.in && !(await api.punchGet(S, `${p.date}_${id}_in`))) { await api.addPunch(S, { uid: id, name: p.name, date: p.date, kind: 'in', at: api.atOf(p.date, p.in) }); ps++; }
+    const oid = `${p.date}_${id}_out`;
+    if (!(await api.punchGet(S, oid))) {
+      await api.addPunch(S, { uid: id, name: p.name, date: p.date, kind: 'out', at: api.atOf(p.date, p.out, p.in || '00:00') }); ps++;
+      if (p.shift) await api.setShift(S, oid, p.shift.kind, p.shift.sub || '');
+    }
+  }
+  return { msg: `계좌·이메일 ${priv}명 · 매니저 ${mgr}명 · 근무표 ${weeks}주 · 출퇴근 ${ps}줄 넣었어요`, missing: [...missing] };
 };
 
 // ---------- 입사 · 퇴사 ----------

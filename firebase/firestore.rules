@@ -129,7 +129,7 @@ service cloud.firestore {
         // 번호 다시 정하기(서버가 pinReset=true) 뒤 본인이 새 번호를 정하면 표시만 지움
         allow update: if signedIn() && uid() == m && changedOnly(['pinReset']) && d().pinReset == false;
         // 가입 승인은 매니저도 (승인 대기 → 직원, 다른 칸은 못 바꿈)
-        allow update: if manager(s) && resource.data.status == 'pending' && changedOnly(['status', 'type', 'startTime', 'startDate']) && d().status == 'active'
+        allow update: if manager(s) && resource.data.status == 'pending' && changedOnly(['status', 'type', 'startTime', 'startDate', 'disp', 'offDays', 'minDays', 'priority', 'half', 'sgroup', 'noJuhu']) && d().status == 'active'
           && (!('type' in d()) || d().type in ['정', '알']);
         // 퇴사·다시 일함은 매니저도 (직원만, 사장님·매니저 계정은 못 건드림)
         allow update: if manager(s) && resource.data.role == 'staff' && resource.data.status in ['active', 'left']
@@ -142,7 +142,11 @@ service cloud.firestore {
       // 입사 등록 (가입 전에 미리). 문서 이름 = 띄어쓰기 뺀 소문자 이름. 시급(wage)은 사장님만 넣음
       match /hires/{k} {
         allow read, delete: if manager(s);
-        allow create, update: if manager(s) && d().keys().hasOnly(['name', 'type', 'startTime', 'startDate', 'wage', 'by', 'at'])
+        allow create, update: if manager(s) && d().keys().hasOnly(['name', 'type', 'startTime', 'startDate', 'wage', 'by', 'at', 'disp', 'offDays', 'minDays', 'priority', 'half', 'sgroup', 'noJuhu'])
+          && (!('disp' in d()) || d().disp == null || (d().disp is string && d().disp.size() <= 10))
+          && (!('offDays' in d()) || (d().offDays is list && d().offDays.size() <= 7))
+          && (!('minDays' in d()) || d().minDays == null || (d().minDays is int && d().minDays >= 0 && d().minDays <= 7))
+          && (!('sgroup' in d()) || d().sgroup == null || d().sgroup in ['정', '알'])
           && d().name is string && d().name.size() > 0 && d().name.size() <= 20 && d().type in ['정', '알']
           && (!('startDate' in d()) || d().startDate == null || isDate(d().startDate)) && d().by == uid() && d().at == request.time
           && (!('wage' in d()) || (owner(s) && d().wage is int && d().wage > 0));
@@ -178,6 +182,9 @@ service cloud.firestore {
         allow create: if signedIn() && uid() == m && active(s)
           && d().keys().hasOnly(['req']) && d().req.at == request.time
           && d().req.keys().hasOnly(['bank', 'account', 'email', 'at']);
+        // 사장님이 직접 넣기 (예전 시트에서 옮길 때 등)
+        allow create: if owner(s) && d().keys().hasOnly(['bank', 'account', 'email', 'req', 'updatedAt'])
+          && exists(/databases/$(database)/documents/stores/$(s)/members/$(m));
         allow update: if owner(s)
           || (signedIn() && uid() == m && active(s) && changedOnly(['req'])
             && (d().req == null

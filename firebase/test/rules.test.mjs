@@ -145,6 +145,14 @@ test('공개 근무표는 누구나 읽고, 그 매장 매니저 이상만 쓴�
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'pubSched/sansung_2026-11-23')));
   await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'pubSched')));   // 목록은 못 훑음
 });
+test('입사 등록에 직원 설정 칸, 사장님은 계좌를 직접 넣을 수 있다', async () => {
+  const h = { name: '새알바', type: '알', startTime: '18:00', wage: 10500, disp: '새', offDays: ['화'], minDays: 3, priority: false, half: false, sgroup: null, noJuhu: false, by: 'boss', at: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/hires/새알바'), h));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/hires/새알바2'), { ...h, name: '새알바2', minDays: 9 }));
+  await assertSucceeds(setDoc(doc(as('boss', G), 'stores/sansung/private/mgr'), { bank: '은행', account: '1', email: '', req: null, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('mgr', P), 'stores/sansung/private/mgr'), { bank: '은행', account: '2', email: '', req: null, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/private/nobody'), { bank: '은행', account: '1', email: '', req: null, updatedAt: serverTimestamp() }));
+});
 test('승인 대기 중에는 매장 정보와 스케줄을 못 본다', async () => {
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung')));
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung/schedules/2026-11-23')));
