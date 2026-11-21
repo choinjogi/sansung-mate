@@ -1,6 +1,6 @@
 // 여러 매장용 서버(Firebase) 호출을 한곳에 모음. 화면(app.js)은 이 파일의 API만 쓴다.
-import * as F from './vendor/firebase.js?v=29';
-import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=29';
+import * as F from './vendor/firebase.js?v=30';
+import { FIREBASE, USE_EMULATOR, SERVER_URL } from './config.js?v=30';
 
 export const configured = USE_EMULATOR || FIREBASE.apiKey !== 'TODO';
 const app = F.initializeApp(USE_EMULATOR ? { apiKey: 'demo', projectId: 'demo-mate', authDomain: 'localhost' } : FIREBASE);
@@ -83,6 +83,8 @@ export const myOrgs = () => list(F.query(col('orgs'), F.where('adminUids', 'arra
 export const myStores = () => list(F.query(col('stores'), F.where('ownerUids', 'array-contains', auth.currentUser.uid)));
 export const orgStores = orgId => list(F.query(col('stores'), F.where('orgId', '==', orgId)));
 // 근무표 전용 직원(noLogin, 예: 사장님 본인)은 근무표에만 나오고 출퇴근·급여·계정 목록엔 안 나옴
+// 근무표 그룹: 보통은 구분대로(정직원·반직원 = 정, 알바 = 알). 고정 근무 알바처럼 급여는 시급인데 근무표는 정 그룹이면 sgroup = '정'
+export const groupOf = m => m.sgroup || (m.type === '정' ? '정' : '알');
 export const membersAll = storeId => list(col(`stores/${storeId}/members`));
 export const members = storeId => membersAll(storeId).then(ms => ms.filter(m => !m.noLogin));
 export const addNoLoginMember = (storeId, v) => F.setDoc(ref(`stores/${storeId}/members/x_${rand(12, 'abcdefghijkmnpqrstuvwxyz23456789')}`),

@@ -116,7 +116,8 @@ service cloud.firestore {
           && d().role == 'staff' && d().status == 'active' && d().type == '정' && d().noLogin == true;
         // 승인·역할 변경·퇴사: 매장 사장님만
         allow update: if owner(s)
-          && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type', 'noJuhu', 'startDate', 'leaveDate', 'disp', 'offDays', 'minDays', 'priority', 'half'])
+          && changedOnly(['name', 'role', 'status', 'leftAt', 'startTime', 'type', 'noJuhu', 'startDate', 'leaveDate', 'disp', 'offDays', 'minDays', 'priority', 'half', 'sgroup'])
+          && (!('sgroup' in d()) || d().sgroup == null || d().sgroup in ['정', '알'])
           && (!('disp' in d()) || d().disp == null || (d().disp is string && d().disp.size() <= 10))
           && (!('offDays' in d()) || (d().offDays is list && d().offDays.size() <= 7))
           && (!('minDays' in d()) || d().minDays == null || (d().minDays is int && d().minDays >= 0 && d().minDays <= 7))

@@ -1,7 +1,7 @@
 // 매장 규칙 입력 · 매장 규칙 바꾸기 · 새 매장 만들기 화면 (새 앱 multi와 산성 화면 multi2가 같이 씀)
-import * as api from './fb.js?v=29';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=29';
-import { $, esc, DOW, DOW_ORDER, ls, clone, toast, show, top, wireTop, busy } from './ui.js?v=29';
+import * as api from './fb.js?v=30';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=30';
+import { $, esc, DOW, DOW_ORDER, ls, clone, toast, show, top, wireTop, busy } from './ui.js?v=30';
 
 export function rulesFields(r) {
   const days = new Set(r.open.days);

@@ -110,7 +110,9 @@ try {
   await alba.locator('#cOut').waitFor();
   await alba.locator('#cOut').click();
   await alba.locator('#oYes').click();
-  await alba.getByText(/김알바님 퇴근/).waitFor();
+  // 시험 시각이 정시보다 15분 넘게 이르면 "오늘 출근, 어떤 경우인가요?"가 먼저 나옴 → 평소대로
+  await Promise.race([alba.getByText(/김알바님 퇴근/).waitFor(), alba.locator('#eSelf').waitFor()]);
+  if (await alba.locator('#eSelf').count()) await alba.locator('#eSelf').click();
   await alba.locator('[data-sh="extra"]').click();
   await alba.getByText('저장 완료! 이제 닫아도 돼요').waitFor();
   await alba.getByText('닫기').click();

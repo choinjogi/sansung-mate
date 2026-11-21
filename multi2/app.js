@@ -724,7 +724,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
   // ---------- 관리: 직원 설정 (새 앱: 산성 직원명부 K~Q — 표시이름·구분·정시·고정휴무·최소출근일·우선배정·주휴) ----------
   VIEWS.acfg = async function () {
     loading(); const list = await API.staffCfg(), DAYS = ['월', '화', '수', '목', '금', '토', '일'];
-    const sum = a => [a.kind, a.start && a.start + ' 출근', a.offDays.length ? a.offDays.join('·') + ' 고정휴무' : '', a.kind === '알바' && a.minDays != null ? '최소 ' + a.minDays + '일' : '', a.priority ? '우선배정' : '', a.noJuhu ? '주휴 없음' : ''].filter(Boolean).join(' · ');
+    const sum = a => [a.kind, a.start && a.start + ' 출근', a.offDays.length ? a.offDays.join('·') + ' 고정휴무' : '', a.kind === '알바' && a.minDays != null ? '최소 ' + a.minDays + '일' : '', a.sgroup === '정' && a.kind === '알바' ? '근무표 정 그룹' : '', a.priority ? '우선배정' : '', a.noJuhu ? '주휴 없음' : ''].filter(Boolean).join(' · ');
     render(`<div>${header()}<h2>직원 설정</h2>
       <div class="card list">${list.map((a, i) => `<a class="item" href="#" data-i="${i}" style="color:inherit;text-decoration:none"><div><b>${esc(a.disp || a.name)}</b>${a.disp ? ` <span class="small">(${esc(a.name)})</span>` : ''}<div class="small">${esc(sum(a))}${a.noLogin ? ' · 근무표 전용' : ''}</div></div><span class="small">›</span></a>`).join('')}</div>
       <p class="small">근무표 자동 짜기와 급여 계산에 쓰는 정보예요. 사장님만 고칠 수 있어요.</p>
@@ -739,7 +739,8 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
         <label>구분</label><select id="ck">${(a.noLogin ? ['정직원', '반직원'] : ['정직원', '반직원', '알바']).map(k => `<option${k === a.kind ? ' selected' : ''}>${k}</option>`).join('')}</select>
         <label>정시 출근 (비우면 매장 기본)</label><input id="cs" type="time" step="300" value="${esc(a.start)}">
         <label>고정휴무 요일</label><div class="row" style="flex-wrap:wrap;gap:6px">${DAYS.map(d => `<label style="display:inline-flex;align-items:center;gap:4px;margin:0"><input type="checkbox" data-d="${d}"${a.offDays.includes(d) ? ' checked' : ''} style="width:auto">${d}</label>`).join('')}</div>
-        <div id="calba"><label>최소출근일 (한 주, 비우면 매장 기본)</label><input id="cm" type="number" min="0" max="7" value="${a.minDays == null ? '' : a.minDays}">
+        <div id="calba"><label>근무표 그룹</label><select id="cg"><option value="">알 그룹 (스케줄 알바)</option><option value="정"${a.sgroup === '정' ? ' selected' : ''}>정 그룹 (고정 근무 — 급여는 시급, 휴무신청 안 받음)</option></select>
+        <label>최소출근일 (한 주, 비우면 매장 기본)</label><input id="cm" type="number" min="0" max="7" value="${a.minDays == null ? '' : a.minDays}">
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cp" style="width:auto"${a.priority ? ' checked' : ''}>우선배정 (다른 알바보다 조금 더)</label></div>
         <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cj" style="width:auto"${a.noJuhu ? ' checked' : ''}>주휴수당 없음 (계약상 미포함)</label>
         <button id="csv" style="margin-top:16px">저장</button></div>
@@ -750,7 +751,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
       if ($('cdel')) $('cdel').onclick = () => busy($('cdel'), async () => { if (!confirm(a.name + '님을 근무표에서 뺄까요?')) return; toast((await API.removeNoLogin(a.name)).msg); VIEWS.acfg(); });
       $('csv').onclick = () => busy($('csv'), async () => {
         const o = { disp: $('cd').value, kind: $('ck').value, start: $('cs').value, offDays: [...$app.querySelectorAll('[data-d]')].filter(x => x.checked).map(x => x.dataset.d),
-          minDays: $('ck').value === '알바' ? $('cm').value : null, priority: $('ck').value === '알바' && $('cp').checked, noJuhu: $('cj').checked };
+          minDays: $('ck').value === '알바' ? $('cm').value : null, priority: $('ck').value === '알바' && $('cp').checked, noJuhu: $('cj').checked, sgroup: $('ck').value === '알바' ? $('cg').value : '' };
         const r = await API.saveStaffCfg(a.name, o); toast(r.msg); if (r.saved) VIEWS.acfg();
       });
     }
@@ -854,7 +855,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 29;
+  const APP_VER = 30;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

@@ -1,12 +1,12 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=29';
-import * as sched from '../multi/sched.js?v=29';
-import * as pay from '../multi/pay.js?v=29';
-import * as dash from '../multi/dash.js?v=29';
-import * as staff from '../multi/staff.js?v=29';
-import { wageOf } from '../multi/paycalc.js?v=29';
-import * as auto from '../multi/autosched.js?v=29';
+import * as api from '../multi/fb.js?v=30';
+import * as sched from '../multi/sched.js?v=30';
+import * as pay from '../multi/pay.js?v=30';
+import * as dash from '../multi/dash.js?v=30';
+import * as staff from '../multi/staff.js?v=30';
+import { wageOf } from '../multi/paycalc.js?v=30';
+import * as auto from '../multi/autosched.js?v=30';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -91,7 +91,7 @@ A.leaveAll = async () => {
   const w = setting ? api.leaveWindow(week, setting) : null, now = new Date(), L = Object.fromEntries(lvs.map(l => [l.uid, l]));
   return { title: `${md(dates[0])} ~ ${md(dates[6])}`, open: !!w && now >= w.opens && now < w.closes, past: false, closes: w ? api.fmtWhen(w.closes) : '',
     days: dates.map(d => ({ date: d, label: lab(d), need: need[api.dowOf(d)] || 0 })),
-    rows: ms.filter(m => m.type !== '정').map(m => { const l = L[m.id]; return { name: m.name, disp: m.name, sent: !!l, off: l ? l.off || [] : [], am: l ? l.am || [] : [], at: l ? when(l.at) : '' }; }) };
+    rows: ms.filter(m => api.groupOf(m) === '알').map(m => { const l = L[m.id]; return { name: m.name, disp: m.disp || m.name, sent: !!l, off: l ? l.off || [] : [], am: l ? l.am || [] : [], at: l ? when(l.at) : '' }; }) };
 };
 A.leaveDel = async name => {
   const c = await admin(), m = await byName(c, name), week = api.addDays(api.mondayOf(api.kst().date), 7);
@@ -121,7 +121,7 @@ A.saveSales = async (date, amount, force) => {
 };
 
 // ---------- 사람 · 일찍 부르기 · 기록 고치기 ----------
-A.people = async () => { const c = await admin(); return { list: (await staffList(c)).map(m => ({ name: m.name, disp: m.name, alba: m.type !== '정', group: m.type === '정' ? '정' : '알' })) }; };
+A.people = async () => { const c = await admin(); return { list: (await staffList(c)).map(m => ({ name: m.name, disp: m.name, alba: m.type !== '정', group: api.groupOf(m) })) }; };
 A.early = async (name, wd, time) => {
   const c = await admin(), m = await byName(c, name), d = wd || api.kst().date;
   await api.setEarly(c.store.id, d, m.id, time);
@@ -159,7 +159,7 @@ A.issueAll = async () => ({ list: [], hours: 0 });
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 A.staffCfg = async () => {
   const c = await owner(), ms = (await api.membersAll(c.store.id)).filter(m => api.isActive(m)).sort((a, b) => (a.name < b.name ? -1 : 1));
-  return ms.map(m => ({ name: m.name, noLogin: !!m.noLogin, disp: m.disp || '', kind: m.type === '정' ? (m.half ? '반직원' : '정직원') : '알바', start: m.startTime || '',
+  return ms.map(m => ({ name: m.name, noLogin: !!m.noLogin, disp: m.disp || '', kind: m.type === '정' ? (m.half ? '반직원' : '정직원') : '알바', sgroup: m.sgroup || '', start: m.startTime || '',
     offDays: (m.offDays || []).filter(x => DAYS.includes(x)), minDays: m.minDays == null ? null : m.minDays, priority: !!m.priority, noJuhu: !!m.noJuhu, manager: m.role === 'manager' }));
 };
 A.saveStaffCfg = async (name, o) => {
@@ -171,7 +171,8 @@ A.saveStaffCfg = async (name, o) => {
   if (min != null && !(min >= 0 && min <= 7)) return { saved: false, msg: '최소출근일은 0~7일이에요' };
   if (o.start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(o.start)) return { saved: false, msg: '정시 출근은 18:00처럼 넣어 주세요' };
   const patch = { disp: disp || null, type: o.kind === '알바' ? '알' : '정', half: o.kind === '반직원', startTime: o.start || null,
-    offDays: DAYS.filter(x => (o.offDays || []).includes(x)), minDays: min, priority: !!o.priority, noJuhu: !!o.noJuhu };
+    offDays: DAYS.filter(x => (o.offDays || []).includes(x)), minDays: min, priority: !!o.priority, noJuhu: !!o.noJuhu,
+    sgroup: o.kind === '알바' && o.sgroup === '정' ? '정' : null };   // 알바인데 근무표는 정 그룹(고정 근무)일 때만
   await api.setMember(c.store.id, m.id, patch);
   return { saved: true, msg: `${name}님 설정을 저장했어요` };
 };
@@ -194,7 +195,7 @@ A.removeNoLogin = async name => {
 // ---------- 스케줄 규칙 (산성 스케줄 "설정" 시트: 목표 인원·알바 고정 수·동시휴무 금지·과인원 순서·최소출근일 기본) ----------
 A.schedCfg = async () => {
   const c = await owner(), [cfg, ms] = await Promise.all([api.schedCfg(c.store.id), api.membersAll(c.store.id)]);
-  return { cfg: { ...auto.SCHED_DEFAULT, ...(cfg || {}) }, saved: !!cfg, jung: ms.filter(m => api.isActive(m) && m.type === '정').map(m => m.name).sort() };
+  return { cfg: { ...auto.SCHED_DEFAULT, ...(cfg || {}) }, saved: !!cfg, jung: ms.filter(m => api.isActive(m) && api.groupOf(m) === '정').map(m => m.name).sort() };
 };
 A.saveSchedCfg = async o => {
   const c = await owner(), num = (v, lo, hi) => { const n = Math.round(+v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
