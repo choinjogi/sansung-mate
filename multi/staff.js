@@ -3,8 +3,8 @@
 //        승인하면 구분·정시·입사일이 자동으로 들어감 (시급은 사장님이 승인하거나 사장님 화면을 열 때 들어감)
 //  퇴사: 이름 + 퇴사일(마지막 근무일). 그날까지는 그대로 일하고(퇴근 찍기 됨), 다음 날부터 로그인·근무표·출퇴근에서 빠짐.
 //        정산은 퇴사일까지. 지난 출퇴근 기록은 그대로
-import * as api from './fb.js?v=33';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=33';
+import * as api from './fb.js?v=34';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=34';
 
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
 const since = d => (d ? md(d) + ' 입사' : '기존 직원');

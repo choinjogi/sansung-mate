@@ -165,6 +165,7 @@ try {
   await boss2.waitForFunction(() => /처리할 게 없어요|확인 필요/.test(document.getElementById('app').innerText));
   // 매출 넣기
   await tab(boss2, '매출');
+  await boss2.locator('#ss').waitFor(); await boss2.waitForTimeout(1200);   // 저장해 둔 값으로 먼저 그린 뒤 새 값으로 한 번 더 그림 → 다 그려질 때까지
   await boss2.locator('#sa').fill('1500000');
   await boss2.locator('#ss').click();
   await boss2.getByText('₩1,500,000').first().waitFor();
@@ -253,7 +254,7 @@ try {
       { name: '조사장', kind: '정직원', start: '11:30', wage: 0, bank: '', account: '', email: '', disp: '조사장', group: '정', offDays: ['월'], owner: true }],
     cfg: { min: [7, 7, 7, 7, 9, 9, 7], max: [7, 7, 7, 7, 10, 10, 8], alba: [4, 4, 4, 4, null, null, null], pairs: [], overflow: ['토', '금'], defMin: 3 },
     schedules: { '2026-11-02': { 김알바: ['O', '', '', '', '', '', ''], 최가져: ['', 'O', '', '', '', '', ''] } },
-    sales: { '2026-11-02': 1234000 }, punches: [{ name: '김알바', date: '2026-11-02', full: false, in: '18:00', out: '22:30', shift: { kind: 'extra' } }, { name: '최가져', date: '2026-11-03', full: false, in: '18:00', out: '22:00' }] };
+    sales: { '2026-11-02': 1234000 }, punches: [{ name: '김알바', date: '2026-11-02', full: false, in: '17:00', out: '22:30', shift: { kind: 'extra' } }, { name: '최가져', date: '2026-11-03', full: false, in: '18:00', out: '22:00' }, { name: '조사장', date: '2026-11-02', full: true, in: '11:30', out: '22:00' }] };
   await tab(boss2, '더보기'); await boss2.locator('[data-go="aimport"]').click();
   await boss2.locator('#jf').setInputFiles({ name: 'sansung.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(J)) });
   await boss2.locator('#j1').waitFor(); assert.match(await text(boss2), /최가져\s+알바\s+아직 없음/);
@@ -261,6 +262,10 @@ try {
   await boss2.locator('#j2').click(); await boss2.getByText(/근무표 1주 · 출퇴근 2줄 넣었어요/).first().waitFor();
   assert.match(await text(boss2), /아직 가입 안 함 \(기록 못 넣음\): 최가져/);
   await boss2.locator('#j2').click(); await boss2.getByText(/출퇴근 0줄 넣었어요/).first().waitFor();   // 두 번 눌러도 중복 없음
+  const imp = await boss2.evaluate(async () => { const api = window.API._api, c = await window.API._ctx(), ms = await api.membersAll(c.store.id), k = ms.find(m => m.name === '김알바'), boss = ms.find(m => m.name === '조사장');
+    const s = await api.getSchedule(c.store.id, '2026-11-02'), ps = await api.punchesBetween(c.store.id, '2026-11-02', '2026-11-02');
+    return { early: s && s.early && s.early['2026-11-02'] && s.early['2026-11-02'][k.id], bossPunch: ps.filter(p => p.uid === boss.id).length }; });
+  assert.deepEqual(imp, { early: '17:00', bossPunch: 0 });   // 정시보다 이른 시작 = 일찍 부름, 사장님(근무표 전용) 출퇴근은 안 넣음
   await tab(boss2, '오늘'); await boss2.locator('#app').getByText('김알바').first().waitFor(); assert.doesNotMatch(await text(boss2), /조사장/);   // 출퇴근 현황엔 안 나옴
   await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
   await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();

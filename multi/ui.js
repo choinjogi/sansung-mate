@@ -1,6 +1,6 @@
 // 화면 공용 도구 (app.js, attend.js가 같이 씀)
-import { qrcode } from './vendor/firebase.js?v=33';
-import * as api from './fb.js?v=33';
+import { qrcode } from './vendor/firebase.js?v=34';
+import * as api from './fb.js?v=34';
 
 export const $ = id => document.getElementById(id);
 export const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,7 +16,10 @@ export function toast(msg) {
   setTimeout(() => t.remove(), 2600);
 }
 export function show(html) { $('app').innerHTML = `<div class="fade">${html}</div>`; window.scrollTo(0, 0); }
+// 산성 화면(2판) 안에서 열리면 산성 머리글(엠블럼·매장·이름·나가기·버전) + 제목 줄을 씀 → 산성 앱과 같은 모양
 export function top(title, back) {
+  const H = window.MATE_HEADER && window.MATE_HEADER();   // 로그인 전·매장 없을 때는 예전 머리글
+  if (H) return `${H}<div class="row" style="align-items:center;gap:8px;margin:12px 0 4px">${back ? '<button class="sm ghost" id="back" style="width:auto;margin:0">‹ 뒤로</button>' : ''}<h2 style="margin:0">${esc(title)}</h2></div>`;
   return `<div class="top"><div class="brand">${back ? '<button class="sm ghost" id="back">‹</button>' : ''}<span>${esc(title)}</span></div>
     ${api.auth.currentUser ? '<button class="sm ghost" id="out">로그아웃</button>' : ''}</div>`;
 }
@@ -34,7 +37,7 @@ export function setNav(tabs, cur, onGo) {
 }
 // 버튼 눌렀을 때: 잠그고, 실패하면 이유를 보여 줌
 export async function busy(btn, fn) {
-  const old = btn.textContent; btn.disabled = true; btn.textContent = '잠시만요…';
+  const old = btn.textContent; btn.disabled = true; btn.textContent = window.MATE_HEADER && window.MATE_HEADER() ? '처리 중…' : '잠시만요…';
   try { await fn(); } catch (e) { console.error(e); toast(niceErr(e)); } finally { if (btn.isConnected) { btn.disabled = false; btn.textContent = old; } }
 }
 export function niceErr(e) {

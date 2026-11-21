@@ -1,13 +1,13 @@
 // 사장님·매니저 화면 데이터 — 산성 data-live.js의 관리용 API와 같은 이름·모양을 Firebase로 만든다.
 // 산성은 결산 시트·NFC를 읽었지만, 여기서는 새 앱 데이터(Firestore)와 계산(multi/*.js)을 쓴다.
-import * as api from '../multi/fb.js?v=33';
-import * as sched from '../multi/sched.js?v=33';
-import * as pay from '../multi/pay.js?v=33';
-import * as dash from '../multi/dash.js?v=33';
-import * as staff from '../multi/staff.js?v=33';
-import { wageOf } from '../multi/paycalc.js?v=33';
-import * as auto from '../multi/autosched.js?v=33';
-import * as att from '../multi/attcheck.js?v=33';
+import * as api from '../multi/fb.js?v=34';
+import * as sched from '../multi/sched.js?v=34';
+import * as pay from '../multi/pay.js?v=34';
+import * as dash from '../multi/dash.js?v=34';
+import * as staff from '../multi/staff.js?v=34';
+import { wageOf } from '../multi/paycalc.js?v=34';
+import * as auto from '../multi/autosched.js?v=34';
+import * as att from '../multi/attcheck.js?v=34';
 
 const A = window.API, DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
@@ -269,8 +269,13 @@ A.import2 = async j => {
     const cells = {}; Object.entries(rows).forEach(([n, cs]) => { const id = idOf(n); if (id) cells[id] = cs; else missing.add(n); });
     await api.saveSchedule(S, w, cells, true); weeks++;
   }
+  const noLogin = new Set(act.filter(m => m.noLogin).map(m => m.id));   // 근무표 전용(사장님)은 출퇴근 기록 안 넣음
   for (const p of j.punches || []) {
     const id = idOf(p.name); if (!id) { missing.add(p.name); continue; }
+    if (noLogin.has(id)) continue;
+    // 정시보다 이른 계산 시작 = 그날 일찍 부름 (시트 "예외 출근") → 근무표 일찍 부르기로 넣어야 새 앱도 그 시각부터 계산
+    const base = (St[keyOf(p.name)] || {}).start || '18:00';
+    if (!p.full && p.in && p.in < base) await api.setEarly(S, p.date, id, p.in);
     if (!p.full && p.in && !(await api.punchGet(S, `${p.date}_${id}_in`))) { await api.addPunch(S, { uid: id, name: p.name, date: p.date, kind: 'in', at: api.atOf(p.date, p.in) }); ps++; }
     const oid = `${p.date}_${id}_out`;
     if (!(await api.punchGet(S, oid))) {
