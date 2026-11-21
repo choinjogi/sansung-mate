@@ -276,6 +276,16 @@ service cloud.firestore {
     }
 
     // 직원 초대 코드 → 매장. 코드를 아는 사람만 하나씩 조회 가능(목록 불가)
+    // 공개 근무표 (단톡 링크, 로그인 없이 봄): 문서 이름 = 매장_주월요일. 표시이름·근무 칸만 (실명·개인정보 없음). 매니저 이상이 확정할 때 씀
+    match /pubSched/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if signedIn() && d().storeId is string && d().week is string && id == d().storeId + '_' + d().week && isDate(d().week)
+        && manager(d().storeId) && d().keys().hasOnly(['storeId', 'storeName', 'week', 'rows', 'at'])
+        && d().rows is list && d().rows.size() <= 60;
+      allow delete: if signedIn() && manager(resource.data.storeId);
+    }
+
     match /joinCodes/{code} {
       allow get: if true;
       allow list: if false;

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>근무표</title>
+<meta name="theme-color" content="#141b2d">
+<style>
+  :root { --bg: #141b2d; --text: #e9edf7; --sub: #8f9bb8; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 14px 10px 40px; }
+  h1 { font-size: 17px; margin: 6px 4px 12px; }
+  .wk { margin-bottom: 18px; }
+  .lab { font-size: 13px; color: var(--sub); margin: 0 4px 6px; }
+  .empty { color: var(--sub); font-size: 14px; padding: 18px 6px; }
+  .foot { color: var(--sub); font-size: 11px; margin: 16px 4px 0; }
+</style>
+</head>
+<body>
+<main id="app"><p class="empty">불러오는 중…</p></main>
+<script type="module">
+// 공개 근무표 (로그인 없이): pubSched/{매장}_{주} 의 이번 주·다음 주 (표시이름만). 근무표를 확정하면 바로 바뀜
+import * as api from './fb.js?v=32';
+import * as img from './schedimg.js?v=32';
+const $app = document.getElementById('app');
+const sid = new URLSearchParams(location.search).get('s') || '';
+async function draw() {
+  if (!/^[a-z0-9]{3,30}$/.test(sid)) { $app.innerHTML = '<p class="empty">주소가 잘못됐어요. 단톡방의 링크로 다시 열어 주세요.</p>'; return; }
+  const mon = api.mondayOf(api.kst().date), weeks = [mon, api.addDays(mon, 7)];
+  const docs = await Promise.all(weeks.map(w => api.getPubSched(sid, w).catch(() => null)));
+  const name = (docs.find(Boolean) || {}).storeName || '';
+  $app.innerHTML = (name ? '' : '') + weeks.map((w, i) => {
+    const d = docs[i], lab = i ? '다음 주' : '이번 주';
+    return `<div class="wk"><div class="lab">${lab}</div>${d ? img.html(img.model({ storeName: d.storeName || '', week: w, rows: d.rows || [] })) : '<p class="empty">아직 확정된 근무표가 없어요.</p>'}</div>`;
+  }).join('') + `<p class="foot">근무표가 확정되면 이 화면도 바로 바뀌어요. 마지막으로 연 시각 ${api.kst().hm}</p>`;
+  if (name) document.title = name + ' 근무표';
+}
+draw().catch(e => { $app.innerHTML = '<p class="empty">불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</p>'; console.error(e); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) draw().catch(() => {}); });
+</script>
+</body>
+</html>

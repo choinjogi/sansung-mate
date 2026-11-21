@@ -6,12 +6,13 @@
 //          급여 = 시급분 + 주휴 (원 단위 반올림은 맨 끝에 한 번)
 //  · 정직원: 월급. 그 달 중간에 들어오거나 나가면 일한 날짜 수만큼 (월급 ÷ 그 달 일수 × 날짜 수)
 //  · 가감(보너스·공제 등)은 사장님이 정산표에서 직접 넣음
-import * as api from './fb.js?v=31';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=31';
-import * as records from './records.js?v=31';
-import * as sched from './sched.js?v=31';
+import * as api from './fb.js?v=32';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=32';
+import * as records from './records.js?v=32';
+import * as sched from './sched.js?v=32';
+import * as tax from './taxout.js?v=32';
 
-import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=31';
+import { won, lastDay, addMonth, weekNo, wageOf, albaPay, fullPay } from './paycalc.js?v=32';
 export { weekNo, wageOf, albaPay, fullPay };
 
 const ymd = ts => (ts && ts.toDate ? api.kst(ts.toDate()).date : null);
@@ -36,7 +37,7 @@ export async function payrollData(store, month, until, data) {
     const a = +(adj[uid] || 0);
     if (full) {
       const l = endOf(m), f = fullPay(month, wage, { startDate: m.startDate || null, endDate: until && (!l || until < l) ? until : l });
-      return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: f.pay, juhu: 0, juhuW: [], weeks: [], adjust: a, pay: f.pay + a, note: f.days < f.monthDays ? `${f.days}/${f.monthDays}일` : '', left: api.isGone(m) };
+      return { uid, name: m.name, full, half: !!m.half, wage, min: p.min, workDays: p.workDays, days: p.days, base: f.pay, juhu: 0, juhuW: [], weeks: [], adjust: a, pay: f.pay + a, note: f.days < f.monthDays ? `${f.days}/${f.monthDays}일` : '', left: api.isGone(m) };
     }
     const x = albaPay(p.days, wage, { noJuhu: !!m.noJuhu, juhu: data.rules && data.rules.pay && data.rules.pay.juhu });
     return { uid, name: m.name, full, wage, min: p.min, workDays: p.workDays, days: p.days, base: x.base, juhu: x.juhu, juhuW: x.juhuW, weeks: x.weeks, adjust: a, pay: x.pay + a, noJuhu: !!m.noJuhu, note: m.noJuhu ? '주휴 없음' : '', left: api.isGone(m) };
@@ -79,7 +80,9 @@ export async function payrollScreen(store, back, month) {
       · 근무 시간은 [월 근무 기록]과 같아요. 틀린 출퇴근은 오늘 탭에서 고친 뒤 다시 보세요<br>
       · 야간·휴일 수당은 아직 계산하지 않아요</p></div>
     ${pr.rows.length ? `<button id="save">정산표 저장${store.direct ? '' : ' · 대표님께 합계 보내기'}</button>
-    <button class="ghost" id="csv" style="margin-top:8px">엑셀로 내려받기</button>` : ''}`);
+    <button class="ghost" id="csv" style="margin-top:8px">엑셀로 내려받기</button>
+    <div class="card" style="margin-top:12px"><b>월말 보내기</b><p class="small">세무사 근태기록부 = 세무사 양식 그대로 (1쪽 요약 + 직원 1명 1장). 월말결제 이미지 = 송금 담당에게 보낼 이름·급여·계좌 (알바 + 반직원).</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="ghost" id="taxX">📗 근태기록부 엑셀</button><button class="ghost" id="taxP">📄 근태기록부 PDF</button><button class="ghost" id="payImg">🖼️ 월말결제 이미지</button></div></div>` : ''}`);
   wireTop(back);
   const again = m => payrollScreen(store, back, m || month);
   $('mPrev').onclick = () => again(addMonth(month, -1));
@@ -98,6 +101,24 @@ export async function payrollScreen(store, back, month) {
   if ($('csv')) $('csv').onclick = e => busy(e.target, async () => {
     const priv = Object.fromEntries((await api.privAll(store.id).catch(() => [])).map(p => [p.id, p]));
     records.download(`${store.name}_${month}_정산표.csv`, payrollCsv(store, pr, priv));
+  });
+  if ($('taxX')) $('taxX').onclick = e => busy(e.target, async () => {
+    const b = await tax.taxXlsx(store.name || '', month, pr), a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = `${store.name || '매장'}_${tax.ym(month)}_근태기록부.xlsx`; document.body.appendChild(a); a.click(); a.remove(); toast('엑셀을 내려받았어요');
+  });
+  if ($('taxP')) $('taxP').onclick = () => {
+    const w = window.open('', '_blank'); if (!w) return toast('새 창이 막혔어요. 팝업을 허용해 주세요');
+    w.document.write(tax.taxHtml(store.name || '', month, pr)); w.document.close();
+  };
+  if ($('payImg')) $('payImg').onclick = e => busy(e.target, async () => {
+    const priv = Object.fromEntries((await api.privAll(store.id).catch(() => [])).map(p => [p.id, p]));
+    const m = tax.payModel(pr, priv, new Set(pr.rows.filter(r => r.half).map(r => r.uid)));
+    const cv = tax.payCanvas(`${store.name || ''} ${tax.ym(month)} 월말결제`, m), name = `월말결제_${month}.png`;
+    await new Promise(ok => cv.toBlob(async b => {
+      const f = new File([b], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '월말결제' }); return ok(); } catch (x) { if (x.name === 'AbortError') return ok(); } }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast('이미지를 저장했어요'); ok();
+    }, 'image/png'));
   });
   if ($('save')) $('save').onclick = e => busy(e.target, async () => {
     const adjust = readAdj();

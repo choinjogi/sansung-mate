@@ -232,6 +232,15 @@ try {
   await boss2.locator('#fAuto').click(); await boss2.getByText(/✅ 자동 짜기 완료/).waitFor();
   assert.match(await text(boss2), /정\+알: 월 0\+1/);  // 조사장 월 고정휴무, 월요일 알바 고정 1명
   await boss2.locator('#save').click(); await boss2.getByText('초안을 저장했어요').waitFor();
+  // 확정 → 단톡용 이미지 버튼 + 로그인 없이 보는 공개 근무표(다음 주)
+  await boss2.locator('#pub').click(); await boss2.getByText('확정됨 (직원에게 보임)').waitFor(); await boss2.locator('#imgSave').waitFor();
+  const sid2 = await boss2.evaluate(() => localStorage.getItem('mate_store'));
+  const pubPage = await (await phone()).newPage(); watch(pubPage, '공개 근무표');
+  await pubPage.goto(new URL(`../multi/week.html?s=${sid2}`, APP2).href);
+  await pubPage.getByText('다음 주').waitFor(); await pubPage.getByText(/근무표 · /).first().waitFor();
+  const pubText = await pubPage.locator('body').innerText();
+  assert.match(pubText, /조사장/); assert.match(pubText, /정\+알/); assert.match(pubText, /아직 확정된 근무표가 없어요/);   // 이번 주는 아직 없음
+  await pubPage.close();
   await backMore();
   // 스케줄과 비교 (이번 주 · 지난주 · 이번 달)
   await tab(boss2, '더보기'); await boss2.locator('[data-go="acmp"]').click(); await boss2.getByText(/확인할 것 \d+건/).waitFor();
@@ -240,7 +249,8 @@ try {
   await tab(boss2, '오늘'); await boss2.locator('#app').getByText('김알바').first().waitFor(); assert.doesNotMatch(await text(boss2), /조사장/);   // 출퇴근 현황엔 안 나옴
   await more('need'); await boss2.locator('#nsv').click(); await boss2.getByText('요일별 인원을 저장했어요').waitFor();
   await more('notice'); await boss2.fill('#nt', '산성 화면 공지 시험'); await boss2.locator('#nsend').click(); await boss2.getByText('올린 공지 1개').waitFor(); await backMore();
-  await more('pay'); await boss2.getByText('지급 합계').waitFor(); assert.match(await text(boss2), /김알바/); await backMore();
+  await more('pay'); await boss2.getByText('지급 합계').waitFor(); assert.match(await text(boss2), /김알바/);
+  await boss2.locator('#taxX').waitFor(); await boss2.locator('#taxP').waitFor(); await boss2.locator('#payImg').waitFor(); await backMore();
   await more('month'); await boss2.getByText('전체 근무 시간').waitFor(); await backMore();
   await more('staff'); await boss2.getByText('여러 명 한 번에').waitFor(); await backMore();
   await more('store'); await boss2.locator('#regen').waitFor(); assert.match(await boss2.locator('.url').first().innerText(), /multi\/\?join=/);

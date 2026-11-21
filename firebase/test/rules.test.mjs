@@ -135,6 +135,16 @@ test('스케줄 규칙(settings/sched)은 사장님만 쓰고 매장 사람은 �
   await assertFails(setDoc(doc(as('boss', G), 'stores/sansung/settings/sched'), { ...v, defMin: 9 }));
   await assertSucceeds(getDoc(doc(as('alba', P), 'stores/sansung/settings/sched')));
 });
+test('공개 근무표는 누구나 읽고, 그 매장 매니저 이상만 쓴다', async () => {
+  const v = { storeId: 'sansung', storeName: '산성', week: '2026-11-23', rows: [{ disp: '가람', g: '알', fixed: false, c: ['O', '', '', '', '', '', ''] }], at: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(as('mgr', P), 'pubSched/sansung_2026-11-23'), v));
+  await assertFails(setDoc(doc(as('alba', P), 'pubSched/sansung_2026-11-30'), { ...v, week: '2026-11-30' }));
+  await assertFails(setDoc(doc(as('kim', G), 'pubSched/sansung_2026-11-30'), { ...v, week: '2026-11-30' }));
+  await assertFails(setDoc(doc(as('mgr', P), 'pubSched/other_2026-11-23'), v));                 // 문서 이름과 매장이 다름
+  await assertFails(setDoc(doc(as('mgr', P), 'pubSched/sansung_2026-11-23'), { ...v, wage: 1 })); // 정해진 칸만
+  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'pubSched/sansung_2026-11-23')));
+  await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'pubSched')));   // 목록은 못 훑음
+});
 test('승인 대기 중에는 매장 정보와 스케줄을 못 본다', async () => {
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung')));
   await assertFails(getDoc(doc(as('newbie', P), 'stores/sansung/schedules/2026-11-23')));

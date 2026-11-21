@@ -1,9 +1,13 @@
 // 근무표·휴무신청 화면
 // 직원: 근무표 보기, 휴무신청(알바만). 매니저·사장님: 근무표 짜기(휴무신청 반영·자동 채우기 초안·확정), 휴무신청 현황
-import * as api from './fb.js?v=31';
-import { STORE_RULES_DEFAULT } from './defaults.js?v=31';
-import * as auto from './autosched.js?v=31';
-import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=31';
+import * as api from './fb.js?v=32';
+import { STORE_RULES_DEFAULT } from './defaults.js?v=32';
+import * as auto from './autosched.js?v=32';
+import * as img from './schedimg.js?v=32';
+// 단톡용 표 줄 (표시이름만): 정 그룹 먼저. 고정 근무 알바(정 그룹인데 급여 알바)는 휴무를 ✕로
+export const pubRows = (act, cells) => act.map(m => ({ disp: m.disp || m.name, g: api.groupOf(m), fixed: api.groupOf(m) === '정' && m.type !== '정', c: [...(cells[m.id] || ['', '', '', '', '', '', ''])] }));
+export const pubLink = storeId => new URL('./week.html?s=' + storeId, import.meta.url).href;
+import { $, esc, DOW, toast, show, top, wireTop, busy, copy } from './ui.js?v=32';
 
 const PAL = ['#a32442', '#2f6c9e', '#2e7a58', '#8a5a1c', '#6a4c9c', '#9a3a78', '#2f7a7a', '#b04e36', '#4a58a6', '#5e7a2a', '#7a4a3a', '#3a6a8a'];
 export const isAlba = m => api.groupOf(m) === '알';   // 근무표·휴무신청 기준 (급여 구분은 m.type)
@@ -194,7 +198,9 @@ export async function scheduleEditor(store, back, week) {
       <div class="row" style="gap:8px"><button class="ghost" id="fLeave">휴무신청 반영</button><button class="ghost" id="fAuto">자동으로 짜기</button></div>
       <p class="small">자동으로 짜기 = 스케줄 규칙대로(정 그룹 고정휴무 → 동시휴무 검사 → 휴무신청 ✕ → 최소출근일·요일 인원·지난 4주 균등 → 과인원 순서). 알바 칸은 ✕만 남기고 새로 짜고, 정 그룹은 빈칸만 채워요. 휴무신청 반영 = ✕만 넣기.</p>
       ${notes.length ? `<div class="card">${notes.map((m, k) => `<p class="small" style="margin:6px 0;${m.kind === 'stop' ? 'color:var(--bad)' : m.kind === 'warn' ? 'color:var(--warn)' : ''}">${esc(m.text)}${m.kind === 'notice' ? ` <button class="sm ghost" data-note="${k}">복사</button>` : ''}</p>`).join('')}</div>` : ''}
-      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="save">초안 저장</button><button id="pub">확정해서 직원에게 보이기</button></div>`);
+      <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="save">초안 저장</button><button id="pub">확정해서 직원에게 보이기</button></div>
+      ${sch.published && !dirty ? `<div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="imgSave">🖼️ 단톡용 이미지</button><button class="ghost" id="linkCopy">🔗 공개 링크 복사</button></div>
+      <p class="small">공개 링크 = 로그인 없이 휴대폰으로 보는 이번 주·다음 주 근무표 (표시이름만 나와요). 단톡방 공지에 고정해 두면 돼요.</p>` : ''}`);
     wireTop(() => { if (!dirty || confirm('저장 안 한 내용이 있어요. 나갈까요?')) back(); });
     $('wPrev').onclick = () => (!dirty || confirm('저장 안 한 내용이 있어요. 넘어갈까요?')) && scheduleEditor(store, back, api.addDays(week, -7));
     $('wNext').onclick = () => (!dirty || confirm('저장 안 한 내용이 있어요. 넘어갈까요?')) && scheduleEditor(store, back, api.addDays(week, 7));
@@ -225,10 +231,20 @@ export async function scheduleEditor(store, back, week) {
     const save = published => e => busy(e.target, async () => {
       if (published && !confirm('확정하면 직원들 근무표에 바로 보여요. 확정할까요?')) return;
       await api.saveSchedule(store.id, week, cells, published);
+      if (published) await api.savePubSched(store, week, pubRows(act, cells)).catch(() => toast('공개 링크 갱신 실패 — 다시 확정해 주세요'));
       sch.published = published; dirty = false; toast(published ? '확정했어요' : '초안을 저장했어요'); draw();
     });
     $('save').onclick = save(false);
     $('pub').onclick = save(true);
+    if ($('imgSave')) $('imgSave').onclick = () => {
+      const cv = img.canvas(img.model({ storeName: store.name || '', week, rows: pubRows(act, cells) })), name = `근무표_${week}.png`;
+      cv.toBlob(async b => {
+        const f = new File([b], name, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: '근무표' }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast('이미지를 저장했어요');
+      }, 'image/png');
+    };
+    if ($('linkCopy')) $('linkCopy').onclick = () => copy(pubLink(store.id));
   };
   draw();
 }

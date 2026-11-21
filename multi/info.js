@@ -2,8 +2,8 @@
 //  공지: 사장님·매니저가 쓰고 지움. 직원 홈 맨 위에 최근 3개
 //  내 정보: 직원이 은행·계좌·이메일을 넣으면 "변경 요청"으로만 저장 → 사장님이 승인 탭에서 승인하면 실제 칸으로.
 //          직원 화면엔 가린 값만(계좌 끝 4자리·이메일 앞 2글자). 주민번호는 앱에 안 넣음(세무사에게 따로)
-import * as api from './fb.js?v=31';
-import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=31';
+import * as api from './fb.js?v=32';
+import { $, esc, toast, show, top, wireTop, busy } from './ui.js?v=32';
 
 export const maskAcct = a => { const d = String(a || '').replace(/\D/g, ''); return d ? '••••' + d.slice(-4) : ''; };
 export const maskMail = e => { const [u, h] = String(e || '').split('@'); return u ? u.slice(0, 2) + '***' + (h ? '@' + h : '') : ''; };

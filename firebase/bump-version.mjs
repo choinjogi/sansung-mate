@@ -14,6 +14,8 @@ for (const f of (await readdir(dir)).filter(f => f.endsWith('.js'))) {
   const t = s.replace(/from '(\.\/[^'?]+\.js)(\?v=\d+)?'/g, `from '$1?v=${v}'`);
   if (t !== s) await writeFile(new URL(f, dir), t);
 }
+// 공개 근무표 페이지(week.html)도 같은 번호로
+{ const u = new URL('week.html', dir), h = await readFile(u, 'utf8'); await writeFile(u, h.replace(/from '(\.\/[^'?]+\.js)(\?v=\d+)?'/g, `from '$1?v=${v}'`)); }
 // multi2(산성 화면 그대로 + Firebase)도 multi 파일을 같은 번호로 불러야 Firebase가 두 번 안 뜸
 const dir2 = new URL('../multi2/', import.meta.url);
 for (const f of (await readdir(dir2)).filter(f => f.endsWith('.js'))) {
