@@ -9,7 +9,8 @@
 
   function toast(t) { const d = document.createElement('div'); d.className = 'toast fade'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
   let SILENT = false;  // 뒤에서 새 값으로 다시 그릴 때는 깜빡임·스크롤 이동 없이
-  function render(html) { const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
+  let NAV = 0, SILENT_NAV = -1;   // 새 앱: 뒤에서 다시 그리는 사이에 다른 탭으로 옮겼으면 늦게 온 옛 화면은 안 그림
+  function render(html) { if (SILENT && NAV !== SILENT_NAV) return; const y = window.scrollY; $app.innerHTML = html; if (SILENT) { window.scrollTo(0, y); return; } $app.firstElementChild && $app.firstElementChild.classList.add('fade'); window.scrollTo(0, 0); }
   const header = () => `<div class="top"><div class="brand"><img src="../icons/emblem.png" alt=""><div>${esc(API.storeName() || 'MATE')}<br><small>${esc(ME.disp)}님${ME.role ? ' · ' + esc(ME.role) : ''}</small></div></div>
     <button class="ghost sm" id="logout">나가기</button></div><div class="small" style="text-align:right;margin-top:-2px">버전 ${APP_VER}</div>${API.demo ? '<div class="demo">시험 화면 — 실제 기록과 연결 안 됨</div>' : ''}`;
   window.MATE_HEADER = () => (ME ? header() : '');   // 새 앱: 더보기에 붙인 화면(근무표 짜기·정산표 등)도 이 머리글을 씀 (multi/ui.js top)
@@ -27,6 +28,7 @@
   }
   $navin.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); go(a.dataset.tab); });
   function go(t) {
+    NAV++;
     TAB = t; store.set('mate_tab', t); drawNav();
     Promise.resolve().then(() => (VIEWS[t] || VIEWS.home)()).catch(e => {
       if (!ME) return;
@@ -157,8 +159,11 @@
   window.addEventListener('mate-fresh', e => {
     if (!ME || !(VIEW_FN[TAB] || []).includes(e.detail)) return;
     const f = document.activeElement; if (f && /INPUT|SELECT|TEXTAREA/.test(f.tagName)) return;
-    const t = TAB; SILENT = true;
-    Promise.resolve().then(() => VIEWS[t]()).catch(() => {}).finally(() => { SILENT = false; });
+    const t = TAB; SILENT = true; SILENT_NAV = NAV;
+    Promise.resolve().then(() => VIEWS[t]()).catch(() => {}).finally(() => {
+      SILENT = false;
+      if (NAV !== SILENT_NAV && VIEWS[TAB]) Promise.resolve().then(() => VIEWS[TAB]()).catch(() => {});   // 그사이 옮긴 탭을 다시 그림
+    });
   });
   document.addEventListener('click', async e => { if (e.target.id === 'logout') { if (!confirm('로그아웃할까요?')) return; await API.logout(); store.del('mate_tab'); login(); } });
 
@@ -898,7 +903,7 @@ ${when === 'now' ? d.month + '월 1일부터 (이번 달 전체 다시 계산)' 
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) newVer(); });
   }
   // 새 버전 알림 (11/19): version.json을 앱 열 때·다시 볼 때·30분마다 확인 → 띠 [새로고침]. 입력 중 갑자기 새로고침되지 않게 누를 때만
-  const APP_VER = 34;
+  const APP_VER = 35;
   function newVer() {
     if (document.getElementById('nv')) return;
     const d = document.createElement('div'); d.id = 'nv';

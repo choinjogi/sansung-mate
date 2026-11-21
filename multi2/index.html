@@ -2,6 +2,10 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<script>
+// 새 앱은 따로 된 주소(sansung-sheets.web.app)에서 씀 — 깃허브(지금 산성 앱과 같은 뿌리)로 열면 새 주소로 넘김 (두 앱이 폰에서 섞이지 않게)
+if (/github\.io$/.test(location.hostname)) location.replace('https://sansung-sheets.web.app' + location.pathname.replace(/^\/sansung-mate/, '') + location.search + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MATE</title>
 <meta name="theme-color" content="#241624">
@@ -179,6 +183,6 @@ code { font-size: 13px; }
 <body>
 <div id="app"></div>
 <nav id="nav" hidden><div class="in" id="navin"></div></nav>
-<script type="module" src="data-fb.js?v=34"></script>
+<script type="module" src="data-fb.js?v=35"></script>
 </body>
 </html>

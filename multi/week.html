@@ -2,6 +2,10 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<script>
+// 새 앱은 따로 된 주소(sansung-sheets.web.app)에서 씀 — 깃허브(지금 산성 앱과 같은 뿌리)로 열면 새 주소로 넘김 (두 앱이 폰에서 섞이지 않게)
+if (/github\.io$/.test(location.hostname)) location.replace('https://sansung-sheets.web.app' + location.pathname.replace(/^\/sansung-mate/, '') + location.search + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>근무표</title>
 <meta name="theme-color" content="#141b2d">
@@ -20,8 +24,8 @@
 <main id="app"><p class="empty">불러오는 중…</p></main>
 <script type="module">
 // 공개 근무표 (로그인 없이): pubSched/{매장}_{주} 의 이번 주·다음 주 (표시이름만). 근무표를 확정하면 바로 바뀜
-import * as api from './fb.js?v=34';
-import * as img from './schedimg.js?v=34';
+import * as api from './fb.js?v=35';
+import * as img from './schedimg.js?v=35';
 const $app = document.getElementById('app');
 const sid = new URLSearchParams(location.search).get('s') || '';
 async function draw() {

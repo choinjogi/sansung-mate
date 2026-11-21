@@ -164,8 +164,11 @@ try {
   await boss2.locator('[data-ok="1"]').first().click();
   await boss2.waitForFunction(() => /처리할 게 없어요|확인 필요/.test(document.getElementById('app').innerText));
   // 매출 넣기
-  await tab(boss2, '매출');
-  await boss2.locator('#ss').waitFor(); await boss2.waitForTimeout(1200);   // 저장해 둔 값으로 먼저 그린 뒤 새 값으로 한 번 더 그림 → 다 그려질 때까지
+  // 승인 처리 뒤 앞 화면이 늦게 다시 그려질 수 있어서, 매출 화면이 자리 잡을 때까지 (최대 3번)
+  for (let k = 0; k < 3; k++) {
+    await tab(boss2, '매출'); await boss2.locator('#ss').waitFor(); await boss2.waitForTimeout(1200);
+    if (await boss2.locator('#sa').count()) break;
+  }
   await boss2.locator('#sa').fill('1500000');
   await boss2.locator('#ss').click();
   await boss2.getByText('₩1,500,000').first().waitFor();
